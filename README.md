@@ -31,3 +31,23 @@ python -m http.server 8000
 - Esc — освободить курсор
 
 Кнопка «Снимок» сохраняет текущий кадр в PNG. Код в поле позволяет вернуться в тот же мир.
+
+## Звук
+
+Кнопка «Звук» включает адаптивную звуковую среду: ветер звучит постоянно, дождь следует погоде, а шаги меняются между снегом и песком с гравием. Громкость приглушается внутри строений.
+
+Игра автоматически ищет рядом с `index.html` четыре файла:
+
+- `51366__samsmyname__wind.wav`
+- `337791__miradeshazer__city-pouring-rain.wav`
+- `528953__fthgurdy__walking-on-sand-and-gravel-2.wav`
+- `842553__hyperfoley__snow-walking-4.wav`
+
+Если файлов нет на сервере, их можно выбрать кнопкой «Свои WAV». После первого выбора записи сохраняются в браузере и подхватываются при следующих запусках.
+
+### Источники записей
+
+- WIND.wav — samsmyname, Freesound 51366, Sampling+
+- city pouring rain.wav — Mira DeShazer, Freesound 337791, CC BY 4.0
+- Walking on sand and gravel 2 — fthgurdy, Freesound 528953, CC0
+- Snow Walking 4 — HyperFoley, Freesound 842553
