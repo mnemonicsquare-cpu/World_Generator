@@ -9,6 +9,7 @@ const $=s=>document.querySelector(s),clamp=T.MathUtils.clamp,mix=T.MathUtils.ler
 rend.setPixelRatio(Math.min(devicePixelRatio,1.7));rend.setSize(innerWidth,innerHeight);rend.toneMapping=T.ACESFilmicToneMapping;rend.toneMappingExposure=1.08;document.body.prepend(rend.domElement);
 const cam=new T.PerspectiveCamera(66,innerWidth/innerHeight,.1,1200);cam.rotation.order="YXZ";
 let scene,landMesh,water,G,rnd,weather,celestial,audio,sound=false,yaw=0,pitch=-.05,jump=0,grounded=true;
+let painterShaders=new Set,waterShader=null;
 const keys=new Set,clock=new T.Clock,temp=new T.Object3D,SIZE=820,SEG=170,STEP=SIZE/SEG;
 let mobileForward=0,mobileSide=0,mobileBoost=false;
 const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost;
@@ -18,7 +19,73 @@ function smooth(x){return x*x*(3-2*x)}
 function noise(x,z){let X=Math.floor(x),Z=Math.floor(z),u=smooth(x-X),v=smooth(z-Z);function n(a,b){let q=Math.imul(a,374761393)^Math.imul(b,668265263)^G.hash;q=Math.imul(q^q>>>13,1274126177);return((q^q>>>16)>>>0)/4294967295}return mix(mix(n(X,Z),n(X+1,Z),u),mix(n(X,Z+1),n(X+1,Z+1),u),v)}
 function fbm(x,z,o=5){let v=0,a=.5,t=0;for(let i=0;i<o;i++){v+=noise(x,z)*a;t+=a;x=x*2.03+17;z=z*2.03-9;a*=.5}return v/t}
 function col(h,s,l){return new T.Color().setHSL((h%1+1)%1,s,l)}
-function mat(c,e=0){let m=new T.MeshStandardMaterial({color:c,roughness:.9,flatShading:true});if(e){m.emissive.copy(c);m.emissiveIntensity=e}return m}
+function cosineColor(t,quantize=true){
+  if(!G?.palette)return col(G?.hue||0,.25,.45);
+  if(quantize)t=Math.round(clamp(t,0,1)*(G.palette.steps-1))/(G.palette.steps-1);
+  const {a,b,c,d}=G.palette,out=new T.Color;
+  out.setRGB(...a.map((v,i)=>clamp(v+b[i]*Math.cos(Math.PI*2*(c[i]*t+d[i])),.025,.98)));
+  return out;
+}
+function painter(m,mode=0,wind=0){
+  m.onBeforeCompile=shader=>{
+    shader.uniforms.uPainterTime={value:0};shader.uniforms.uWind={value:wind};shader.uniforms.uWindSpeed={value:G?.windVisualSpeed||1};
+    shader.uniforms.uFogLow={value:cosineColor(.18,false)};shader.uniforms.uFogHigh={value:cosineColor(.04,false)};shader.uniforms.uPainterFog={value:.0015};shader.uniforms.uMicroMode={value:mode};
+    shader.vertexShader=`uniform float uPainterTime;uniform float uWind;uniform float uWindSpeed;varying vec3 vPainterWorld;\n${shader.vertexShader}`
+      .replace('#include <begin_vertex>',`#include <begin_vertex>
+        #ifdef USE_INSTANCING
+          vec3 painterAnchor=(modelMatrix*instanceMatrix*vec4(0.,0.,0.,1.)).xyz;
+        #else
+          vec3 painterAnchor=(modelMatrix*vec4(0.,0.,0.,1.)).xyz;
+        #endif
+        float painterSway=sin(uPainterTime*uWindSpeed+painterAnchor.x*.071+painterAnchor.z*.053)*uWind;
+        transformed.x+=painterSway*(.35+.65*clamp(position.y+.5,0.,1.));
+        transformed.z+=cos(uPainterTime*uWindSpeed*.73+painterAnchor.z*.061)*uWind*.38*(.35+.65*clamp(position.y+.5,0.,1.));`)
+      .replace('#include <project_vertex>',`#include <project_vertex>
+        #ifdef USE_INSTANCING
+          vPainterWorld=(modelMatrix*instanceMatrix*vec4(transformed,1.)).xyz;
+        #else
+          vPainterWorld=(modelMatrix*vec4(transformed,1.)).xyz;
+        #endif`);
+    shader.fragmentShader=`uniform vec3 uFogLow;uniform vec3 uFogHigh;uniform float uPainterFog;uniform float uMicroMode;varying vec3 vPainterWorld;
+      float phash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+      float pnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(phash(i),phash(i+vec2(1,0)),f.x),mix(phash(i+vec2(0,1)),phash(i+vec2(1)),f.x),f.y);}
+      ${shader.fragmentShader}`
+      .replace('#include <color_fragment>',`#include <color_fragment>
+        float micro=1.;
+        if(uMicroMode<1.5&&uMicroMode>.5){vec2 q=vPainterWorld.xz*.18;vec2 cell=abs(fract(q)-.5);micro=.88+.18*smoothstep(.08,.48,max(cell.x,cell.y))+.08*pnoise(q*2.3);}
+        else if(uMicroMode<2.5&&uMicroMode>1.5){micro=.84+.23*pnoise(vec2(vPainterWorld.x*2.2,vPainterWorld.y*.32));}
+        else if(uMicroMode>2.5){micro=.9+.1*sin(vPainterWorld.x*.7+pnoise(vPainterWorld.xz*.08)*4.)+.06*pnoise(vPainterWorld.xz*1.5);}
+        diffuseColor.rgb*=micro;`)
+      .replace('#include <fog_fragment>',`#ifdef USE_FOG
+        float painterFogFactor=1.-exp(-uPainterFog*uPainterFog*vFogDepth*vFogDepth);
+        float fogLift=clamp(.45+normalize(vPainterWorld-cameraPosition).y*1.6,0.,1.);
+        vec3 painterFogColor=mix(uFogLow,uFogHigh,fogLift);
+        gl_FragColor.rgb=mix(gl_FragColor.rgb,painterFogColor,painterFogFactor);
+      #endif`);
+    painterShaders.add(shader);
+  };
+  m.customProgramCacheKey=()=>`painter-${mode}-${wind}`;
+  return m;
+}
+function mat(c,e=0,mode=0,wind=0){let m=painter(new T.MeshStandardMaterial({color:c,roughness:.9,flatShading:true}),mode,wind);if(e){m.emissive.copy(c);m.emissiveIntensity=e}return m}
+function makeWater(){
+  const geo=new T.PlaneGeometry(SIZE,SIZE,96,96);geo.rotateX(-Math.PI/2);
+  const p=geo.attributes.position,shore=[];
+  for(let i=0;i<p.count;i++){
+    const depth=G.water-height(p.getX(i),p.getZ(i));
+    shore.push(1-smooth(clamp((depth-.15)/3.8,0,1)));
+  }
+  geo.setAttribute("shore",new T.Float32BufferAttribute(shore,1));
+  const material=new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{
+    uTime:{value:0},uDeep:{value:cosineColor(.64)},uShallow:{value:cosineColor(.42)},uFoam:{value:cosineColor(.08,false)},uSky:{value:cosineColor(.03,false)},
+    uFogLow:{value:cosineColor(.18,false)},uFogHigh:{value:cosineColor(.04,false)},uFogDensity:{value:.0015}
+  },vertexShader:`attribute float shore;varying float vShore;varying vec3 vWorld;uniform float uTime;
+    void main(){vec3 q=position;q.y+=sin(position.x*.055+uTime*.7)*.055+sin(position.z*.037-uTime*.43)*.04;vShore=shore;vec4 w=modelMatrix*vec4(q,1.);vWorld=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,
+    fragmentShader:`varying float vShore;varying vec3 vWorld;uniform float uTime;uniform vec3 uDeep,uShallow,uFoam,uSky,uFogLow,uFogHigh;uniform float uFogDensity;
+    void main(){vec3 dx=dFdx(vWorld),dy=dFdy(vWorld),n=normalize(cross(dx,dy));if(n.y<0.)n=-n;vec3 viewDir=normalize(cameraPosition-vWorld);float fresnel=pow(1.-max(dot(n,viewDir),0.),3.);float ripple=.5+.5*sin(vWorld.x*.16+sin(vWorld.z*.08+uTime*.5)*2.4-uTime*.35);float edge=smoothstep(.18,.76,vShore);float foam=smoothstep(.52,.92,vShore)*(.7+.3*ripple);vec3 color=mix(uDeep,uShallow,edge*.72);color=mix(color,uSky,.18+fresnel*.58);color=mix(color,uFoam,foam*.78);float dist=length(cameraPosition-vWorld);float fog=1.-exp(-uFogDensity*uFogDensity*dist*dist);vec3 fogColor=mix(uFogLow,uFogHigh,clamp(.45+normalize(vWorld-cameraPosition).y*1.6,0.,1.));color=mix(color,fogColor,fog);gl_FragColor=vec4(color,.66+fresnel*.2+foam*.12);}`
+  });
+  waterShader=material;water=new T.Mesh(geo,material);water.position.y=G.water;scene.add(water);
+}
 function mesh(g,m,x,y,z,sx=1,sy=1,sz=1){let o=new T.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);scene.add(o);return o}
 function shape(k,x,z){let c=Math.cos(G.angle),s=Math.sin(G.angle),u=x*c-z*s,v=x*s+z*c;u+=(noise(x*.007+41,z*.007)-.5)*G.warp;v+=(noise(x*.007,z*.007+73)-.5)*G.warp;let n=fbm(u*G.freq,v*G.freq);
 if(k===0)return Math.pow(Math.max(0,(n-.39)*2.7),1.55)*G.relief-12;
@@ -33,9 +100,17 @@ function height(x,z){
   let h=mix(shape(G.kind,x,z),shape(G.second,x,z),region);
   const reliefField=fbm(x*.0027-91,z*.0027+147);
   h*=mix(1,.34+reliefField*1.32,G.terrainVariation);
+  // Broad composition field: open calm ground dominates, ridges form a smaller rhythm,
+  // and only the top of the field retains the full relief as a focal mass.
+  let rhythm=0;
+  for(const mass of G.masses){
+    const d=Math.hypot(x-mass.x,z-mass.z)/mass.radius,soft=1-smooth(clamp((d-.55)/.45,0,1));
+    rhythm=Math.max(rhythm,soft*mass.strength);
+  }
+  h*=mix(.16,1.08,rhythm);
   const p=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve),pathBlend=Math.exp(-p*p/190);
   h=mix(h,(fbm(x*.004,z*.004)-.42)*10*G.pathRelief+G.water+3,pathBlend*.88);
-  h+=(noise(x*.065,z*.065)-.5)*G.roughness*(1-pathBlend);
+  h+=(noise(x*.035,z*.035)-.5)*G.roughness*(.18+.82*rhythm)*(1-pathBlend);
   for(const home of homes){
     const d=Math.max(Math.abs(x-home.x-4)/27,Math.abs(z-home.z)/23),blend=1-smooth(clamp((d-1)/.4,0,1));
     h=mix(h,home.base-.05,blend);
@@ -46,13 +121,14 @@ function height(x,z){
 function floraDensity(x,z,y){
   const broad=fbm(x*G.forestScale+G.phase*37,z*G.forestScale-G.phase*23);
   const fine=fbm(x*G.forestScale*3.7-71,z*G.forestScale*3.7+119);
-  const field=broad*.76+fine*.24;
+  const field=broad*.8+fine*.2;
+  const island=smooth(clamp((broad-G.groveThreshold)/Math.max(.04,1-G.groveThreshold),0,1));
   const deviation=(field-.5)*G.forestContrast*mix(.18,1.55,G.forestPatchiness);
   const moisture=clamp((y-G.water)/18,0,1);
-  return smooth(clamp(G.forestCover+deviation+(moisture-.5)*.1,0,1));
+  return smooth(clamp((G.forestCover+deviation+(moisture-.5)*.1)*mix(.06,1.42,island),0,1));
 }
 function ground(x,z){let gx=clamp((x+SIZE/2)/STEP,0,SEG-.001),gz=clamp((z+SIZE/2)/STEP,0,SEG-.001),X=Math.floor(gx),Z=Math.floor(gz),u=gx-X,v=gz-Z,a=(Z*(SEG+1)+X)*3+1,p=landMesh.geometry.attributes.position.array,A=p[a],B=p[a+3],C=p[a+(SEG+1)*3],D=p[a+(SEG+2)*3];return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
-function clear(){if(!scene)return;let gs=new Set,ms=new Set;scene.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose())}
+function clear(){if(!scene)return;let gs=new Set,ms=new Set;scene.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose());painterShaders.clear();waterShader=null}
 function instances(g,m,a){if(!a.length){g.dispose();m.dispose();return;}let o=new T.InstancedMesh(g,m,a.length);a.forEach((v,i)=>{temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);temp.rotation.set(v[6]||0,v[7]||0,v[8]||0);temp.updateMatrix();o.setMatrixAt(i,temp.matrix)});scene.add(o)}
 function instancesQ(g,m,a){
   if(!a.length){g.dispose();m.dispose();return;}
@@ -168,19 +244,19 @@ function growLSystemFlora(land,leaf,rock){
   }
   catalog.forEach((species,i)=>{
     const branchColor=land.clone().multiplyScalar(.48+species.branchScale*.1);
-        instancesQ(new T.CylinderGeometry(1,1,1,5),mat(branchColor),groups[i].branches);
-    instancesQ(leafGeometry(species.leafForm),mat(new T.Color(0xffffff),species.glow),groups[i].foliage);
+    instancesQ(new T.CylinderGeometry(1,1,1,5),mat(branchColor,0,2,.035+G.windVisualStrength*.08),groups[i].branches);
+    instancesQ(leafGeometry(species.leafForm),mat(new T.Color(0xffffff),species.glow,0,.09+G.windVisualStrength*.22),groups[i].foliage);
   });
-  instances(new T.IcosahedronGeometry(1,0),mat(rock),rocks);
+  instances(new T.IcosahedronGeometry(1,0),mat(rock,0,1),rocks);
   const generations=[...new Set(catalog.map(s=>s.iterations))].sort().join(",");
   return {plants,species:catalog.length,generations};
 }
 function growGroundFlora(land,leaf,accent){
-  const r=rng(G.hash^0x35a7c1),moss=[],stems=[],caps=[],flatQ=new T.Quaternion().setFromAxisAngle(new T.Vector3(1,0,0),-Math.PI/2);
+  const r=rng(G.hash^0x35a7c1),moss=[],stems=[],caps=[],flowerStems=[],blossoms=[],flatQ=new T.Quaternion().setFromAxisAngle(new T.Vector3(1,0,0),-Math.PI/2);
   const mossLimit=Math.floor((80+G.forestCover*720)*(.45+G.wet*.75));
   const mushroomLimit=Math.floor((8+G.forestCover*150)*(.25+G.wet));
-  let mossCount=0,mushroomCount=0;
-  for(let i=0;i<4200&&(mossCount<mossLimit||mushroomCount<mushroomLimit);i++){
+  const flowerLimit=Math.floor(35+(1-G.forestCover)*210);let mossCount=0,mushroomCount=0,flowerCount=0;
+  for(let i=0;i<4600&&(mossCount<mossLimit||mushroomCount<mushroomLimit||flowerCount<flowerLimit);i++){
     const x=(r()-.5)*780,z=(r()-.5)*780,y=height(x,z),density=floraDensity(x,z,y);
     const slope=Math.hypot(height(x+1.2,z)-y,height(x,z+1.2)-y)/1.2;
     if(houseReserved(x,z)||y<G.water+.15||slope>.72)continue;
@@ -194,12 +270,20 @@ function growGroundFlora(land,leaf,accent){
       stems.push([x,y+stem/2,z,cap*.28,stem,cap*.28,0,r()*6.28,0]);
       caps.push([x,y+stem,z,cap,cap*(.32+r()*.24),cap,0,0,0,1,capTone.r,capTone.g,capTone.b]);mushroomCount++;
     }
+    const flowerPatch=noise(x*.016+331,z*.016-227);
+    if(flowerCount<flowerLimit&&flowerPatch>.67&&density<.72&&r()<.13){
+      const stem=.22+r()*.58,bloom=.08+r()*.16,patchTone=cosineColor(.88+Math.floor(flowerPatch*3)*.025);
+      flowerStems.push([x,y+stem/2,z,.025,stem,.025,0,r()*6.28,0]);
+      blossoms.push([x,y+stem,z,bloom,bloom*.45,bloom,0,0,0,1,patchTone.r,patchTone.g,patchTone.b]);flowerCount++;
+    }
   }
   const mossMat=mat(new T.Color(0xffffff));mossMat.side=T.DoubleSide;
   instancesQ(new T.CircleGeometry(1,8),mossMat,moss);
   instances(new T.CylinderGeometry(.7,1,1,6),mat(land.clone().lerp(new T.Color(0xffffff),.28)),stems);
   instancesQ(new T.SphereGeometry(1,9,5,0,Math.PI*2,0,Math.PI/2),mat(new T.Color(0xffffff),.015),caps);
-  return {moss:mossCount,mushrooms:mushroomCount};
+  instances(new T.CylinderGeometry(1,1,1,5),mat(leaf.clone().multiplyScalar(.72),0,2,.025),flowerStems);
+  instancesQ(new T.OctahedronGeometry(1,0),mat(new T.Color(0xffffff),.02,0,.05),blossoms);
+  return {moss:mossCount,mushrooms:mushroomCount,flowers:flowerCount};
 }
 function ruin(x,z,type,stone,accent){let a=rnd()*6.28,box=new T.BoxGeometry(1,1,1),column=new T.CylinderGeometry(.8,1,1,7);function p(px,pz,w,h,d,g=box,up=0){let X=x+Math.cos(a)*px-Math.sin(a)*pz,Z=z+Math.sin(a)*px+Math.cos(a)*pz,o=mesh(g,stone,X,ground(X,Z)+h/2+up,Z,w,h,d);o.rotation.y=a}
 if(type===0){for(let j=-2;j<=2;j++)for(const side of[-1,1])if(rnd()>.25)p(side*5,j*4,1,5+rnd()*5,1,column);p(0,-9,11,.7,1)}
@@ -250,7 +334,7 @@ function makeNightSky(){
   for(let i=0;i<count;i++){
     const radius=i===0?27+r()*17:10+r()*16;
     const geo=new T.SphereGeometry(radius,32,24),p=geo.attributes.position,colors=[];
-    const base=col(G.hue+.04+i*.035,.12,.79);
+    const base=cosineColor(.08+i*.025,false);
     const craters=Array.from({length:12},()=>{const v=new T.Vector3(r()-.5,r()-.5,r()-.5).normalize();return {v,size:.025+r()*.06};});
     const normal=new T.Vector3();
     for(let j=0;j<p.count;j++){
@@ -274,7 +358,7 @@ function makeNightSky(){
     for(let i=0;i<n;i++){
       const y=.04+r()*.96,az=r()*Math.PI*2,h=Math.sqrt(1-y*y);
       positions.push(Math.cos(az)*h*970,y*970,Math.sin(az)*h*970);
-      const tint=col(.55+(r()-.5)*.3,.06+r()*.12,.65+r()*.3);
+      const tint=cosineColor(.03+r()*.1,false).multiplyScalar(.82+r()*.24);
       colors.push(tint.r,tint.g,tint.b);
     }
     const geo=new T.BufferGeometry();
@@ -283,9 +367,9 @@ function makeNightSky(){
     const material=new T.PointsMaterial({vertexColors:true,size:layer===0?1.3:2.4,sizeAttenuation:false,transparent:true,opacity:0,depthWrite:false,fog:false});
     const points=new T.Points(geo,material);group.add(points);stars.push(points);
   }
-  const moonlight=new T.DirectionalLight(col(G.hue+.035,.13,.83),0);
+  const moonlight=new T.DirectionalLight(cosineColor(.06,false),0);
   moonlight.position.copy(moons[0].position);scene.add(moonlight);
-  const ambient=new T.AmbientLight(col(G.hue,.08,.72),0);scene.add(ambient);
+  const ambient=new T.AmbientLight(cosineColor(.12,false),0);scene.add(ambient);
   return {group,dome,moons,stars,moonlight,ambient};
 }
 function updateNightSky(e,day,front,top,horizon){
@@ -334,10 +418,10 @@ function buildHomes(){
   buildingSolids=[];
   for(const house of homes){
     const r=rng(house.seed),{x,z,base,cells}=house,box=new T.BoxGeometry(1,1,1);
-    const wall=mat(col(G.hue+(r()-.5)*.16,.1+r()*.2,.32+r()*.3));
-    const trim=mat(col(G.hue+.035,.16,.22+r()*.15));
-    const floorMat=mat(col(G.hue+.06,.15,.36+r()*.16));
-    const paints=Array.from({length:5},()=>mat(col(G.hue+(r()-.5)*.24,.1+r()*.2,.4+r()*.2)));
+    const wall=mat(cosineColor(.58+r()*.14),0,1);
+    const trim=mat(cosineColor(.74+r()*.08),0,2);
+    const floorMat=mat(cosineColor(.46+r()*.12),0,3);
+    const paints=Array.from({length:5},()=>mat(cosineColor(.18+r()*.72)));
     function part(px,py,pz,w,h,d,m=wall,solid=true){
       mesh(box,m,x+px,base+py,z+pz,w,h,d);
       if(solid)buildingSolids.push({x:x+px,z:z+pz,y:base+py,w:w/2,d:d/2,h:h/2});
@@ -392,9 +476,9 @@ function buildHomes(){
       if(level>start)for(const side of [-1,1])part(side*1.8,b+.5,-1,.12,1,14,trim);
       // Restrict expensive point lights to two per building.
       if(level===0||level===start){
-        const lamp=new T.PointLight(col(.11,.22,.8),25,23,2);lamp.position.set(x,base+b+3.3,z+9);scene.add(lamp);
+        const lamp=new T.PointLight(cosineColor(.02,false),25,23,2);lamp.position.set(x,base+b+3.3,z+9);scene.add(lamp);
       }
-      part(0,b+3.4,9,.5,.18,.5,mat(col(.11,.2,.7),1),false);
+      part(0,b+3.4,9,.5,.18,.5,mat(cosineColor(.02,false),1),false);
     }
     for(const [ix,iz] of cells){
       const top=house.floors*4.2;
@@ -464,32 +548,29 @@ function generate(seed){clear();homes=[];buildingSolids=[];rnd=rng(hash(seed));l
 relief:2+Math.pow(reliefSeed,1.35)*108,freq:.003+rnd()*.011,angle:rnd()*6.28,warp:18+rnd()*92,phase:rnd()*6.28,
 path:rnd()*100-50,curve:8+rnd()*72,wet:rnd(),slender:rnd(),form:Math.floor(rnd()*5),
 regionStrength:Math.pow(rnd(),.72),regionScale:.0015+rnd()*.006,regionWidth:.12+rnd()*.22,
-terrainVariation:Math.pow(rnd(),1.15),roughness:.08+Math.pow(rnd(),1.3)*3.1,pathRelief:.12+rnd()*.88,
+terrainVariation:Math.pow(rnd(),1.15),roughness:.04+Math.pow(rnd(),1.55)*.86,pathRelief:.12+rnd()*.88,
 forestCover:Math.pow(coverSeed,.72),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
-forestContrast:.25+rnd()*1.75,craters:[]};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;for(let i=0;i<15;i++)G.craters.push({x:(rnd()-.5)*760,z:(rnd()-.5)*760,r:25+rnd()*65,d:(2+rnd()*28)*(.12+G.relief/110)});
-const paletteR=rng(G.hash^0x6ca91),baseHue=G.hue,botanicalShift=(paletteR()-.5)*.11;
-let sky=col(baseHue,.2+paletteR()*.12,.46+paletteR()*.1),
-horizon=col(baseHue+.035+botanicalShift*.18,.22+paletteR()*.12,.64+paletteR()*.1),
-land=col(baseHue+botanicalShift*.32,.2+paletteR()*.14,.2+paletteR()*.1),
-rock=col(baseHue+botanicalShift*.12,.07+paletteR()*.09,.32+paletteR()*.12),
-leaf=col(baseHue+botanicalShift,.34+paletteR()*.18,.3+paletteR()*.13),
-accent=col(baseHue+(paletteR()<.72?.075:.48),.34+paletteR()*.16,.58+paletteR()*.12);
-scene=new T.Scene;scene.background=sky;scene.fog=new T.FogExp2(horizon,.0014+G.wet*.0017);let hemi=new T.HemisphereLight(horizon,land,.9),light=new T.DirectionalLight(col(G.hue+.42,.3,.9),2);scene.add(hemi,light);
-planHomes();let geo=new T.PlaneGeometry(SIZE,SIZE,SEG,SEG);geo.rotateX(-Math.PI/2);let pos=geo.attributes.position,colors=[];for(let i=0;i<pos.count;i++){let x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2,c=land.clone().lerp(rock,clamp(slope*.6+(y-25)/80,0,1));c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors.push(c.r,c.g,c.b)}geo.setAttribute("color",new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();landMesh=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));scene.add(landMesh);
-let wg=new T.PlaneGeometry(SIZE,SIZE);wg.rotateX(-Math.PI/2);water=new T.Mesh(wg,new T.MeshStandardMaterial({color:col(G.hue+.08,.5,.3),metalness:.35,roughness:.2,transparent:true,opacity:.86}));water.position.y=G.water;scene.add(water);
-let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({color:col(G.hue+.42,.25,.9),fog:false}),-260,160,-600);for(let i=0;i<Math.floor(rnd()*4);i++){rnd();rnd();}
+forestContrast:.25+rnd()*1.75,groveThreshold:.42+rnd()*.19,windVisualSpeed:.45+rnd()*1.35,windVisualStrength:.25+rnd()*.75,masses:[],craters:[]};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;for(let i=0;i<15;i++)G.craters.push({x:(rnd()-.5)*760,z:(rnd()-.5)*760,r:25+rnd()*65,d:(2+rnd()*28)*(.12+G.relief/110)});
+const massR=rng(G.hash^0x70a2010);for(let i=0;i<7;i++)G.masses.push({x:(massR()-.5)*690,z:(massR()-.5)*690,radius:58+massR()*38,strength:.48+massR()*.18});for(let i=0;i<2;i++)G.masses.push({x:(massR()-.5)*620,z:(massR()-.5)*620,radius:42+massR()*25,strength:1});
+const paletteR=rng(G.hash^0x6ca91),baseHue=G.hue,anchor=col(baseHue,.22+paletteR()*.16,.44+paletteR()*.08),phase=paletteR();
+G.palette={steps:3+Math.floor(paletteR()*3),a:[anchor.r*.68+.15,anchor.g*.68+.15,anchor.b*.68+.15],b:[.11+paletteR()*.06,.11+paletteR()*.06,.11+paletteR()*.06],c:[.72+paletteR()*.18,.72+paletteR()*.18,.72+paletteR()*.18],d:[phase-.035,phase,phase+.035]};
+let sky=cosineColor(.04,false),horizon=cosineColor(.16,false),land=cosineColor(.38),rock=cosineColor(.82),leaf=cosineColor(.54),accent=cosineColor(.96,false);
+scene=new T.Scene;scene.background=sky;const fogDensity=.00125+G.wet*.00155;scene.fog=new T.FogExp2(horizon,fogDensity);let hemi=new T.HemisphereLight(cosineColor(.08,false),cosineColor(.46,false),1.12),light=new T.DirectionalLight(cosineColor(.02,false),1.65);scene.add(hemi,light);
+planHomes();let geo=new T.PlaneGeometry(SIZE,SIZE,SEG,SEG);geo.rotateX(-Math.PI/2);let pos=geo.attributes.position,colors=[];for(let i=0;i<pos.count;i++){let x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2,moisture=1-clamp((y-G.water)/22,0,1),t=.34+clamp(slope*.42,0,.34)+clamp((y-G.water)/105,0,.22)-moisture*.07,c=cosineColor(t);colors.push(c.r,c.g,c.b)}geo.setAttribute("color",new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();landMesh=new T.Mesh(geo,painter(new T.MeshStandardMaterial({vertexColors:true,roughness:1,flatShading:false}),1));scene.add(landMesh);
+makeWater();
+let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({color:cosineColor(.01,false).lerp(new T.Color(0xffffff),.45),fog:false}),-260,160,-600);for(let i=0;i<Math.floor(rnd()*4);i++){rnd();rnd();}
 let flora=growLSystemFlora(land,leaf,rock),undergrowth=growGroundFlora(land,leaf,accent);
 let spawn;for(let z=140;z>-160;z-=4){let x=G.path+Math.sin(z*.011+G.phase)*G.curve,y=ground(x,z);if(y>G.water+.8){spawn=[x,y+1.75,z];break}}if(!spawn)spawn=[G.path,Math.max(ground(G.path,120),G.water)+1.75,120];cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();
 let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
-buildHomes();$("#home").disabled=homes.length===0;$("#home").textContent=homes.length?"К строению":"Нет строений";const weatherRoll=rng(G.hash^0x57ea7)(),wt=kind===4?"dust":G.wet>.62?"rain":weatherRoll<.28?"snow":"spores";weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
-let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · растительность: "+flora.plants+" растений, "+flora.species+" форм, поколения "+flora.generations+" · мхи: "+undergrowth.moss+" · грибы: "+undergrowth.mushrooms+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+buildHomes();$("#home").disabled=homes.length===0;$("#home").textContent=homes.length?"К строению":"Нет строений";const weatherRoll=rng(G.hash^0x57ea7)(),wt=kind===4?"dust":G.wet>.62?"rain":weatherRoll<.28?"snow":"spores";weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?cosineColor(.14,false):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
+let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · растительность: "+flora.plants+" растений, "+flora.species+" форм · цветы: "+undergrowth.flowers+" · мхи: "+undergrowth.moss+" · грибы: "+undergrowth.mushrooms+" · палитра: "+G.palette.steps+" тона · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
 function update(dt){
   const e=celestial;e.age+=dt;
   const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
-  const front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength,night=col(G.hue,.25,.13),sunset=col(G.hue+.12,.4,.42);
+  const front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength,night=cosineColor(.72,false).multiplyScalar(.22),sunset=cosineColor(.94,false).multiplyScalar(.72);
   const top=night.clone().lerp(e.sky,day),h=night.clone().lerp(e.horizon,day).lerp(sunset,tw*.35);
   scene.background.copy(top);scene.fog.color.copy(h);scene.fog.density=e.fog*(1+front*.75);
-  e.hemi.color.copy(h).lerp(col(G.hue,.12,.64),(1-day)*.65);e.hemi.intensity=.85+day*.95;
+  e.hemi.color.copy(h).lerp(cosineColor(.1,false),(1-day)*.65);e.hemi.intensity=.9+day*.72;
   e.light.position.set(Math.cos(a)*450,alt*500,-400);e.light.intensity=(.05+day*2.5)*(1-front*.45);
   e.sun.position.set(cam.position.x+Math.cos(a)*430,cam.position.y+alt*480,cam.position.z-650);e.sun.visible=alt>-.12;updateNightSky(e,day,front,top,h);
 
@@ -514,7 +595,8 @@ function update(dt){
     }
   }
   weather.points.geometry.attributes.position.needsUpdate=true;
-  water.material.roughness=.2+Math.sin(e.age*.4)*.035;
+  for(const shader of painterShaders){shader.uniforms.uPainterTime.value=e.age;shader.uniforms.uWindSpeed.value=G.windVisualSpeed;shader.uniforms.uFogLow.value.copy(h);shader.uniforms.uFogHigh.value.copy(top);shader.uniforms.uPainterFog.value=scene.fog.density;}
+  if(waterShader){waterShader.uniforms.uTime.value=e.age;waterShader.uniforms.uFogLow.value.copy(h);waterShader.uniforms.uFogHigh.value.copy(top);waterShader.uniforms.uFogDensity.value=scene.fog.density;}
 }
 async function toggleAudio(){if(!audio){let ctx=new AudioContext,master=ctx.createGain(),filter=ctx.createBiquadFilter(),buf=ctx.createBuffer(1,ctx.sampleRate*4,ctx.sampleRate),d=buf.getChannelData(0),r=rng(G.hash^999),last=0;for(let i=0;i<d.length;i++){last=(last+(r()*2-1)*.03)/1.03;d[i]=last*4}let src=ctx.createBufferSource();src.buffer=buf;src.loop=true;filter.type="lowpass";filter.frequency.value=250+G.slender*900;src.connect(filter).connect(master).connect(ctx.destination);master.gain.value=0;src.start();audio={ctx,master,filter}}await audio.ctx.resume();sound=!sound;audio.master.gain.setTargetAtTime(sound?.25:0,audio.ctx.currentTime,.4);$("#sound").textContent="Звук: "+(sound?"вкл.":"выкл.")}
 
