@@ -1,6 +1,7 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Иные миры</title><style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071018;color:#fff;font-family:system-ui}canvas{display:block}#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 2px 14px #000}header{position:absolute;top:22px;left:26px}h1{font:400 26px Georgia;margin:0 0 6px}p{margin:3px 0;color:#ffffffc7;font-size:13px}footer{position:absolute;bottom:20px;left:22px;right:22px;display:flex;gap:8px;flex-wrap:wrap}.ui{pointer-events:auto;color:#fff;background:#0a1621c9;border:1px solid #ffffff42;border-radius:7px;padding:10px 13px;backdrop-filter:blur(10px)}button{cursor:pointer}button:hover{background:#293c4b}input{width:130px}.cross{position:absolute;top:50%;left:50%;width:5px;height:5px;border-radius:50%;background:#ffffffa0}#start{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;background:#071018e8;transition:.5s}#start div{max-width:480px;padding:25px}#start h2{font:400 38px Georgia;margin:0 0 15px}#start p{line-height:1.7;margin-bottom:20px}@media(max-width:650px){header{left:14px}footer{left:12px;bottom:12px}}</style></head><body>
-<div id="start"><div><h2>Иные миры</h2><p>Каждый код создаёт собственный ландшафт, флору, руины, погоду и небо.</p><button class="ui" id="enter">Войти в мир</button><p>WASD — идти · мышь — смотреть · Shift — суперускорение · пробел — прыжок</p></div></div>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071018;color:#fff;font-family:system-ui}canvas{display:block;touch-action:none}#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 2px 14px #000}header{position:absolute;top:22px;left:26px}h1{font:400 26px Georgia;margin:0 0 6px}p{margin:3px 0;color:#ffffffc7;font-size:13px}footer{position:absolute;bottom:20px;left:22px;right:22px;display:flex;gap:8px;flex-wrap:wrap}.ui{pointer-events:auto;color:#fff;background:#0a1621c9;border:1px solid #ffffff42;border-radius:7px;padding:10px 13px;backdrop-filter:blur(10px)}button{cursor:pointer}button:hover{background:#293c4b}input{width:130px}.cross{position:absolute;top:50%;left:50%;width:5px;height:5px;border-radius:50%;background:#ffffffa0}#start{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;background:#071018e8;transition:.5s}#start div{max-width:480px;padding:25px}#start h2{font:400 38px Georgia;margin:0 0 15px}#start p{line-height:1.7;margin-bottom:20px}.mobileHint,#mobile{display:none}#mobile{position:fixed;inset:0;z-index:2;pointer-events:none;touch-action:none}#stick{position:absolute;left:24px;bottom:25px;width:116px;height:116px;border:2px solid #ffffff45;border-radius:50%;background:#07101870;backdrop-filter:blur(6px);pointer-events:auto}#stick i{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px;border-radius:50%;background:#ffffff45;box-shadow:0 0 20px #0008;transform:translate(0,0)}#mobileActions{position:absolute;right:24px;bottom:28px;display:flex;align-items:flex-end;gap:14px;pointer-events:auto}#mobileActions button{width:66px;height:66px;padding:0;border-radius:50%;font-size:25px;font-weight:700;touch-action:none}#mjump{transform:translateY(-35px)}@media(max-width:650px){header{left:14px}footer{left:12px;bottom:12px}}@media(pointer:coarse){#mobile,.mobileHint{display:block}.desktopHint{display:none}footer{bottom:158px;left:12px;right:12px}.ui{padding:9px 11px}header{top:14px}}</style></head><body>
+<div id="start"><div><h2>Иные миры</h2><p>Каждый код создаёт собственный ландшафт, флору, руины, погоду и небо.</p><button class="ui" id="enter">Войти в мир</button><p><span class="desktopHint">WASD — идти · мышь — смотреть · Shift — суперускорение · пробел — прыжок</span><span class="mobileHint">Стик — идти · свайп справа — смотреть · ↑ — прыжок · ⚡ — суперускорение</span></p></div></div>
+<div id="mobile" aria-label="Сенсорное управление"><div id="stick"><i></i></div><div id="mobileActions"><button class="ui" id="mboost" aria-label="Суперускорение">⚡</button><button class="ui" id="mjump" aria-label="Прыжок">↑</button></div></div>
 <div id="hud"><header><h1 id="name">Создание мира</h1><p id="info"></p></header><i class="cross"></i><footer><button class="ui" id="new">Новый мир</button><input class="ui" id="seed"><button class="ui" id="open">Открыть</button><button class="ui" id="sound">Звук: выкл.</button><button class="ui" id="sounds" title="Резервная загрузка своих записей">Свои WAV</button><input type="file" id="audioFiles" accept=".wav,audio/*" multiple hidden><span id="audioStatus" role="status"></span><button class="ui" id="photo">Снимок</button><button class="ui" id="night">День / ночь</button><button class="ui" id="home">К дому</button></footer></div>
 <script type="module">
 import*as T from"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js";
@@ -9,7 +10,8 @@ rend.setPixelRatio(Math.min(devicePixelRatio,1.7));rend.setSize(innerWidth,inner
 const cam=new T.PerspectiveCamera(66,innerWidth/innerHeight,.1,1200);cam.rotation.order="YXZ";
 let scene,landMesh,water,G,rnd,weather,celestial,audio,sound=false,yaw=0,pitch=-.05,jump=0,grounded=true;
 const keys=new Set,clock=new T.Clock,temp=new T.Object3D,SIZE=820,SEG=170,STEP=SIZE/SEG;
-const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight");
+let mobileForward=0,mobileSide=0,mobileBoost=false;
+const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost;
 function hash(s){let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(),16777619);return h>>>0}
 function rng(s){return()=>{s|=0;s=s+0x6d2b79f5|0;let t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296}}
 function smooth(x){return x*x*(3-2*x)}
@@ -443,13 +445,45 @@ $("#sounds").onclick=()=>$("#audioFiles").click();
 $("#audioFiles").onchange=async e=>{try{await loadSoundFiles(e.target.files);}catch(error){$("#audioStatus").textContent=" · ошибка звука: "+error.message;}};
 
 
+function setupMobileControls(){
+  const stick=$("#stick"),nub=stick.querySelector("i"),jumpButton=$("#mjump"),boostButton=$("#mboost");
+  let stickPointer=null,lookPointer=null,lastLookX=0,lastLookY=0;
+  function resetStick(){stickPointer=null;mobileForward=mobileSide=0;nub.style.transform="translate(0,0)";}
+  function moveStick(e){
+    const r=stick.getBoundingClientRect(),radius=r.width*.34;
+    let x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2;
+    const d=Math.hypot(x,y);if(d>radius){x*=radius/d;y*=radius/d;}
+    nub.style.transform=`translate(${x}px,${y}px)`;
+    mobileSide=x/radius;mobileForward=-y/radius;
+  }
+  stick.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();stickPointer=e.pointerId;stick.setPointerCapture(e.pointerId);moveStick(e)});
+  stick.addEventListener("pointermove",e=>{if(e.pointerId===stickPointer)moveStick(e)});
+  stick.addEventListener("pointerup",resetStick);stick.addEventListener("pointercancel",resetStick);
+  const stopBoost=e=>{e.preventDefault();e.stopPropagation();mobileBoost=false;boostButton.style.background=""};
+  boostButton.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();mobileBoost=true;boostButton.style.background="#587386";boostButton.setPointerCapture(e.pointerId)});
+  boostButton.addEventListener("pointerup",stopBoost);boostButton.addEventListener("pointercancel",stopBoost);
+  jumpButton.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();if(grounded){jump=8.2;grounded=false}});
+  rend.domElement.addEventListener("pointerdown",e=>{
+    if(e.pointerType==="mouse"||e.clientX<innerWidth*.4)return;
+    lookPointer=e.pointerId;lastLookX=e.clientX;lastLookY=e.clientY;rend.domElement.setPointerCapture(e.pointerId);
+  });
+  rend.domElement.addEventListener("pointermove",e=>{
+    if(e.pointerId!==lookPointer)return;
+    yaw-=(e.clientX-lastLookX)*.0042;pitch=clamp(pitch-(e.clientY-lastLookY)*.0042,-1.45,1.45);
+    lastLookX=e.clientX;lastLookY=e.clientY;
+  });
+  const stopLook=e=>{if(e.pointerId===lookPointer)lookPointer=null};
+  rend.domElement.addEventListener("pointerup",stopLook);rend.domElement.addEventListener("pointercancel",stopLook);
+}
+setupMobileControls();
+
 function fresh(){return crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}
-$("#enter").onclick=()=>{$("#start").style.opacity=0;setTimeout(()=>$("#start").remove(),500);rend.domElement.requestPointerLock()};rend.domElement.onclick=()=>rend.domElement.requestPointerLock();addEventListener("mousemove",e=>{if(document.pointerLockElement!==rend.domElement)return;yaw-=e.movementX*.0024;pitch=clamp(pitch-e.movementY*.0024,-1.45,1.45)});addEventListener("keydown",e=>{if(e.target.tagName==="INPUT"||document.pointerLockElement!==rend.domElement)return;if(["Space","KeyW","KeyA","KeyS","KeyD"].includes(e.code))e.preventDefault();keys.add(e.code);if(e.code==="Space"&&grounded){jump=8.2;grounded=false}});addEventListener("keyup",e=>keys.delete(e.code));addEventListener("blur",()=>keys.clear());document.addEventListener("pointerlockchange",()=>keys.clear());
+$("#enter").onclick=()=>{$("#start").style.opacity=0;setTimeout(()=>$("#start").remove(),500);if(matchMedia("(pointer:fine)").matches)rend.domElement.requestPointerLock()};rend.domElement.onclick=()=>{if(matchMedia("(pointer:fine)").matches)rend.domElement.requestPointerLock()};addEventListener("mousemove",e=>{if(document.pointerLockElement!==rend.domElement)return;yaw-=e.movementX*.0024;pitch=clamp(pitch-e.movementY*.0024,-1.45,1.45)});addEventListener("keydown",e=>{if(e.target.tagName==="INPUT"||document.pointerLockElement!==rend.domElement)return;if(["Space","KeyW","KeyA","KeyS","KeyD"].includes(e.code))e.preventDefault();keys.add(e.code);if(e.code==="Space"&&grounded){jump=8.2;grounded=false}});addEventListener("keyup",e=>keys.delete(e.code));addEventListener("blur",()=>keys.clear());document.addEventListener("pointerlockchange",()=>keys.clear());
 $("#new").onclick=()=>generate(fresh());$("#open").onclick=()=>{let s=$("#seed").value.trim().slice(0,60);if(s)generate(s)};$("#seed").onkeydown=e=>{if(e.key==="Enter")$("#open").click()};$("#sound").onclick=async()=>{await toggleAudio();if(sound)await loadBundledSounds();};$("#home").onclick=()=>{const h=homes[0];if(!h)return;cam.position.set(h.x,h.base+1.75,h.z+18);yaw=0;pitch=-.02;jump=0;grounded=true;keys.clear();};$("#night").onclick=()=>{const phase=(celestial.start+celestial.age/celestial.length)%1;celestial.start=phase<.5?.75:.25;celestial.age=0;update(0);};$("#photo").onclick=()=>rend.domElement.toBlob(b=>{let u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="world-"+G.hash+".png";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)});
 addEventListener("resize",()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();rend.setSize(innerWidth,innerHeight)});generate(new URLSearchParams(location.search).get("seed")||fresh());
 rend.setAnimationLoop(()=>{
-  const dt=Math.min(clock.getDelta(),.05),f=+keys.has("KeyW")-+keys.has("KeyS"),s=+keys.has("KeyD")-+keys.has("KeyA");
-  const n=Math.hypot(f,s)||1,spd=boosting()?32:5;
+  const dt=Math.min(clock.getDelta(),.05),f=+keys.has("KeyW")-+keys.has("KeyS")+mobileForward,s=+keys.has("KeyD")-+keys.has("KeyA")+mobileSide;
+  const n=Math.max(1,Math.hypot(f,s)),spd=boosting()?32:5;
   const dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)/n*spd*dt,dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)/n*spd*dt;
   // Substeps keep walls and stair risers solid even during fast movement.
   const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.1));
