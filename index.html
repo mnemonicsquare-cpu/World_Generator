@@ -43,12 +43,12 @@ function height(x,z){
   }
   return h;
 }
-function floraDensity(x,z){
+function floraDensity(x,z,y){
   const broad=fbm(x*G.forestScale+G.phase*37,z*G.forestScale-G.phase*23);
   const fine=fbm(x*G.forestScale*3.7-71,z*G.forestScale*3.7+119);
   const field=broad*.76+fine*.24;
   const deviation=(field-.5)*G.forestContrast*mix(.18,1.55,G.forestPatchiness);
-  const moisture=clamp((height(x,z)-G.water)/18,0,1);
+  const moisture=clamp((y-G.water)/18,0,1);
   return smooth(clamp(G.forestCover+deviation+(moisture-.5)*.1,0,1));
 }
 function ground(x,z){let gx=clamp((x+SIZE/2)/STEP,0,SEG-.001),gz=clamp((z+SIZE/2)/STEP,0,SEG-.001),X=Math.floor(gx),Z=Math.floor(gz),u=gx-X,v=gz-Z,a=(Z*(SEG+1)+X)*3+1,p=landMesh.geometry.attributes.position.array,A=p[a],B=p[a+3],C=p[a+(SEG+1)*3],D=p[a+(SEG+2)*3];return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
@@ -134,7 +134,7 @@ function growLSystemFlora(land,leaf,rock){
     const x=(r()-.5)*790,z=(r()-.5)*790,y=height(x,z);
     const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
     const path=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve);
-    const localDensity=floraDensity(x,z);
+    const localDensity=floraDensity(x,z,y);
     if(!houseReserved(x,z)&&plants<plantLimit&&y>G.water+.7&&slope<.82&&path>7&&r()<localDensity){
       const patch=noise(x*.009+211,z*.009-173),index=Math.min(catalog.length-1,Math.floor((patch*.78+r()*.22)*catalog.length));
       const species=catalog[index],prototype=species.prototype,group=groups[index];
