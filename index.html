@@ -1,5 +1,5 @@
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Иные миры</title><style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071018;color:#fff;font-family:system-ui}canvas{display:block;touch-action:none}#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 2px 14px #000}header{position:absolute;top:22px;left:26px}h1{font:400 26px Georgia;margin:0 0 6px}p{margin:3px 0;color:#ffffffc7;font-size:13px}footer{position:absolute;bottom:20px;left:22px;right:22px;display:flex;gap:8px;flex-wrap:wrap}.ui{pointer-events:auto;color:#fff;background:#0a1621c9;border:1px solid #ffffff42;border-radius:7px;padding:10px 13px;backdrop-filter:blur(10px)}button{cursor:pointer}button:hover{background:#293c4b}input{width:130px}.cross{position:absolute;top:50%;left:50%;width:5px;height:5px;border-radius:50%;background:#ffffffa0}#start{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;background:#071018e8;transition:.5s}#start div{max-width:480px;padding:25px}#start h2{font:400 38px Georgia;margin:0 0 15px}#start p{line-height:1.7;margin-bottom:20px}.mobileHint,#mobile{display:none}#mobile{position:fixed;inset:0;z-index:2;pointer-events:none;touch-action:none}#stick{position:absolute;left:24px;bottom:25px;width:116px;height:116px;border:2px solid #ffffff45;border-radius:50%;background:#07101870;backdrop-filter:blur(6px);pointer-events:auto}#stick i{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px;border-radius:50%;background:#ffffff45;box-shadow:0 0 20px #0008;transform:translate(0,0)}#mobileActions{position:absolute;right:24px;bottom:28px;display:flex;align-items:flex-end;gap:14px;pointer-events:auto}#mobileActions button{width:66px;height:66px;padding:0;border-radius:50%;font-size:25px;font-weight:700;touch-action:none}#mjump{transform:translateY(-35px)}@media(max-width:650px){header{left:14px}footer{left:12px;bottom:12px}}@media(pointer:coarse){#mobile,.mobileHint{display:block}.desktopHint{display:none}footer{bottom:158px;left:12px;right:12px}.ui{padding:9px 11px}header{top:14px}}</style></head><body>
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Иные миры</title><style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;min-height:100dvh;overflow:hidden;background:#071018;color:#fff;font-family:system-ui}canvas{display:block;touch-action:none;width:100vw!important;height:100dvh!important}#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 2px 14px #000}header{position:absolute;top:22px;left:26px}h1{font:400 26px Georgia;margin:0 0 6px}p{margin:3px 0;color:#ffffffc7;font-size:13px}footer{position:absolute;bottom:20px;left:22px;right:22px;display:flex;gap:8px;flex-wrap:wrap}.ui{pointer-events:auto;color:#fff;background:#0a1621c9;border:1px solid #ffffff42;border-radius:7px;padding:10px 13px;backdrop-filter:blur(10px)}button{cursor:pointer}button:hover{background:#293c4b}input{width:130px}.cross{position:absolute;top:50%;left:50%;width:5px;height:5px;border-radius:50%;background:#ffffffa0}#start{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;background:#071018e8;transition:.5s}#start div{max-width:480px;padding:25px}#start h2{font:400 38px Georgia;margin:0 0 15px}#start p{line-height:1.7;margin-bottom:20px}.mobileHint,#mobile{display:none}#mobile{position:fixed;inset:0;width:100vw;height:100dvh;z-index:2;pointer-events:none;touch-action:none}#stick{position:absolute;left:24px;bottom:25px;width:116px;height:116px;border:2px solid #ffffff45;border-radius:50%;background:#07101870;backdrop-filter:blur(6px);pointer-events:auto}#stick i{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px;border-radius:50%;background:#ffffff45;box-shadow:0 0 20px #0008;transform:translate(0,0)}#mobileActions{position:absolute;right:24px;bottom:28px;display:flex;align-items:flex-end;gap:14px;pointer-events:auto}#mobileActions button{width:66px;height:66px;padding:0;border-radius:50%;font-size:25px;font-weight:700;touch-action:none}#mjump{transform:translateY(-35px)}@media(max-width:650px){header{left:14px}footer{left:12px;bottom:12px}}@media(pointer:coarse){#mobile,.mobileHint{display:block}.desktopHint{display:none}footer{bottom:158px;left:12px;right:12px}.ui{padding:9px 11px}header{top:14px}}@media(pointer:coarse) and (orientation:landscape){header{top:max(8px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left))}footer{top:max(8px,env(safe-area-inset-top));bottom:auto;left:210px;right:max(100px,env(safe-area-inset-right));justify-content:flex-end}.ui{padding:7px 9px}#stick{left:max(18px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));width:104px;height:104px}#mobileActions{right:max(18px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom))}#mobileActions button{width:58px;height:58px}#mjump{transform:translateY(-18px)}}</style></head><body>
 <div id="start"><div><h2>Иные миры</h2><p>Каждый код создаёт собственный ландшафт, флору, руины, погоду и небо.</p><button class="ui" id="enter">Войти в мир</button><p><span class="desktopHint">WASD — идти · мышь — смотреть · Shift — суперускорение · пробел — прыжок</span><span class="mobileHint">Стик — идти · свайп справа — смотреть · ↑ — прыжок · ⚡ — суперускорение</span></p></div></div>
 <div id="mobile" aria-label="Сенсорное управление"><div id="stick"><i></i></div><div id="mobileActions"><button class="ui" id="mboost" aria-label="Суперускорение">⚡</button><button class="ui" id="mjump" aria-label="Прыжок">↑</button></div></div>
 <div id="hud"><header><h1 id="name">Создание мира</h1><p id="info"></p></header><i class="cross"></i><footer><button class="ui" id="new">Новый мир</button><input class="ui" id="seed"><button class="ui" id="open">Открыть</button><button class="ui" id="sound">Звук: выкл.</button><button class="ui" id="sounds" title="Резервная загрузка своих записей">Свои WAV</button><input type="file" id="audioFiles" accept=".wav,audio/*" multiple hidden><span id="audioStatus" role="status"></span><button class="ui" id="photo">Снимок</button><button class="ui" id="night">День / ночь</button><button class="ui" id="home">К дому</button></footer></div>
@@ -56,12 +56,13 @@ function clear(){if(!scene)return;let gs=new Set,ms=new Set;scene.traverse(o=>{i
 function instances(g,m,a){if(!a.length){g.dispose();m.dispose();return;}let o=new T.InstancedMesh(g,m,a.length);a.forEach((v,i)=>{temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);temp.rotation.set(v[6]||0,v[7]||0,v[8]||0);temp.updateMatrix();o.setMatrixAt(i,temp.matrix)});scene.add(o)}
 function instancesQ(g,m,a){
   if(!a.length){g.dispose();m.dispose();return;}
-  const o=new T.InstancedMesh(g,m,a.length);
+  const o=new T.InstancedMesh(g,m,a.length),tint=new T.Color();let colored=false;
   a.forEach((v,i)=>{
     temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);
     temp.quaternion.set(v[6],v[7],v[8],v[9]);temp.updateMatrix();o.setMatrixAt(i,temp.matrix);
+    if(v.length>=13){tint.setRGB(v[10],v[11],v[12]);o.setColorAt(i,tint);colored=true;}
   });
-  o.instanceMatrix.setUsage(T.StaticDrawUsage);scene.add(o);
+  o.instanceMatrix.setUsage(T.StaticDrawUsage);if(colored)o.instanceColor.needsUpdate=true;scene.add(o);
 }
 function expandLSystem(axiom,rule,iterations){
   let sentence=axiom;
@@ -74,9 +75,12 @@ function makeLSystemPlant(species){
     "F[&F][/+F]F[^F]",
     "F[+F][-F][&F][^F]",
     "F[+F]F[&F]\\\\F",
-    "F[+F][-F][/F]F"
+    "F[+F][-F][/F]F",
+    "FF[+F][-F][&F]",
+    "F[+F][&F]F[-F][^F]",
+    "F[/+F][\\\\-F]F"
   ];
-  const sentence=expandLSystem("F",rules[species.form],species.iterations);
+  const sentence=expandLSystem("F",rules[species.grammar],species.iterations);
   const position=new T.Vector3(),orientation=new T.Quaternion(),stack=[],segments=[],tips=[];
   const up=new T.Vector3(0,1,0),axis=new T.Vector3(),turn=new T.Quaternion();
   let depth=0;
@@ -109,15 +113,18 @@ function makeLSystemPlant(species){
   return {segments,tips,height:maxY};
 }
 function makeFloraCatalog(){
-  const r=rng(G.hash^0x4f19ab),count=3+Math.floor(r()*4),catalog=[];
+  const r=rng(G.hash^0x4f19ab),count=5+Math.floor(r()*4),catalog=[];
   for(let i=0;i<count;i++){
+    const shrub=i===0,tall=i===1;
     const species={
-      form:(G.form+i*2+Math.floor(r()*2))%5,
+      grammar:(G.form+i*3+Math.floor(r()*3))%8,leafForm:(G.form+i+Math.floor(r()*3))%5,
       iterations:1+(i+Math.floor(r()*3))%3,
-      angle:.22+r()*.48,shrink:.61+r()*.2,roll:.55+r()*1.25,
-      leafScale:.7+r()*.85,hueShift:(r()-.5)*.2,
-      lightShift:(r()-.5)*.16,branchScale:.72+r()*.55,
-      glow:r()<.16?.04+r()*.12:0
+      angle:.18+r()*.58,shrink:.58+r()*.24,roll:.45+r()*1.5,
+      leafScale:.55+r()*1.15,hueShift:(r()-.5)*.07,leafHueVariance:.01+r()*.018,
+      lightShift:(r()-.5)*.12,branchScale:.62+r()*.72,glow:r()<.13?.03+r()*.1:0,
+      heightMin:shrub?.25+r()*.7:.9+r()*3,
+      heightMax:shrub?1.2+r()*2:tall?18+r()*14:5+r()*18,
+      heightCurve:.55+r()*1.35
     };
     species.prototype=makeLSystemPlant(species);catalog.push(species);
   }
@@ -129,8 +136,8 @@ function leafGeometry(form){
 function growLSystemFlora(land,leaf,rock){
   const catalog=makeFloraCatalog(),groups=catalog.map(()=>({branches:[],foliage:[]})),rocks=[];
   const r=rng(G.hash^0x91b44d),yawQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3(),yAxis=new T.Vector3(0,1,0);
-  const plantLimit=8+Math.floor(G.forestCover*720);let plants=0;
-  for(let i=0;i<4200;i++){
+  const plantLimit=24+Math.floor(Math.pow(G.forestCover,.82)*1150);let plants=0;
+  for(let i=0;i<6200;i++){
     const x=(r()-.5)*790,z=(r()-.5)*790,y=height(x,z);
     const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
     const path=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve);
@@ -138,7 +145,8 @@ function growLSystemFlora(land,leaf,rock){
     if(!houseReserved(x,z)&&plants<plantLimit&&y>G.water+.7&&slope<.82&&path>7&&r()<localDensity){
       const patch=noise(x*.009+211,z*.009-173),index=Math.min(catalog.length-1,Math.floor((patch*.78+r()*.22)*catalog.length));
       const species=catalog[index],prototype=species.prototype,group=groups[index];
-      const h=(1.1+r()*(6+localDensity*8))*(.72+G.slender*.75),scale=h/prototype.height,yaw=r()*Math.PI*2;
+      const h=mix(species.heightMin,species.heightMax,Math.pow(r(),species.heightCurve))*(.72+localDensity*.52)*( .72+G.slender*.45),scale=h/prototype.height,yaw=r()*Math.PI*2;
+      const treeHue=(r()-.5)*.014,treeLight=(r()-.5)*.09;
       yawQ.setFromAxisAngle(yAxis,yaw);
       for(const branch of prototype.segments){
         p.copy(branch.mid).multiplyScalar(scale).applyQuaternion(yawQ);
@@ -150,7 +158,8 @@ function growLSystemFlora(land,leaf,rock){
         p.copy(tip.position).multiplyScalar(scale).applyQuaternion(yawQ);
         worldQ.copy(yawQ).multiply(tip.q);
         const s=h*(.035+G.slender*.035)*species.leafScale*(.8+r()*.45);
-        group.foliage.push([x+p.x,y+p.y,z+p.z,s,s*(species.form===2?.42:.65+G.slender*.35),s,worldQ.x,worldQ.y,worldQ.z,worldQ.w]);
+        const tint=leaf.clone().offsetHSL(species.hueShift+treeHue+(r()-.5)*species.leafHueVariance,.015,species.lightShift+treeLight+(r()-.5)*.07);
+        group.foliage.push([x+p.x,y+p.y,z+p.z,s,s*(species.leafForm===2?.42:.65+G.slender*.35),s,worldQ.x,worldQ.y,worldQ.z,worldQ.w,tint.r,tint.g,tint.b]);
       }
       plants++;
     }else if(y>G.water&&r()<.06+(1-localDensity)*.18){
@@ -159,13 +168,38 @@ function growLSystemFlora(land,leaf,rock){
   }
   catalog.forEach((species,i)=>{
     const branchColor=land.clone().multiplyScalar(.48+species.branchScale*.1);
-    const leafColor=leaf.clone().offsetHSL(species.hueShift,.02,species.lightShift);
-    instancesQ(new T.CylinderGeometry(1,1,1,5),mat(branchColor),groups[i].branches);
-    instancesQ(leafGeometry(species.form),mat(leafColor,species.glow),groups[i].foliage);
+        instancesQ(new T.CylinderGeometry(1,1,1,5),mat(branchColor),groups[i].branches);
+    instancesQ(leafGeometry(species.leafForm),mat(new T.Color(0xffffff),species.glow),groups[i].foliage);
   });
   instances(new T.IcosahedronGeometry(1,0),mat(rock),rocks);
   const generations=[...new Set(catalog.map(s=>s.iterations))].sort().join(",");
   return {plants,species:catalog.length,generations};
+}
+function growGroundFlora(land,leaf,accent){
+  const r=rng(G.hash^0x35a7c1),moss=[],stems=[],caps=[],flatQ=new T.Quaternion().setFromAxisAngle(new T.Vector3(1,0,0),-Math.PI/2);
+  const mossLimit=Math.floor((80+G.forestCover*720)*(.45+G.wet*.75));
+  const mushroomLimit=Math.floor((8+G.forestCover*150)*(.25+G.wet));
+  let mossCount=0,mushroomCount=0;
+  for(let i=0;i<4200&&(mossCount<mossLimit||mushroomCount<mushroomLimit);i++){
+    const x=(r()-.5)*780,z=(r()-.5)*780,y=height(x,z),density=floraDensity(x,z,y);
+    const slope=Math.hypot(height(x+1.2,z)-y,height(x,z+1.2)-y)/1.2;
+    if(houseReserved(x,z)||y<G.water+.15||slope>.72)continue;
+    if(mossCount<mossLimit&&r()<density*(.15+G.wet*.3)){
+      const s=.35+r()*(1.2+density*2.4),tone=leaf.clone().multiplyScalar(.42+r()*.28).offsetHSL((r()-.5)*.018,-.08,(r()-.5)*.04);
+      moss.push([x,y+.025,z,s,.6+r()*.5,s,flatQ.x,flatQ.y,flatQ.z,flatQ.w,tone.r,tone.g,tone.b]);mossCount++;
+    }
+    if(mushroomCount<mushroomLimit&&r()<density*G.wet*.095){
+      const stem=.18+r()*(.35+density*.7),cap=.16+r()*(.25+density*.55);
+      const capTone=accent.clone().lerp(leaf,.28+r()*.28).offsetHSL((r()-.5)*.025,-.04,(r()-.5)*.08);
+      stems.push([x,y+stem/2,z,cap*.28,stem,cap*.28,0,r()*6.28,0]);
+      caps.push([x,y+stem,z,cap,cap*(.32+r()*.24),cap,0,0,0,1,capTone.r,capTone.g,capTone.b]);mushroomCount++;
+    }
+  }
+  const mossMat=mat(new T.Color(0xffffff));mossMat.side=T.DoubleSide;
+  instancesQ(new T.CircleGeometry(1,8),mossMat,moss);
+  instances(new T.CylinderGeometry(.7,1,1,6),mat(land.clone().lerp(new T.Color(0xffffff),.28)),stems);
+  instancesQ(new T.SphereGeometry(1,9,5,0,Math.PI*2,0,Math.PI/2),mat(new T.Color(0xffffff),.015),caps);
+  return {moss:mossCount,mushrooms:mushroomCount};
 }
 function ruin(x,z,type,stone,accent){let a=rnd()*6.28,box=new T.BoxGeometry(1,1,1),column=new T.CylinderGeometry(.8,1,1,7);function p(px,pz,w,h,d,g=box,up=0){let X=x+Math.cos(a)*px-Math.sin(a)*pz,Z=z+Math.sin(a)*px+Math.cos(a)*pz,o=mesh(g,stone,X,ground(X,Z)+h/2+up,Z,w,h,d);o.rotation.y=a}
 if(type===0){for(let j=-2;j<=2;j++)for(const side of[-1,1])if(rnd()>.25)p(side*5,j*4,1,5+rnd()*5,1,column);p(0,-9,11,.7,1)}
@@ -176,7 +210,7 @@ for(let j=0;j<18;j++){let A=rnd()*6.28,r=5+rnd()*18,s=.4+rnd(),X=x+Math.cos(A)*r
 function makeWeather(type,c){
   const r=rng(G.hash^hash(type)^0x72d01);
   const ranges={rain:[1500,3300],snow:[500,1900],dust:[350,1100],spores:[140,720]},range=ranges[type];
-  const n=range[0]+Math.floor(r()*(range[1]-range[0]+1)),rain=type==="rain",stride=rain?6:3;
+  const windSpeed=.2+r()*1.8,n=Math.floor((range[0]+r()*(range[1]-range[0]+1))*mix(.72,1.32,windSpeed/2)),rain=type==="rain",stride=rain?6:3;
   const a=new Float32Array(n*stride),speed=new Float32Array(n),streak=.65+r()*1.5;
   for(let i=0;i<n;i++){
     const k=i*stride,x=(r()-.5)*110,y=r()*70-22,z=(r()-.5)*110;
@@ -195,7 +229,7 @@ function makeWeather(type,c){
   const windAngle=r()*Math.PI*2,blizzard=type==="snow"?r():0;
   points.frustumCulled=false;scene.add(points);
   return {
-    type,points,a,speed,stride,streak,count:n,phase:r()*6.28,strength:.32+r()*.68,
+    type,points,a,speed,stride,streak,count:n,phase:r()*6.28,strength:.32+r()*.68,windSpeed,
     windX:Math.cos(windAngle),windZ:Math.sin(windAngle),
     drift:type==="snow"?2+blizzard*24:type==="dust"?5+r()*10:type==="rain"?.15+r()*.75:.08+r()*.3,
     fall:type==="rain"?30+r()*22:type==="snow"?.55+(1-blizzard)*4:type==="dust"?.08+r()*.35:0,
@@ -431,18 +465,24 @@ relief:2+Math.pow(reliefSeed,1.35)*108,freq:.003+rnd()*.011,angle:rnd()*6.28,war
 path:rnd()*100-50,curve:8+rnd()*72,wet:rnd(),slender:rnd(),form:Math.floor(rnd()*5),
 regionStrength:Math.pow(rnd(),.72),regionScale:.0015+rnd()*.006,regionWidth:.12+rnd()*.22,
 terrainVariation:Math.pow(rnd(),1.15),roughness:.08+Math.pow(rnd(),1.3)*3.1,pathRelief:.12+rnd()*.88,
-forestCover:smooth(coverSeed),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
+forestCover:Math.pow(coverSeed,.72),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
 forestContrast:.25+rnd()*1.75,craters:[]};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;for(let i=0;i<15;i++)G.craters.push({x:(rnd()-.5)*760,z:(rnd()-.5)*760,r:25+rnd()*65,d:(2+rnd()*28)*(.12+G.relief/110)});
-let sky=col(G.hue,.25,.5),horizon=col(G.hue+.08,.3,.7),land=col(G.hue+.03,.28,.25),rock=col(G.hue-.03,.12,.38),leaf=col(G.hue+.12+rnd()*.22,.44,.38),accent=col(G.hue+.38,.48,.68);
+const paletteR=rng(G.hash^0x6ca91),baseHue=G.hue,botanicalShift=(paletteR()-.5)*.11;
+let sky=col(baseHue,.2+paletteR()*.12,.46+paletteR()*.1),
+horizon=col(baseHue+.035+botanicalShift*.18,.22+paletteR()*.12,.64+paletteR()*.1),
+land=col(baseHue+botanicalShift*.32,.2+paletteR()*.14,.2+paletteR()*.1),
+rock=col(baseHue+botanicalShift*.12,.07+paletteR()*.09,.32+paletteR()*.12),
+leaf=col(baseHue+botanicalShift,.34+paletteR()*.18,.3+paletteR()*.13),
+accent=col(baseHue+(paletteR()<.72?.075:.48),.34+paletteR()*.16,.58+paletteR()*.12);
 scene=new T.Scene;scene.background=sky;scene.fog=new T.FogExp2(horizon,.0014+G.wet*.0017);let hemi=new T.HemisphereLight(horizon,land,.9),light=new T.DirectionalLight(col(G.hue+.42,.3,.9),2);scene.add(hemi,light);
 planHomes();let geo=new T.PlaneGeometry(SIZE,SIZE,SEG,SEG);geo.rotateX(-Math.PI/2);let pos=geo.attributes.position,colors=[];for(let i=0;i<pos.count;i++){let x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2,c=land.clone().lerp(rock,clamp(slope*.6+(y-25)/80,0,1));c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors.push(c.r,c.g,c.b)}geo.setAttribute("color",new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();landMesh=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));scene.add(landMesh);
 let wg=new T.PlaneGeometry(SIZE,SIZE);wg.rotateX(-Math.PI/2);water=new T.Mesh(wg,new T.MeshStandardMaterial({color:col(G.hue+.08,.5,.3),metalness:.35,roughness:.2,transparent:true,opacity:.86}));water.position.y=G.water;scene.add(water);
 let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({color:col(G.hue+.42,.25,.9),fog:false}),-260,160,-600);for(let i=0;i<Math.floor(rnd()*4);i++){rnd();rnd();}
-let flora=growLSystemFlora(land,leaf,rock);
+let flora=growLSystemFlora(land,leaf,rock),undergrowth=growGroundFlora(land,leaf,accent);
 let spawn;for(let z=140;z>-160;z-=4){let x=G.path+Math.sin(z*.011+G.phase)*G.curve,y=ground(x,z);if(y>G.water+.8){spawn=[x,y+1.75,z];break}}if(!spawn)spawn=[G.path,Math.max(ground(G.path,120),G.water)+1.75,120];cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();
 let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
 buildHomes();$("#home").disabled=homes.length===0;$("#home").textContent=homes.length?"К строению":"Нет строений";const weatherRoll=rng(G.hash^0x57ea7)(),wt=kind===4?"dust":G.wet>.62?"rain":weatherRoll<.28?"snow":"spores";weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
-let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · растительность: "+flora.plants+" растений, "+flora.species+" форм, поколения "+flora.generations+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · растительность: "+flora.plants+" растений, "+flora.species+" форм, поколения "+flora.generations+" · мхи: "+undergrowth.moss+" · грибы: "+undergrowth.mushrooms+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
 function update(dt){
   const e=celestial;e.age+=dt;
   const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
@@ -458,7 +498,8 @@ function update(dt){
   weather.points.material.opacity=front*(type==="rain"?.58:type==="spores"?.72:.66);
   for(let i=0;i<weather.speed.length;i++){
     const k=i*stride,s=weather.speed[i];
-    let dx=weather.windX*weather.drift*dt*s,dz=weather.windZ*weather.drift*dt*s,dy=-weather.fall*dt*s;
+    const gust=.68+front*.7+.16*Math.sin(e.age*.41+weather.phase);
+    let dx=weather.windX*weather.drift*weather.windSpeed*gust*dt*s,dz=weather.windZ*weather.drift*weather.windSpeed*gust*dt*s,dy=-weather.fall*dt*s;
     if(type==="spores"){
       dx+=Math.sin(e.age*.17+i*.73)*.16*dt;dz+=Math.cos(e.age*.13+i*.51)*.16*dt;
       dy=Math.sin(e.age*.28+weather.phase+i*.37)*.2*dt;
@@ -479,11 +520,12 @@ async function toggleAudio(){if(!audio){let ctx=new AudioContext,master=ctx.crea
 
 const soundTracks=new Map();
 const bundledSounds={
-  wind:"51366__samsmyname__wind.wav",
-  rain:"337791__miradeshazer__city-pouring-rain.wav",
-  gravel:"528953__fthgurdy__walking-on-sand-and-gravel-2.wav",
-  snow:"842553__hyperfoley__snow-walking-4.wav"
-};
+  wind:"audio/wind.mp3",
+  rain:"audio/rain.mp3",
+  gravel:"audio/gravel.mp3",
+  snow:"audio/snow.mp3",
+  music:"audio/under-starlit-boughs.mp3"
+}
 let lastAudioX=0,lastAudioZ=0,audioLoading;
 
 function audioStore(){
@@ -542,7 +584,7 @@ async function loadSoundFiles(files){
   const status=$("#audioStatus");let loaded=0;
   for(const file of files){
     const name=file.name.toLowerCase();
-    const type=name.includes("rain")?"rain":name.includes("wind")?"wind":name.includes("snow")?"snow":name.includes("sand")||name.includes("gravel")?"gravel":null;
+    const type=name.includes("rain")?"rain":name.includes("wind")?"wind":name.includes("snow")?"snow":name.includes("sand")||name.includes("gravel")?"gravel":name.includes("starlit")||name.includes("bough")||name.includes("music")?"music":null;
     if(!type)continue;
     try{
       const data=await file.arrayBuffer();
@@ -565,6 +607,7 @@ function updateSoundscape(dt){
     let volume=0;
     if(type==="wind")volume=(.1+front*.13)*(indoors?.18:1);
     if(type==="rain"&&weather.type==="rain")volume=(.06+front*.28)*(indoors?.25:1);
+    if(type==="music")volume=indoors?.095:.075;
     if(type===(weather.type==="snow"?"snow":"gravel")&&walking&&!indoors)volume=boosting()?.36:.27;
     track.gain.gain.setTargetAtTime(sound?volume:0,audio.ctx.currentTime,.14);
     if(type==="snow"||type==="gravel")track.source.playbackRate.setTargetAtTime(boosting()?1.65:1,audio.ctx.currentTime,.2);
@@ -610,7 +653,11 @@ setupMobileControls();
 function fresh(){return crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}
 $("#enter").onclick=()=>{$("#start").style.opacity=0;setTimeout(()=>$("#start").remove(),500);if(matchMedia("(pointer:fine)").matches)rend.domElement.requestPointerLock()};rend.domElement.onclick=()=>{if(matchMedia("(pointer:fine)").matches)rend.domElement.requestPointerLock()};addEventListener("mousemove",e=>{if(document.pointerLockElement!==rend.domElement)return;yaw-=e.movementX*.0024;pitch=clamp(pitch-e.movementY*.0024,-1.45,1.45)});addEventListener("keydown",e=>{if(e.target.tagName==="INPUT"||document.pointerLockElement!==rend.domElement)return;if(["Space","KeyW","KeyA","KeyS","KeyD"].includes(e.code))e.preventDefault();keys.add(e.code);if(e.code==="Space"&&grounded){jump=8.2;grounded=false}});addEventListener("keyup",e=>keys.delete(e.code));addEventListener("blur",()=>keys.clear());document.addEventListener("pointerlockchange",()=>keys.clear());
 $("#new").onclick=()=>generate(fresh());$("#open").onclick=()=>{let s=$("#seed").value.trim().slice(0,60);if(s)generate(s)};$("#seed").onkeydown=e=>{if(e.key==="Enter")$("#open").click()};$("#sound").onclick=async()=>{await toggleAudio();if(sound)await loadBundledSounds();};$("#home").onclick=()=>{const h=homes[0];if(!h)return;cam.position.set(h.x,h.base+1.75,h.z+18);yaw=0;pitch=-.02;jump=0;grounded=true;keys.clear();};$("#night").onclick=()=>{const phase=(celestial.start+celestial.age/celestial.length)%1;celestial.start=phase<.5?.75:.25;celestial.age=0;update(0);};$("#photo").onclick=()=>rend.domElement.toBlob(b=>{let u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="world-"+G.hash+".png";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)});
-addEventListener("resize",()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();rend.setSize(innerWidth,innerHeight)});generate(new URLSearchParams(location.search).get("seed")||fresh());
+function resizeView(){
+  const w=Math.round(visualViewport?.width||innerWidth),h=Math.round(visualViewport?.height||innerHeight);
+  cam.aspect=w/h;cam.updateProjectionMatrix();rend.setSize(w,h);
+}
+addEventListener("resize",resizeView);visualViewport?.addEventListener("resize",resizeView);screen.orientation?.addEventListener("change",()=>setTimeout(resizeView,120));resizeView();generate(new URLSearchParams(location.search).get("seed")||fresh());
 rend.setAnimationLoop(()=>{
   const dt=Math.min(clock.getDelta(),.05),f=+keys.has("KeyW")-+keys.has("KeyS")+mobileForward,s=+keys.has("KeyD")-+keys.has("KeyA")+mobileSide;
   const n=Math.max(1,Math.hypot(f,s)),spd=boosting()?32:5;
