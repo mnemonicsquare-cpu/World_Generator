@@ -21,7 +21,7 @@ function shape(k,x,z){let c=Math.cos(G.angle),s=Math.sin(G.angle),u=x*c-z*s,v=x*
 if(k===0)return Math.pow(Math.max(0,(n-.39)*2.7),1.55)*G.relief-12;
 if(k===1){let r=n*5,q=Math.floor(r)+smooth(clamp(((r%1)-.25)/.5,0,1));return(q/5-.38)*G.relief}
 if(k===2)return(n-.46)*G.relief*.45+Math.pow(1-Math.abs(Math.sin(u*G.freq*8+n*8)),1.7)*G.relief*.65;
-if(k===3){let h=(n-.46)*18;for(const c of G.craters){let d=Math.hypot(x-c.x,z-c.z)/c.r;h+=Math.exp(-((d-1)/.18)**2)*c.d*.55-Math.exp(-((d/.7)**4))*c.d}return h}
+if(k===3){let h=(n-.46)*18;for(const c of G.craters){let d=Math.hypot(x-c.x,z-c.z)/c.r;h+=Math.exp(-(((d-1)/.18)**2))*c.d*.55-Math.exp(-((d/.7)**4))*c.d}return h}
 if(k===4){let w=.5+.5*Math.sin(u*G.freq*7+fbm(u*G.freq,v*G.freq*.5)*9);return w**2.5*G.relief*.3+(n-.42)*18}
 let ch=Math.abs(Math.sin(u*G.freq*3+fbm(u*G.freq,v*G.freq)*5));return(n-.41)*G.relief-Math.exp(-ch*ch*28)*22}
 function height(x,z){let region=smooth(clamp((fbm(x*.0035+130,z*.0035-80)-.34)/.32,0,1)),h=mix(shape(G.kind,x,z),shape(G.second,x,z),region),p=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve),c=Math.exp(-p*p/190);return mix(h,(fbm(x*.004,z*.004)-.42)*10+G.water+3,c*.88)+(noise(x*.065,z*.065)-.5)*1.4*(1-c)}
