@@ -45,15 +45,15 @@ function expandLSystem(axiom,rule,iterations){
   for(let i=0;i<iterations;i++)sentence=[...sentence].map(ch=>ch==="F"?rule:ch).join("");
   return sentence;
 }
-function makeLSystemPlant(form){
-  const species=[
-    {rule:"F[+F]F[-F][&F]",iterations:2,angle:.42},
-    {rule:"F[&F][/+F]F[^F]",iterations:2,angle:.34},
-    {rule:"F[+F][-F][&F][^F]",iterations:2,angle:.5},
-    {rule:"F[+F]F[&F]\\F",iterations:2,angle:.29},
-    {rule:"F[+F][-F][/F]F",iterations:2,angle:.58}
-  ][form];
-  const sentence=expandLSystem("F",species.rule,species.iterations);
+function makeLSystemPlant(species){
+  const rules=[
+    "F[+F]F[-F][&F]",
+    "F[&F][/+F]F[^F]",
+    "F[+F][-F][&F][^F]",
+    "F[+F]F[&F]\\\\F",
+    "F[+F][-F][/F]F"
+  ];
+  const sentence=expandLSystem("F",rules[species.form],species.iterations);
   const position=new T.Vector3(),orientation=new T.Quaternion(),stack=[],segments=[],tips=[];
   const up=new T.Vector3(0,1,0),axis=new T.Vector3(),turn=new T.Quaternion();
   let depth=0;
@@ -64,7 +64,7 @@ function makeLSystemPlant(form){
   for(let i=0;i<sentence.length;i++){
     const ch=sentence[i];
     if(ch==="F"){
-      const length=Math.pow(.73,depth);
+      const length=Math.pow(species.shrink,depth);
       const direction=up.clone().applyQuaternion(orientation).normalize();
       const start=position.clone(),end=start.clone().addScaledVector(direction,length);
       const q=new T.Quaternion().setFromUnitVectors(up,direction);
@@ -79,45 +79,69 @@ function makeLSystemPlant(form){
     else if(ch==="-")rotate(0,0,1,-species.angle);
     else if(ch==="&")rotate(1,0,0,species.angle);
     else if(ch==="^")rotate(1,0,0,-species.angle);
-    else if(ch==="/")rotate(0,1,0,1.05);
-    else if(ch==="\\")rotate(0,1,0,-1.05);
+    else if(ch==="/")rotate(0,1,0,species.roll);
+    else if(ch==="\\")rotate(0,1,0,-species.roll);
   }
   let maxY=1;for(const s of segments)maxY=Math.max(maxY,s.mid.y+s.length*.5);
-  return {segments,tips,height:maxY,name:["веерные","спиральные","звёздчатые","ярусные","коралловые"][form]};
+  return {segments,tips,height:maxY};
+}
+function makeFloraCatalog(){
+  const r=rng(G.hash^0x4f19ab),count=3+Math.floor(r()*3),catalog=[];
+  for(let i=0;i<count;i++){
+    const species={
+      form:(G.form+i*2+Math.floor(r()*2))%5,
+      iterations:1+(i+Math.floor(r()*3))%3,
+      angle:.22+r()*.48,shrink:.61+r()*.2,roll:.55+r()*1.25,
+      leafScale:.7+r()*.85,hueShift:(r()-.5)*.2,
+      lightShift:(r()-.5)*.16,branchScale:.72+r()*.55,
+      glow:r()<.16?.04+r()*.12:0
+    };
+    species.prototype=makeLSystemPlant(species);catalog.push(species);
+  }
+  return catalog;
+}
+function leafGeometry(form){
+  return form===0?new T.IcosahedronGeometry(1,0):form===1?new T.ConeGeometry(1,1.8,6):form===2?new T.SphereGeometry(1,7,5,0,6.28,0,Math.PI/2):form===3?new T.OctahedronGeometry(1):new T.CapsuleGeometry(.45,1.2,3,6);
 }
 function growLSystemFlora(land,leaf,rock){
-  const prototype=makeLSystemPlant(G.form),branches=[],foliage=[],rocks=[];
-  const yawQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3();
-  let plants=0;
-  for(let i=0;i<2800;i++){
-    const x=(rnd()-.5)*790,z=(rnd()-.5)*790,y=height(x,z);
+  const catalog=makeFloraCatalog(),groups=catalog.map(()=>({branches:[],foliage:[]})),rocks=[];
+  const r=rng(G.hash^0x91b44d),yawQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3(),yAxis=new T.Vector3(0,1,0);
+  const plantLimit=280+Math.floor(r()*141);let plants=0;
+  for(let i=0;i<3400;i++){
+    const x=(r()-.5)*790,z=(r()-.5)*790,y=height(x,z);
     const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
     const path=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve);
-    if(!houseReserved(x,z)&&plants<340&&y>G.water+.7&&slope<.75&&path>7&&fbm(x*.017+80,z*.017)<G.density){
-      const h=(3+rnd()*10)*(1+G.slender*.8),scale=h/prototype.height,yaw=rnd()*Math.PI*2;
-      yawQ.setFromAxisAngle(new T.Vector3(0,1,0),yaw);
+    if(!houseReserved(x,z)&&plants<plantLimit&&y>G.water+.7&&slope<.75&&path>7&&fbm(x*.017+80,z*.017)<G.density){
+      const patch=noise(x*.009+211,z*.009-173),index=Math.min(catalog.length-1,Math.floor((patch*.78+r()*.22)*catalog.length));
+      const species=catalog[index],prototype=species.prototype,group=groups[index];
+      const h=(2.5+r()*11.5)*(1+G.slender*.75),scale=h/prototype.height,yaw=r()*Math.PI*2;
+      yawQ.setFromAxisAngle(yAxis,yaw);
       for(const branch of prototype.segments){
         p.copy(branch.mid).multiplyScalar(scale).applyQuaternion(yawQ);
         worldQ.copy(yawQ).multiply(branch.q);
-        const radius=h*(.018+G.slender*.006)*Math.pow(.62,branch.depth);
-        branches.push([x+p.x,y+p.y,z+p.z,radius,branch.length*scale,radius,worldQ.x,worldQ.y,worldQ.z,worldQ.w]);
+        const radius=h*(.014+G.slender*.007)*species.branchScale*Math.pow(.61,branch.depth);
+        group.branches.push([x+p.x,y+p.y,z+p.z,radius,branch.length*scale,radius,worldQ.x,worldQ.y,worldQ.z,worldQ.w]);
       }
       for(const tip of prototype.tips){
         p.copy(tip.position).multiplyScalar(scale).applyQuaternion(yawQ);
         worldQ.copy(yawQ).multiply(tip.q);
-        const s=h*(.045+G.slender*.035)*(1+rnd()*.4);
-        foliage.push([x+p.x,y+p.y,z+p.z,s,G.form===2?s*.42:s*(.65+G.slender*.35),s,worldQ.x,worldQ.y,worldQ.z,worldQ.w]);
+        const s=h*(.035+G.slender*.035)*species.leafScale*(.8+r()*.45);
+        group.foliage.push([x+p.x,y+p.y,z+p.z,s,s*(species.form===2?.42:.65+G.slender*.35),s,worldQ.x,worldQ.y,worldQ.z,worldQ.w]);
       }
       plants++;
-    }else if(y>G.water&&rnd()<.18){
-      const s=.5+rnd()*3;rocks.push([x,y+s*.3,z,s,s*(.6+G.slender),s*.8,rnd()*.2,rnd()*6.28,rnd()*.2]);
+    }else if(y>G.water&&r()<.16){
+      const s=.5+r()*3;rocks.push([x,y+s*.3,z,s,s*(.6+G.slender),s*.8,r()*.2,r()*6.28,r()*.2]);
     }
   }
-  instancesQ(new T.CylinderGeometry(1,1,1,5),mat(land.clone().multiplyScalar(.58)),branches);
-  const leafGeometry=G.form===0?new T.IcosahedronGeometry(1,0):G.form===1?new T.ConeGeometry(1,1.8,6):G.form===2?new T.SphereGeometry(1,7,5,0,6.28,0,Math.PI/2):G.form===3?new T.OctahedronGeometry(1):new T.CapsuleGeometry(.45,1.2,3,6);
-  instancesQ(leafGeometry,mat(leaf,G.form===3?.08:0),foliage);
+  catalog.forEach((species,i)=>{
+    const branchColor=land.clone().multiplyScalar(.48+species.branchScale*.1);
+    const leafColor=leaf.clone().offsetHSL(species.hueShift,.02,species.lightShift);
+    instancesQ(new T.CylinderGeometry(1,1,1,5),mat(branchColor),groups[i].branches);
+    instancesQ(leafGeometry(species.form),mat(leafColor,species.glow),groups[i].foliage);
+  });
   instances(new T.IcosahedronGeometry(1,0),mat(rock),rocks);
-  return {plants,species:prototype.name};
+  const generations=[...new Set(catalog.map(s=>s.iterations))].sort().join(",");
+  return {plants,species:catalog.length,generations};
 }
 function ruin(x,z,type,stone,accent){let a=rnd()*6.28,box=new T.BoxGeometry(1,1,1),column=new T.CylinderGeometry(.8,1,1,7);function p(px,pz,w,h,d,g=box,up=0){let X=x+Math.cos(a)*px-Math.sin(a)*pz,Z=z+Math.sin(a)*px+Math.cos(a)*pz,o=mesh(g,stone,X,ground(X,Z)+h/2+up,Z,w,h,d);o.rotation.y=a}
 if(type===0){for(let j=-2;j<=2;j++)for(const side of[-1,1])if(rnd()>.25)p(side*5,j*4,1,5+rnd()*5,1,column);p(0,-9,11,.7,1)}
@@ -125,7 +149,35 @@ else if(type===1)for(let l=0;l<4;l++){let w=11-l*1.5;for(let s=0;s<4;s++)if(rnd(
 else if(type===2){for(let n=0;n<32;n++){let s=n%4,j=Math.floor(n/4)-4,A=s*Math.PI/2;if(rnd()>.38)p(Math.cos(A)*7+(s%2?j*1.8:0),Math.sin(A)*7+(!(s%2)?j*1.8:0),1.5,.5+rnd()*2,1.5)}}
 else{for(let j=1;j<10;j++)if(rnd()>.2){let A=j/10*6.28;p(Math.cos(A)*10,Math.sin(A)*10,2,5+rnd()*6,.8)}mesh(new T.OctahedronGeometry(1),accent,x,ground(x,z)+2,z,1,3,1)}
 for(let j=0;j<18;j++){let A=rnd()*6.28,r=5+rnd()*18,s=.4+rnd(),X=x+Math.cos(A)*r,Z=z+Math.sin(A)*r;mesh(new T.IcosahedronGeometry(1,0),stone,X,ground(X,Z)+s*.3,Z,s,s*.6,s)}}
-function makeWeather(type,c){let n=type==="rain"?1000:650,a=new Float32Array(n*3),speed=new Float32Array(n);for(let i=0;i<n;i++){a[i*3]=(rnd()-.5)*100;a[i*3+1]=rnd()*65-20;a[i*3+2]=(rnd()-.5)*100;speed[i]=.6+rnd()*.9}let g=new T.BufferGeometry;g.setAttribute("position",new T.BufferAttribute(a,3));let m=new T.PointsMaterial({color:c,size:type==="rain"?.07:type==="spores"?.16:.2,transparent:true,opacity:0,depthWrite:false,blending:type==="spores"?T.AdditiveBlending:T.NormalBlending}),points=new T.Points(g,m);points.frustumCulled=false;scene.add(points);return{type,points,a,speed,phase:rnd()*6.28,strength:.3+rnd()*.7}}
+function makeWeather(type,c){
+  const r=rng(G.hash^hash(type)^0x72d01);
+  const ranges={rain:[1500,3300],snow:[500,1900],dust:[350,1100],spores:[140,720]},range=ranges[type];
+  const n=range[0]+Math.floor(r()*(range[1]-range[0]+1)),rain=type==="rain",stride=rain?6:3;
+  const a=new Float32Array(n*stride),speed=new Float32Array(n),streak=.65+r()*1.5;
+  for(let i=0;i<n;i++){
+    const k=i*stride,x=(r()-.5)*110,y=r()*70-22,z=(r()-.5)*110;
+    a[k]=x;a[k+1]=y;a[k+2]=z;speed[i]=.55+r()*.9;
+    if(rain){a[k+3]=x;a[k+4]=y+streak;a[k+5]=z;}
+  }
+  const g=new T.BufferGeometry();g.setAttribute("position",new T.BufferAttribute(a,3));
+  let material,points;
+  if(rain){
+    material=new T.LineBasicMaterial({color:new T.Color(0x67bfff).lerp(c,.16),transparent:true,opacity:0,depthWrite:false});
+    points=new T.LineSegments(g,material);
+  }else{
+    material=new T.PointsMaterial({color:c,size:type==="spores"?.15+r()*.16:type==="snow"?.13+r()*.2:.16,transparent:true,opacity:0,depthWrite:false,blending:type==="spores"?T.AdditiveBlending:T.NormalBlending});
+    points=new T.Points(g,material);
+  }
+  const windAngle=r()*Math.PI*2,blizzard=type==="snow"?r():0;
+  points.frustumCulled=false;scene.add(points);
+  return {
+    type,points,a,speed,stride,streak,count:n,phase:r()*6.28,strength:.32+r()*.68,
+    windX:Math.cos(windAngle),windZ:Math.sin(windAngle),
+    drift:type==="snow"?2+blizzard*24:type==="dust"?5+r()*10:type==="rain"?.15+r()*.75:.08+r()*.3,
+    fall:type==="rain"?30+r()*22:type==="snow"?.55+(1-blizzard)*4:type==="dust"?.08+r()*.35:0,
+    blizzard
+  };
+}
 
 function makeNightSky(){
   // Independent random stream preserves terrain and vegetation for existing seeds.
@@ -341,10 +393,40 @@ let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({co
 let flora=growLSystemFlora(land,leaf,rock);
 let spawn;for(let z=140;z>-160;z-=4){let x=G.path+Math.sin(z*.011+G.phase)*G.curve,y=ground(x,z);if(y>G.water+.8){spawn=[x,y+1.75,z];break}}if(!spawn)spawn=[G.path,Math.max(ground(G.path,120),G.water)+1.75,120];cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();
 let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
-buildHomes();$("#home").disabled=homes.length===0;$("#home").textContent=homes.length?"К строению":"Нет строений";let wt=kind===4?"dust":G.wet>.62?"rain":rnd()<.25?"snow":"spores";weather=makeWeather(wt,wt==="spores"?accent:horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
-let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+" · L-флора: "+flora.species+" ("+flora.plants+") · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
-function update(dt){let e=celestial;e.age+=dt;let cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2)),front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength,night=col(G.hue,.25,.13),sunset=col(G.hue+.12,.4,.42),top=night.clone().lerp(e.sky,day),h=night.clone().lerp(e.horizon,day).lerp(sunset,tw*.35);scene.background.copy(top);scene.fog.color.copy(h);scene.fog.density=e.fog*(1+front*.75);e.hemi.color.copy(h).lerp(col(G.hue,.12,.64),(1-day)*.65);e.hemi.intensity=.85+day*.95;e.light.position.set(Math.cos(a)*450,alt*500,-400);e.light.intensity=(.05+day*2.5)*(1-front*.45);e.sun.position.set(cam.position.x+Math.cos(a)*430,cam.position.y+alt*480,cam.position.z-650);e.sun.visible=alt>-.12;updateNightSky(e,day,front,top,h);
-let p=weather.a,type=weather.type,fall=type==="rain"?24:type==="snow"?2:type==="dust"?.1:-.25,drift=type==="dust"?7:1.4;weather.points.position.copy(cam.position);weather.points.material.opacity=front*(type==="rain"?.38:.65);for(let i=0;i<weather.speed.length;i++){let k=i*3,s=weather.speed[i];p[k]+=Math.sin(e.age*.025+G.phase)*drift*dt*s;p[k+1]-=fall*dt*s;p[k+2]+=Math.cos(e.age*.019+G.phase)*drift*dt*s;if(p[k]>50)p[k]-=100;if(p[k]<-50)p[k]+=100;if(p[k+2]>50)p[k+2]-=100;if(p[k+2]<-50)p[k+2]+=100;if(p[k+1]<-20)p[k+1]+=65;if(p[k+1]>45)p[k+1]-=65}weather.points.geometry.attributes.position.needsUpdate=true;water.material.roughness=.2+Math.sin(e.age*.4)*.035}
+buildHomes();$("#home").disabled=homes.length===0;$("#home").textContent=homes.length?"К строению":"Нет строений";const weatherRoll=rng(G.hash^0x57ea7)(),wt=kind===4?"dust":G.wet>.62?"rain":weatherRoll<.28?"snow":"spores";weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
+let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · L-флора: "+flora.species+" видов, поколения "+flora.generations+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+function update(dt){
+  const e=celestial;e.age+=dt;
+  const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
+  const front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength,night=col(G.hue,.25,.13),sunset=col(G.hue+.12,.4,.42);
+  const top=night.clone().lerp(e.sky,day),h=night.clone().lerp(e.horizon,day).lerp(sunset,tw*.35);
+  scene.background.copy(top);scene.fog.color.copy(h);scene.fog.density=e.fog*(1+front*.75);
+  e.hemi.color.copy(h).lerp(col(G.hue,.12,.64),(1-day)*.65);e.hemi.intensity=.85+day*.95;
+  e.light.position.set(Math.cos(a)*450,alt*500,-400);e.light.intensity=(.05+day*2.5)*(1-front*.45);
+  e.sun.position.set(cam.position.x+Math.cos(a)*430,cam.position.y+alt*480,cam.position.z-650);e.sun.visible=alt>-.12;updateNightSky(e,day,front,top,h);
+
+  const p=weather.a,type=weather.type,stride=weather.stride;
+  weather.points.position.copy(cam.position);
+  weather.points.material.opacity=front*(type==="rain"?.58:type==="spores"?.72:.66);
+  for(let i=0;i<weather.speed.length;i++){
+    const k=i*stride,s=weather.speed[i];
+    let dx=weather.windX*weather.drift*dt*s,dz=weather.windZ*weather.drift*dt*s,dy=-weather.fall*dt*s;
+    if(type==="spores"){
+      dx+=Math.sin(e.age*.17+i*.73)*.16*dt;dz+=Math.cos(e.age*.13+i*.51)*.16*dt;
+      dy=Math.sin(e.age*.28+weather.phase+i*.37)*.2*dt;
+    }
+    p[k]+=dx;p[k+1]+=dy;p[k+2]+=dz;
+    if(p[k]>55)p[k]-=110;if(p[k]<-55)p[k]+=110;
+    if(p[k+2]>55)p[k+2]-=110;if(p[k+2]<-55)p[k+2]+=110;
+    if(p[k+1]<-22)p[k+1]+=70;if(p[k+1]>48)p[k+1]-=70;
+    if(stride===6){
+      const ratio=weather.fall?weather.streak/weather.fall:0;
+      p[k+3]=p[k]-weather.windX*weather.drift*ratio;p[k+4]=p[k+1]+weather.streak;p[k+5]=p[k+2]-weather.windZ*weather.drift*ratio;
+    }
+  }
+  weather.points.geometry.attributes.position.needsUpdate=true;
+  water.material.roughness=.2+Math.sin(e.age*.4)*.035;
+}
 async function toggleAudio(){if(!audio){let ctx=new AudioContext,master=ctx.createGain(),filter=ctx.createBiquadFilter(),buf=ctx.createBuffer(1,ctx.sampleRate*4,ctx.sampleRate),d=buf.getChannelData(0),r=rng(G.hash^999),last=0;for(let i=0;i<d.length;i++){last=(last+(r()*2-1)*.03)/1.03;d[i]=last*4}let src=ctx.createBufferSource();src.buffer=buf;src.loop=true;filter.type="lowpass";filter.frequency.value=250+G.slender*900;src.connect(filter).connect(master).connect(ctx.destination);master.gain.value=0;src.start();audio={ctx,master,filter}}await audio.ctx.resume();sound=!sound;audio.master.gain.setTargetAtTime(sound?.25:0,audio.ctx.currentTime,.4);$("#sound").textContent="Звук: "+(sound?"вкл.":"выкл.")}
 
 const soundTracks=new Map();
