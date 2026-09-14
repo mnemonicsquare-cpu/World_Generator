@@ -1,7 +1,7 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Иные миры</title><style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071018;color:#fff;font-family:system-ui}canvas{display:block}#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 2px 14px #000}header{position:absolute;top:22px;left:26px}h1{font:400 26px Georgia;margin:0 0 6px}p{margin:3px 0;color:#ffffffc7;font-size:13px}footer{position:absolute;bottom:20px;left:22px;right:22px;display:flex;gap:8px;flex-wrap:wrap}.ui{pointer-events:auto;color:#fff;background:#0a1621c9;border:1px solid #ffffff42;border-radius:7px;padding:10px 13px;backdrop-filter:blur(10px)}button{cursor:pointer}button:hover{background:#293c4b}input{width:130px}.cross{position:absolute;top:50%;left:50%;width:5px;height:5px;border-radius:50%;background:#ffffffa0}#start{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;background:#071018e8;transition:.5s}#start div{max-width:480px;padding:25px}#start h2{font:400 38px Georgia;margin:0 0 15px}#start p{line-height:1.7;margin-bottom:20px}@media(max-width:650px){header{left:14px}footer{left:12px;bottom:12px}}</style></head><body>
 <div id="start"><div><h2>Иные миры</h2><p>Каждый код создаёт собственный ландшафт, флору, руины, погоду и небо.</p><button class="ui" id="enter">Войти в мир</button><p>WASD — идти · мышь — смотреть · Shift — ускориться · пробел — прыжок</p></div></div>
-<div id="hud"><header><h1 id="name">Создание мира</h1><p id="info"></p></header><i class="cross"></i><footer><button class="ui" id="new">Новый мир</button><input class="ui" id="seed"><button class="ui" id="open">Открыть</button><button class="ui" id="sound">Звук: выкл.</button><button class="ui" id="sounds">Загрузить WAV</button><input type="file" id="audioFiles" accept=".wav,audio/*" multiple hidden><span id="audioStatus" role="status"></span><button class="ui" id="photo">Снимок</button><button class="ui" id="night">День / ночь</button><button class="ui" id="home">К дому</button></footer></div>
+<div id="hud"><header><h1 id="name">Создание мира</h1><p id="info"></p></header><i class="cross"></i><footer><button class="ui" id="new">Новый мир</button><input class="ui" id="seed"><button class="ui" id="open">Открыть</button><button class="ui" id="sound">Звук: выкл.</button><button class="ui" id="sounds" title="Резервная загрузка своих записей">Свои WAV</button><input type="file" id="audioFiles" accept=".wav,audio/*" multiple hidden><span id="audioStatus" role="status"></span><button class="ui" id="photo">Снимок</button><button class="ui" id="night">День / ночь</button><button class="ui" id="home">К дому</button></footer></div>
 <script type="module">
 import*as T from"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js";
 const $=s=>document.querySelector(s),clamp=T.MathUtils.clamp,mix=T.MathUtils.lerp,rend=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
@@ -258,7 +258,65 @@ let p=weather.a,type=weather.type,fall=type==="rain"?24:type==="snow"?2:type==="
 async function toggleAudio(){if(!audio){let ctx=new AudioContext,master=ctx.createGain(),filter=ctx.createBiquadFilter(),buf=ctx.createBuffer(1,ctx.sampleRate*4,ctx.sampleRate),d=buf.getChannelData(0),r=rng(G.hash^999),last=0;for(let i=0;i<d.length;i++){last=(last+(r()*2-1)*.03)/1.03;d[i]=last*4}let src=ctx.createBufferSource();src.buffer=buf;src.loop=true;filter.type="lowpass";filter.frequency.value=250+G.slender*900;src.connect(filter).connect(master).connect(ctx.destination);master.gain.value=0;src.start();audio={ctx,master,filter}}await audio.ctx.resume();sound=!sound;audio.master.gain.setTargetAtTime(sound?.25:0,audio.ctx.currentTime,.4);$("#sound").textContent="Звук: "+(sound?"вкл.":"выкл.")}
 
 const soundTracks=new Map();
-let lastAudioX=0,lastAudioZ=0;
+const bundledSounds={
+  wind:"51366__samsmyname__wind.wav",
+  rain:"337791__miradeshazer__city-pouring-rain.wav",
+  gravel:"528953__fthgurdy__walking-on-sand-and-gravel-2.wav",
+  snow:"842553__hyperfoley__snow-walking-4.wav"
+};
+let lastAudioX=0,lastAudioZ=0,audioLoading;
+
+function audioStore(){
+  return new Promise((resolve,reject)=>{
+    const request=indexedDB.open("other-worlds-audio",1);
+    request.onupgradeneeded=()=>request.result.createObjectStore("tracks");
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error);
+  });
+}
+async function cacheTrack(type,buffer){
+  try{const db=await audioStore();db.transaction("tracks","readwrite").objectStore("tracks").put(buffer,type);}
+  catch(error){console.warn("Audio cache is unavailable",error);}
+}
+async function cachedTrack(type){
+  try{
+    const db=await audioStore();
+    return await new Promise((resolve,reject)=>{
+      const request=db.transaction("tracks").objectStore("tracks").get(type);
+      request.onsuccess=()=>resolve(request.result);
+      request.onerror=()=>reject(request.error);
+    });
+  }catch{return null;}
+}
+async function installTrack(type,data){
+  const buffer=await audio.ctx.decodeAudioData(data.slice(0));
+  const previous=soundTracks.get(type);
+  if(previous){previous.source.stop();previous.source.disconnect();previous.gain.disconnect();}
+  const source=audio.ctx.createBufferSource(),gain=audio.ctx.createGain();
+  source.buffer=buffer;source.loop=true;gain.gain.value=0;
+  source.connect(gain).connect(audio.ctx.destination);source.start();
+  soundTracks.set(type,{source,gain});
+}
+async function loadBundledSounds(){
+  if(audioLoading)return audioLoading;
+  audioLoading=(async()=>{
+    const status=$("#audioStatus"),missing=[];
+    status.textContent=" · звук загружается…";
+    for(const [type,url] of Object.entries(bundledSounds)){
+      let data=null;
+      try{
+        const response=await fetch(url);
+        if(response.ok)data=await response.arrayBuffer();
+      }catch{}
+      if(!data)data=await cachedTrack(type);
+      if(!data){missing.push(type);continue;}
+      try{await installTrack(type,data);}catch{missing.push(type);}
+    }
+    status.textContent=missing.length?" · можно добавить свои WAV":" · атмосфера готова";
+    return soundTracks.size;
+  })();
+  return audioLoading;
+}
 async function loadSoundFiles(files){
   if(!audio){await toggleAudio();if(sound)await toggleAudio();}
   const status=$("#audioStatus");let loaded=0;
@@ -267,16 +325,13 @@ async function loadSoundFiles(files){
     const type=name.includes("rain")?"rain":name.includes("wind")?"wind":name.includes("snow")?"snow":name.includes("sand")||name.includes("gravel")?"gravel":null;
     if(!type)continue;
     try{
-      const buffer=await audio.ctx.decodeAudioData(await file.arrayBuffer());
-      const previous=soundTracks.get(type);
-      if(previous){previous.source.stop();previous.source.disconnect();previous.gain.disconnect();}
-      const source=audio.ctx.createBufferSource(),gain=audio.ctx.createGain();
-      source.buffer=buffer;source.loop=true;gain.gain.value=0;
-      source.connect(gain).connect(audio.ctx.destination);source.start();
-      soundTracks.set(type,{source,gain});loaded++;
-    }catch(error){status.textContent="Не удалось прочитать "+file.name;return;}
+      const data=await file.arrayBuffer();
+      await installTrack(type,data);
+      await cacheTrack(type,data);
+      loaded++;
+    }catch(error){status.textContent=" · не удалось прочитать "+file.name;return;}
   }
-  status.textContent="Звуков загружено: "+soundTracks.size;
+  status.textContent=loaded?" · WAV сохранены в этом браузере":" · подходящие WAV не найдены";
   if(loaded&&!sound)await toggleAudio();
 }
 function updateSoundscape(dt){
@@ -288,20 +343,21 @@ function updateSoundscape(dt){
   const walking=grounded&&document.pointerLockElement===rend.domElement&&moved>.001&&moved<2;
   for(const [type,track] of soundTracks){
     let volume=0;
-    if(type==="wind")volume=(.13+front*.12)*(indoors?.18:1);
-    if(type==="rain"&&weather.type==="rain")volume=front*.35*(indoors?.25:1);
-    if(type===(weather.type==="snow"?"snow":"gravel")&&walking&&!indoors)volume=.3;
+    if(type==="wind")volume=(.1+front*.13)*(indoors?.18:1);
+    if(type==="rain"&&weather.type==="rain")volume=(.06+front*.28)*(indoors?.25:1);
+    if(type===(weather.type==="snow"?"snow":"gravel")&&walking&&!indoors)volume=keys.has("ShiftLeft")?.36:.27;
     track.gain.gain.setTargetAtTime(sound?volume:0,audio.ctx.currentTime,.14);
     if(type==="snow"||type==="gravel")track.source.playbackRate.setTargetAtTime(keys.has("ShiftLeft")?1.35:1,audio.ctx.currentTime,.2);
   }
   audio.master.gain.setTargetAtTime(sound&&!soundTracks.has("wind")?.18:0,audio.ctx.currentTime,.2);
 }
 $("#sounds").onclick=()=>$("#audioFiles").click();
-$("#audioFiles").onchange=async e=>{try{await loadSoundFiles(e.target.files);}catch(error){$("#audioStatus").textContent="Ошибка звука: "+error.message;}};
+$("#audioFiles").onchange=async e=>{try{await loadSoundFiles(e.target.files);}catch(error){$("#audioStatus").textContent=" · ошибка звука: "+error.message;}};
+
 
 function fresh(){return crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}
 $("#enter").onclick=()=>{$("#start").style.opacity=0;setTimeout(()=>$("#start").remove(),500);rend.domElement.requestPointerLock()};rend.domElement.onclick=()=>rend.domElement.requestPointerLock();addEventListener("mousemove",e=>{if(document.pointerLockElement!==rend.domElement)return;yaw-=e.movementX*.0024;pitch=clamp(pitch-e.movementY*.0024,-1.45,1.45)});addEventListener("keydown",e=>{if(e.target.tagName==="INPUT"||document.pointerLockElement!==rend.domElement)return;if(["Space","KeyW","KeyA","KeyS","KeyD"].includes(e.code))e.preventDefault();keys.add(e.code);if(e.code==="Space"&&grounded){jump=6;grounded=false}});addEventListener("keyup",e=>keys.delete(e.code));addEventListener("blur",()=>keys.clear());document.addEventListener("pointerlockchange",()=>keys.clear());
-$("#new").onclick=()=>generate(fresh());$("#open").onclick=()=>{let s=$("#seed").value.trim().slice(0,60);if(s)generate(s)};$("#seed").onkeydown=e=>{if(e.key==="Enter")$("#open").click()};$("#sound").onclick=toggleAudio;$("#home").onclick=()=>{const h=homes[0];if(!h)return;cam.position.set(h.x,h.base+1.75,h.z+18);yaw=0;pitch=-.02;jump=0;grounded=true;keys.clear();};$("#night").onclick=()=>{const phase=(celestial.start+celestial.age/celestial.length)%1;celestial.start=phase<.5?.75:.25;celestial.age=0;update(0);};$("#photo").onclick=()=>rend.domElement.toBlob(b=>{let u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="world-"+G.hash+".png";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)});
+$("#new").onclick=()=>generate(fresh());$("#open").onclick=()=>{let s=$("#seed").value.trim().slice(0,60);if(s)generate(s)};$("#seed").onkeydown=e=>{if(e.key==="Enter")$("#open").click()};$("#sound").onclick=async()=>{await toggleAudio();if(sound)await loadBundledSounds();};$("#home").onclick=()=>{const h=homes[0];if(!h)return;cam.position.set(h.x,h.base+1.75,h.z+18);yaw=0;pitch=-.02;jump=0;grounded=true;keys.clear();};$("#night").onclick=()=>{const phase=(celestial.start+celestial.age/celestial.length)%1;celestial.start=phase<.5?.75:.25;celestial.age=0;update(0);};$("#photo").onclick=()=>rend.domElement.toBlob(b=>{let u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="world-"+G.hash+".png";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)});
 addEventListener("resize",()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();rend.setSize(innerWidth,innerHeight)});generate(new URLSearchParams(location.search).get("seed")||fresh());
 rend.setAnimationLoop(()=>{
   const dt=Math.min(clock.getDelta(),.05),f=+keys.has("KeyW")-+keys.has("KeyS"),s=+keys.has("KeyD")-+keys.has("KeyA");
