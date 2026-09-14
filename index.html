@@ -1,7 +1,7 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Иные миры</title><style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071018;color:#fff;font-family:system-ui}canvas{display:block}#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 2px 14px #000}header{position:absolute;top:22px;left:26px}h1{font:400 26px Georgia;margin:0 0 6px}p{margin:3px 0;color:#ffffffc7;font-size:13px}footer{position:absolute;bottom:20px;left:22px;right:22px;display:flex;gap:8px;flex-wrap:wrap}.ui{pointer-events:auto;color:#fff;background:#0a1621c9;border:1px solid #ffffff42;border-radius:7px;padding:10px 13px;backdrop-filter:blur(10px)}button{cursor:pointer}button:hover{background:#293c4b}input{width:130px}.cross{position:absolute;top:50%;left:50%;width:5px;height:5px;border-radius:50%;background:#ffffffa0}#start{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;background:#071018e8;transition:.5s}#start div{max-width:480px;padding:25px}#start h2{font:400 38px Georgia;margin:0 0 15px}#start p{line-height:1.7;margin-bottom:20px}@media(max-width:650px){header{left:14px}footer{left:12px;bottom:12px}}</style></head><body>
 <div id="start"><div><h2>Иные миры</h2><p>Каждый код создаёт собственный ландшафт, флору, руины, погоду и небо.</p><button class="ui" id="enter">Войти в мир</button><p>WASD — идти · мышь — смотреть · Shift — ускориться · пробел — прыжок</p></div></div>
-<div id="hud"><header><h1 id="name">Создание мира</h1><p id="info"></p></header><i class="cross"></i><footer><button class="ui" id="new">Новый мир</button><input class="ui" id="seed"><button class="ui" id="open">Открыть</button><button class="ui" id="sound">Звук: выкл.</button><button class="ui" id="photo">Снимок</button><button class="ui" id="night">День / ночь</button><button class="ui" id="home">К дому</button></footer></div>
+<div id="hud"><header><h1 id="name">Создание мира</h1><p id="info"></p></header><i class="cross"></i><footer><button class="ui" id="new">Новый мир</button><input class="ui" id="seed"><button class="ui" id="open">Открыть</button><button class="ui" id="sound">Звук: выкл.</button><button class="ui" id="sounds">Загрузить WAV</button><input type="file" id="audioFiles" accept=".wav,audio/*" multiple hidden><span id="audioStatus" role="status"></span><button class="ui" id="photo">Снимок</button><button class="ui" id="night">День / ночь</button><button class="ui" id="home">К дому</button></footer></div>
 <script type="module">
 import*as T from"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js";
 const $=s=>document.querySelector(s),clamp=T.MathUtils.clamp,mix=T.MathUtils.lerp,rend=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
@@ -24,7 +24,7 @@ if(k===2)return(n-.46)*G.relief*.45+Math.pow(1-Math.abs(Math.sin(u*G.freq*8+n*8)
 if(k===3){let h=(n-.46)*18;for(const c of G.craters){let d=Math.hypot(x-c.x,z-c.z)/c.r;h+=Math.exp(-(((d-1)/.18)**2))*c.d*.55-Math.exp(-((d/.7)**4))*c.d}return h}
 if(k===4){let w=.5+.5*Math.sin(u*G.freq*7+fbm(u*G.freq,v*G.freq*.5)*9);return w**2.5*G.relief*.3+(n-.42)*18}
 let ch=Math.abs(Math.sin(u*G.freq*3+fbm(u*G.freq,v*G.freq)*5));return(n-.41)*G.relief-Math.exp(-ch*ch*28)*22}
-function height(x,z){let region=smooth(clamp((fbm(x*.0035+130,z*.0035-80)-.34)/.32,0,1)),h=mix(shape(G.kind,x,z),shape(G.second,x,z),region),p=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve),c=Math.exp(-p*p/190);h=mix(h,(fbm(x*.004,z*.004)-.42)*10+G.water+3,c*.88)+(noise(x*.065,z*.065)-.5)*1.4*(1-c);for(const home of homes){const d=Math.max(Math.abs(x-home.x)/19,Math.abs(z-home.z)/23);const blend=1-smooth(clamp((d-1)/.4,0,1));h=mix(h,home.base-.05,blend);}return h}
+function height(x,z){let region=smooth(clamp((fbm(x*.0035+130,z*.0035-80)-.34)/.32,0,1)),h=mix(shape(G.kind,x,z),shape(G.second,x,z),region),p=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve),c=Math.exp(-p*p/190);h=mix(h,(fbm(x*.004,z*.004)-.42)*10+G.water+3,c*.88)+(noise(x*.065,z*.065)-.5)*1.4*(1-c);for(const home of homes){const d=Math.max(Math.abs(x-home.x-4)/27,Math.abs(z-home.z)/23);const blend=1-smooth(clamp((d-1)/.4,0,1));h=mix(h,home.base-.05,blend);if(home.basement&&home.cells.some(([ix,iz])=>Math.abs(x-home.x-ix*8)<4.4&&Math.abs(z-home.z-iz*8)<4.4))h=home.base-4.25;}return h}
 function ground(x,z){let gx=clamp((x+SIZE/2)/STEP,0,SEG-.001),gz=clamp((z+SIZE/2)/STEP,0,SEG-.001),X=Math.floor(gx),Z=Math.floor(gz),u=gx-X,v=gz-Z,a=(Z*(SEG+1)+X)*3+1,p=landMesh.geometry.attributes.position.array,A=p[a],B=p[a+3],C=p[a+(SEG+1)*3],D=p[a+(SEG+2)*3];return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
 function clear(){if(!scene)return;let gs=new Set,ms=new Set;scene.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose())}
 function instances(g,m,a){if(!a.length){g.dispose();m.dispose();return;}let o=new T.InstancedMesh(g,m,a.length);a.forEach((v,i)=>{temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);temp.rotation.set(v[6]||0,v[7]||0,v[8]||0);temp.updateMatrix();o.setMatrixAt(i,temp.matrix)});scene.add(o)}
@@ -105,116 +105,111 @@ function updateNightSky(e,day,front,top,horizon){
 }
 
 
+
 let homes=[],buildingSolids=[];
 function planHomes(){
-  const r=rng(G.hash^0x814ae);
-  homes=[];
-  for(let i=0;i<3;i++){
-    const z=105-i*140;
-    const x=G.path+Math.sin(z*.011+G.phase)*G.curve+(i%2?-42:42);
-    const base=Math.max(height(x,z),G.water+2)+.25;
-    homes.push({x,z,base,seed:Math.floor(r()*4294967295),split: -2+r()*4});
+  const r=rng(G.hash^0x814af);homes=[];
+  const count=r()<.3?0:r()<.85?1:2;
+  for(let i=0;i<count;i++){
+    const type=Math.floor(r()*5),z=80-i*220,x=G.path+(i?-85:75);
+    const basement=type===2||r()<.3;
+    const floors=type===4?3+Math.floor(r()*3):type===2?1:1+Math.floor(r()*3);
+    const cells=[];
+    for(let iz=-1;iz<=1;iz++)for(let ix=-1;ix<=1;ix++){
+      if(type===4&&ix!==0)continue;
+      if(type===1&&ix===1&&iz!==1)continue;
+      if(type===0&&ix===-1&&iz===-1)continue;
+      cells.push([ix,iz]);
+    }
+    if(type===3)for(let iz=-1;iz<=1;iz++)cells.push([2,iz]);
+    homes.push({x,z,base:Math.max(height(x,z),G.water+(basement?7:2))+.25,
+      seed:Math.floor(r()*4294967295),type,basement,floors,cells,roof:Math.floor(r()*3)});
   }
 }
 function houseReserved(x,z){
-  return homes.some(h=>Math.abs(x-h.x)<26&&Math.abs(z-h.z)<30);
+  return homes.some(h=>Math.abs(x-h.x)<34&&Math.abs(z-h.z)<30);
 }
 function buildHomes(){
   buildingSolids=[];
-  const box=new T.BoxGeometry(1,1,1);
   for(const house of homes){
-    const r=rng(house.seed),{x,z,base}=house;
-    const exterior=mat(col(G.hue+.015,.17,.52));
-    const trim=mat(col(G.hue+.06,.2,.25));
-    const wood=mat(col(G.hue+.09,.25,.32));
-    const floorMat=mat(col(G.hue+.035,.18,.45));
-    const fabric=mat(col(G.hue+.2+r()*.12,.36,.46));
-    const rooms=Array.from({length:4},()=>mat(col(G.hue+.02+r()*.12,.17,.59)));
-    const glass=new T.MeshStandardMaterial({color:col(G.hue+.08,.2,.7),transparent:true,opacity:.16,roughness:.18,depthWrite:false});
-    function part(px,py,pz,w,h,d,m=exterior,solid=true){
-      const obj=mesh(box,m,x+px,base+py,z+pz,w,h,d);
+    const r=rng(house.seed),{x,z,base,cells}=house,box=new T.BoxGeometry(1,1,1);
+    const wall=mat(col(G.hue+(r()-.5)*.16,.1+r()*.2,.32+r()*.3));
+    const trim=mat(col(G.hue+.035,.16,.22+r()*.15));
+    const floorMat=mat(col(G.hue+.06,.15,.36+r()*.16));
+    const paints=Array.from({length:5},()=>mat(col(G.hue+(r()-.5)*.24,.1+r()*.2,.4+r()*.2)));
+    function part(px,py,pz,w,h,d,m=wall,solid=true){
+      mesh(box,m,x+px,base+py,z+pz,w,h,d);
       if(solid)buildingSolids.push({x:x+px,z:z+pz,y:base+py,w:w/2,d:d/2,h:h/2});
-      return obj;
     }
-    // Ground floor, two upper wings, and two landings around the stairwell.
-    part(0,-.2,0,24,.4,24,floorMat);
-    for(const side of [-1,1])part(side*7.5,4.05,0,9,.3,24,floorMat);
-    part(0,4.05,9,6,.3,6,floorMat);
-    part(0,4.05,-10,6,.3,4,floorMat);
-    // Foundations extend into the prepared site.
-    part(0,-1.1,0,24,1.4,24,trim);
-    for(let level=0;level<2;level++){
-      const b=level*4.2;
-      // Front door downstairs; a tall front window upstairs.
-      part(-6.8,b+1.95,12,10.4,3.9,.4);
-      part(6.8,b+1.95,12,10.4,3.9,.4);
-      part(0,b+3.35,12,3.2,1.1,.4);
-      if(level)part(0,b+.6,12,3.2,1.2,.4);
-      if(level)part(0,b+2,12,3.2,1.6,.08,glass,true);
-      part(0,b+1.95,-12,24,3.9,.4);
-      // Side windows have sills and lintels, leaving daylight openings.
-      for(const side of [-1,1]){
-        part(side*12,b+.55,0,.4,1.1,24);
-        part(side*12,b+3.35,0,.4,1.1,24);
-        for(const pz of [-10,-2,2,10])part(side*12,b+1.95,pz,.4,1.7,4);
-        for(const pz of [-6,6])part(side*12,b+1.95,pz,.08,1.7,4,glass,true);
-        // Hall partitions: a door to each room, and an independently varied dividing wall.
-        const intervals=[[-12,-6.2],[-3.8,3.8],[6.2,12]];
-        for(const [a,bz] of intervals)part(side*3,b+1.9,(a+bz)/2,.3,3.8,bz-a,rooms[level*2+(side>0?1:0)]);
-        for(const pz of [-5,5])part(side*3,b+3.35,pz,.3,.9,2.4,trim);
-        part(side*7.5,b+1.9,house.split,9,3.8,.25,rooms[level*2+(side>0?1:0)]);
+    const exists=(ix,iz)=>cells.some(c=>c[0]===ix&&c[1]===iz);
+    const key=(a,b)=>[a,b].sort().join("|");
+    const start=house.basement?-1:0;
+    house.roomCount=0;
+    for(let level=start;level<house.floors;level++){
+      const b=level*4.2,edges=new Set(),visited=new Set(["0,1"]),stack=[[0,1]];
+      // Randomized depth-first spanning tree: every room is reachable.
+      while(stack.length){
+        const [ix,iz]=stack[stack.length-1];
+        const choices=[[ix+1,iz],[ix-1,iz],[ix,iz+1],[ix,iz-1]].filter(([u,v])=>exists(u,v)&&!visited.has(u+","+v));
+        if(!choices.length){stack.pop();continue;}
+        const next=choices[Math.floor(r()*choices.length)];
+        edges.add(key(ix+","+iz,next.join(",")));visited.add(next.join(","));stack.push(next);
       }
-      // Beds upstairs; downstairs a reading room and dining/study spaces.
-      for(const side of [-1,1])for(const back of [-1,1]){
-        const cx=side*8,cz=back*7;
-        part(cx,b+.018,cz,5,.035,5,fabric,false);
-        if(level){
-          part(cx,b+.32,cz,2.4,.64,3.8,wood);
-          part(cx,b+.72,cz,2.3,.18,3.7,fabric);
-          part(cx,b+1,cz-1.7,2.5,1.4,.2,wood);
-          part(cx,b+.88,cz-1.1,1.6,.15,.7,rooms[0],false);
-          part(side*10.5,b+1.2,cz+1,1,2.4,2,wood);
-        }else{
-          part(cx,b+1,cz,3,.18,2,wood);
-          for(const dx of [-1.2,1.2])for(const dz of [-.7,.7])part(cx+dx,b+.5,cz+dz,.16,1,.16,wood);
-          for(const dz of [-1.8,1.8]){
-            part(cx,b+.52,cz+dz,1,.16,1,fabric);
-            part(cx,b+.9,cz+dz+.45,1,.9,.15,wood);
-            for(const dx of [-.38,.38])part(cx+dx,b+.25,cz+dz,.12,.5,.8,wood);
-          }
-          part(side*10.8,b+1.25,cz,1,2.5,3,wood);
-          for(let shelf=0;shelf<3;shelf++)part(side*10.2,b+.45+shelf*.7,cz,.2,.18,2.7,trim,false);
+      // The full-height stair core always connects its three cells.
+      edges.add(key("0,-1","0,0"));edges.add(key("0,0","0,1"));
+      for(const [ix,iz] of cells){
+        const cx=ix*8,cz=iz*8,paint=paints[Math.floor(r()*paints.length)];
+        if(ix!==0)house.roomCount++;
+        if(level===start||ix!==0)part(cx,b-.15,cz,8,.3,8,floorMat);
+        else{
+          // Open stair flight from -8 to +6, with side galleries.
+          part(-2.85,b-.15,cz,2.3,.3,8,floorMat);
+          part(2.85,b-.15,cz,2.3,.3,8,floorMat);
+          if(iz===-1)part(0,b-.15,-10,3.4,.3,4,floorMat);
+          if(iz===1)part(0,b-.15,9,3.4,.3,6,floorMat);
+        }
+        for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+          const neighbor=exists(ix+dx,iz+dz);
+          if(neighbor&&(dx<0||dz<0))continue;
+          if(ix===0&&dx===0&&neighbor)continue;
+          const door=(neighbor&&edges.has(key(ix+","+iz,(ix+dx)+","+(iz+dz))))||
+            (!neighbor&&level===0&&ix===0&&iz===1&&dz===1);
+          const wx=cx+dx*4,wz=cz+dz*4;
+          const window=!neighbor&&!door&&level>=0&&house.type!==2&&r()<.65;
+          const material=neighbor?paint:wall;
+          function seg(offset,len,yy,hh){part(wx+(dz?offset:0),b+yy,wz+(dx?offset:0),dz?len:.32,hh,dx?len:.32,material);}
+          if(door||window){
+            seg(-2.6,2.8,1.95,3.9);seg(2.6,2.8,1.95,3.9);
+            seg(0,2.4,3.4,1);
+            if(window)seg(0,2.4,.65,1.3);
+          }else seg(0,8,1.95,3.9);
         }
       }
-    }
-    // 28 shallow steps; the second floor is exactly 4.2 metres above the first.
-    for(let i=0;i<28;i++){
-      const top=(i+1)*.15;
-      part(0,top/2,-8+(i+.5)*.5,2.6,top,.5,wood);
-    }
-    // Stair-side guards leave the head and foot of the flight open.
-    for(const side of [-1,1]){
-      for(let i=0;i<8;i++){
-        const zz=-7.6+i*1.85,yy=(zz+8)*.3;
-        part(side*1.45,yy+.5,zz,.1,1,.1,trim);
+      if(level<house.floors-1){
+        for(let i=0;i<28;i++){const top=(i+1)*.15;part(0,b+top-.09,-8+(i+.5)*.5,2.6,.18,.5,trim);}
       }
-      // Upper galleries have railings along the void.
-      part(side*2.85,4.75,-1,.12,1.1,14,trim);
+      if(level>start)for(const side of [-1,1])part(side*1.8,b+.5,-1,.12,1,14,trim);
+      // Restrict expensive point lights to two per building.
+      if(level===0||level===start){
+        const lamp=new T.PointLight(col(.11,.22,.8),25,23,2);lamp.position.set(x,base+b+3.3,z+9);scene.add(lamp);
+      }
+      part(0,b+3.4,9,.5,.18,.5,mat(col(.11,.2,.7),1),false);
     }
-    // Roof and cornice. No opaque slab across the staircase opening.
-    part(0,8.25,0,25,.5,25,trim);
-    part(0,8.7,0,24,.4,24,exterior);
-    if(r()>.5)part(7,9.3,-7,1.4,2.2,1.4,trim);
-    // Warm, non-shadowing hall light serves both floors.
-    const lamp=new T.PointLight(col(.11,.28,.82),22,25,2);
-    lamp.position.set(x,base+6.8,z+8);scene.add(lamp);
-    part(0,7.5,8,.45,.5,.45,mat(col(.11,.25,.78),1.2),false);
-    // Broad outside approach, aligned with the front doorway.
-    part(0,-.12,14,4,.24,4,floorMat);
+    for(const [ix,iz] of cells){
+      const top=house.floors*4.2;
+      part(ix*8,top,iz*8,8.5,.4,8.5,trim);
+      if(house.roof===1){
+        const roof=mesh(new T.ConeGeometry(6,3,4),trim,x+ix*8,base+top+1.7,z+iz*8);
+        roof.rotation.y=Math.PI/4;
+      }else if(house.roof===2){
+        part(ix*8,top+.5,iz*8,7.7,.7,7.7,wall,false);
+      }
+    }
+    part(0,-.12,14,3.5,.24,4,floorMat);
   }
 }
 function supportAt(x,z,feet){
-  let top=Math.max(ground(x,z),G.water);
+  let top=Math.max(ground(x,z),G.water);for(const home of homes)if(home.cells.some(([ix,iz])=>Math.abs(x-home.x-ix*8)<4&&Math.abs(z-home.z-iz*8)<4))top=home.base-(home.basement?4.2:0);
   for(const b of buildingSolids){
     const y=b.y+b.h;
     if(Math.abs(x-b.x)<b.w&&Math.abs(z-b.z)<b.d&&y<=feet+.23&&y>top)top=y;
@@ -256,14 +251,57 @@ let trunks=[],crowns=[],rocks=[];for(let i=0;i<2600;i++){let x=(rnd()-.5)*790,z=
 instances(new T.CylinderGeometry(1,1,1,6),mat(land.clone().multiplyScalar(.62)),trunks);let cg=G.form===0?new T.IcosahedronGeometry(1,1):G.form===1?new T.ConeGeometry(1,1,7):G.form===2?new T.SphereGeometry(1,10,6,0,6.28,0,Math.PI/2):G.form===3?new T.OctahedronGeometry(1):new T.CapsuleGeometry(.5,1,4,7);instances(cg,mat(leaf,G.form===3?.08:0),crowns);instances(new T.IcosahedronGeometry(1,0),mat(rock),rocks);
 let spawn;for(let z=140;z>-160;z-=4){let x=G.path+Math.sin(z*.011+G.phase)*G.curve,y=ground(x,z);if(y>G.water+.8){spawn=[x,y+1.75,z];break}}if(!spawn)spawn=[G.path,Math.max(ground(G.path,120),G.water)+1.75,120];cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();
 let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
-buildHomes();let wt=kind===4?"dust":G.wet>.62?"rain":rnd()<.25?"snow":"spores";weather=makeWeather(wt,wt==="spores"?accent:horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
-let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+" · руины: "+sites.length+" · дома: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+buildHomes();$("#home").disabled=homes.length===0;$("#home").textContent=homes.length?"К строению":"Нет строений";let wt=kind===4?"dust":G.wet>.62?"rain":rnd()<.25?"snow":"spores";weather=makeWeather(wt,wt==="spores"?accent:horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
+let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
 function update(dt){let e=celestial;e.age+=dt;let cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2)),front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength,night=col(G.hue,.25,.13),sunset=col(G.hue+.12,.4,.42),top=night.clone().lerp(e.sky,day),h=night.clone().lerp(e.horizon,day).lerp(sunset,tw*.35);scene.background.copy(top);scene.fog.color.copy(h);scene.fog.density=e.fog*(1+front*.75);e.hemi.color.copy(h).lerp(col(G.hue,.12,.64),(1-day)*.65);e.hemi.intensity=.85+day*.95;e.light.position.set(Math.cos(a)*450,alt*500,-400);e.light.intensity=(.05+day*2.5)*(1-front*.45);e.sun.position.set(cam.position.x+Math.cos(a)*430,cam.position.y+alt*480,cam.position.z-650);e.sun.visible=alt>-.12;updateNightSky(e,day,front,top,h);
 let p=weather.a,type=weather.type,fall=type==="rain"?24:type==="snow"?2:type==="dust"?.1:-.25,drift=type==="dust"?7:1.4;weather.points.position.copy(cam.position);weather.points.material.opacity=front*(type==="rain"?.38:.65);for(let i=0;i<weather.speed.length;i++){let k=i*3,s=weather.speed[i];p[k]+=Math.sin(e.age*.025+G.phase)*drift*dt*s;p[k+1]-=fall*dt*s;p[k+2]+=Math.cos(e.age*.019+G.phase)*drift*dt*s;if(p[k]>50)p[k]-=100;if(p[k]<-50)p[k]+=100;if(p[k+2]>50)p[k+2]-=100;if(p[k+2]<-50)p[k+2]+=100;if(p[k+1]<-20)p[k+1]+=65;if(p[k+1]>45)p[k+1]-=65}weather.points.geometry.attributes.position.needsUpdate=true;water.material.roughness=.2+Math.sin(e.age*.4)*.035}
 async function toggleAudio(){if(!audio){let ctx=new AudioContext,master=ctx.createGain(),filter=ctx.createBiquadFilter(),buf=ctx.createBuffer(1,ctx.sampleRate*4,ctx.sampleRate),d=buf.getChannelData(0),r=rng(G.hash^999),last=0;for(let i=0;i<d.length;i++){last=(last+(r()*2-1)*.03)/1.03;d[i]=last*4}let src=ctx.createBufferSource();src.buffer=buf;src.loop=true;filter.type="lowpass";filter.frequency.value=250+G.slender*900;src.connect(filter).connect(master).connect(ctx.destination);master.gain.value=0;src.start();audio={ctx,master,filter}}await audio.ctx.resume();sound=!sound;audio.master.gain.setTargetAtTime(sound?.25:0,audio.ctx.currentTime,.4);$("#sound").textContent="Звук: "+(sound?"вкл.":"выкл.")}
+
+const soundTracks=new Map();
+let lastAudioX=0,lastAudioZ=0;
+async function loadSoundFiles(files){
+  if(!audio){await toggleAudio();if(sound)await toggleAudio();}
+  const status=$("#audioStatus");let loaded=0;
+  for(const file of files){
+    const name=file.name.toLowerCase();
+    const type=name.includes("rain")?"rain":name.includes("wind")?"wind":name.includes("snow")?"snow":name.includes("sand")||name.includes("gravel")?"gravel":null;
+    if(!type)continue;
+    try{
+      const buffer=await audio.ctx.decodeAudioData(await file.arrayBuffer());
+      const previous=soundTracks.get(type);
+      if(previous){previous.source.stop();previous.source.disconnect();previous.gain.disconnect();}
+      const source=audio.ctx.createBufferSource(),gain=audio.ctx.createGain();
+      source.buffer=buffer;source.loop=true;gain.gain.value=0;
+      source.connect(gain).connect(audio.ctx.destination);source.start();
+      soundTracks.set(type,{source,gain});loaded++;
+    }catch(error){status.textContent="Не удалось прочитать "+file.name;return;}
+  }
+  status.textContent="Звуков загружено: "+soundTracks.size;
+  if(loaded&&!sound)await toggleAudio();
+}
+function updateSoundscape(dt){
+  if(!audio)return;
+  const moved=Math.hypot(cam.position.x-lastAudioX,cam.position.z-lastAudioZ);
+  lastAudioX=cam.position.x;lastAudioZ=cam.position.z;
+  const indoors=homes.some(h=>cam.position.y<h.base+h.floors*4.2&&h.cells.some(([ix,iz])=>Math.abs(cam.position.x-h.x-ix*8)<4&&Math.abs(cam.position.z-h.z-iz*8)<4));
+  const front=smooth(.5+.5*Math.sin(celestial.age/55+weather.phase))*weather.strength;
+  const walking=grounded&&document.pointerLockElement===rend.domElement&&moved>.001&&moved<2;
+  for(const [type,track] of soundTracks){
+    let volume=0;
+    if(type==="wind")volume=(.13+front*.12)*(indoors?.18:1);
+    if(type==="rain"&&weather.type==="rain")volume=front*.35*(indoors?.25:1);
+    if(type===(weather.type==="snow"?"snow":"gravel")&&walking&&!indoors)volume=.3;
+    track.gain.gain.setTargetAtTime(sound?volume:0,audio.ctx.currentTime,.14);
+    if(type==="snow"||type==="gravel")track.source.playbackRate.setTargetAtTime(keys.has("ShiftLeft")?1.35:1,audio.ctx.currentTime,.2);
+  }
+  audio.master.gain.setTargetAtTime(sound&&!soundTracks.has("wind")?.18:0,audio.ctx.currentTime,.2);
+}
+$("#sounds").onclick=()=>$("#audioFiles").click();
+$("#audioFiles").onchange=async e=>{try{await loadSoundFiles(e.target.files);}catch(error){$("#audioStatus").textContent="Ошибка звука: "+error.message;}};
+
 function fresh(){return crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}
 $("#enter").onclick=()=>{$("#start").style.opacity=0;setTimeout(()=>$("#start").remove(),500);rend.domElement.requestPointerLock()};rend.domElement.onclick=()=>rend.domElement.requestPointerLock();addEventListener("mousemove",e=>{if(document.pointerLockElement!==rend.domElement)return;yaw-=e.movementX*.0024;pitch=clamp(pitch-e.movementY*.0024,-1.45,1.45)});addEventListener("keydown",e=>{if(e.target.tagName==="INPUT"||document.pointerLockElement!==rend.domElement)return;if(["Space","KeyW","KeyA","KeyS","KeyD"].includes(e.code))e.preventDefault();keys.add(e.code);if(e.code==="Space"&&grounded){jump=6;grounded=false}});addEventListener("keyup",e=>keys.delete(e.code));addEventListener("blur",()=>keys.clear());document.addEventListener("pointerlockchange",()=>keys.clear());
-$("#new").onclick=()=>generate(fresh());$("#open").onclick=()=>{let s=$("#seed").value.trim().slice(0,60);if(s)generate(s)};$("#seed").onkeydown=e=>{if(e.key==="Enter")$("#open").click()};$("#sound").onclick=toggleAudio;$("#home").onclick=()=>{const h=homes[0];cam.position.set(h.x,h.base+1.75,h.z+18);yaw=0;pitch=-.02;jump=0;grounded=true;keys.clear();};$("#night").onclick=()=>{const phase=(celestial.start+celestial.age/celestial.length)%1;celestial.start=phase<.5?.75:.25;celestial.age=0;update(0);};$("#photo").onclick=()=>rend.domElement.toBlob(b=>{let u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="world-"+G.hash+".png";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)});
+$("#new").onclick=()=>generate(fresh());$("#open").onclick=()=>{let s=$("#seed").value.trim().slice(0,60);if(s)generate(s)};$("#seed").onkeydown=e=>{if(e.key==="Enter")$("#open").click()};$("#sound").onclick=toggleAudio;$("#home").onclick=()=>{const h=homes[0];if(!h)return;cam.position.set(h.x,h.base+1.75,h.z+18);yaw=0;pitch=-.02;jump=0;grounded=true;keys.clear();};$("#night").onclick=()=>{const phase=(celestial.start+celestial.age/celestial.length)%1;celestial.start=phase<.5?.75:.25;celestial.age=0;update(0);};$("#photo").onclick=()=>rend.domElement.toBlob(b=>{let u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="world-"+G.hash+".png";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)});
 addEventListener("resize",()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();rend.setSize(innerWidth,innerHeight)});generate(new URLSearchParams(location.search).get("seed")||fresh());
 rend.setAnimationLoop(()=>{
   const dt=Math.min(clock.getDelta(),.05),f=+keys.has("KeyW")-+keys.has("KeyS"),s=+keys.has("KeyD")-+keys.has("KeyA");
@@ -272,6 +310,6 @@ rend.setAnimationLoop(()=>{
   // Substeps keep walls and stair risers solid even during fast movement.
   const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.1));
   for(let i=0;i<steps;i++)walkFrame(dt/steps,dx/steps,dz/steps);
-  cam.rotation.set(pitch,yaw,0);update(dt);rend.render(scene,cam);
+  cam.rotation.set(pitch,yaw,0);update(dt);updateSoundscape(dt);rend.render(scene,cam);
 });
 </script></body></html>
