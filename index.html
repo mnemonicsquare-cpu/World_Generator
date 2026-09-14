@@ -241,23 +241,6 @@ function growGroundFlora(land,leaf,accent){
   instancesQ(new T.SphereGeometry(1,9,5,0,Math.PI*2,0,Math.PI/2),mat(new T.Color(0xffffff),.015),caps);
   return {moss:mossCount,mushrooms:mushroomCount};
 }
-function hueDistance(a,b){const d=Math.abs(a-b)%1;return Math.min(d,1-d)}
-function growGrass(){
-  const abundance=G.grassAbundance,limit=Math.floor(abundance*4300);
-  if(limit<12)return 0;
-  const r=rng(G.hash^0x2c71af),blades=[],axis=new T.Vector3(0,1,0),q=new T.Quaternion(),tone=new T.Color();
-  for(let i=0;i<10500&&blades.length<limit;i++){
-    const x=(r()-.5)*790,z=(r()-.5)*790,y=height(x,z),slope=Math.hypot(height(x+.9,z)-y,height(x,z+.9)-y)/.9;
-    const path=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve),patch=noise(x*.021+91,z*.021-117);
-    const snowy=G.snowAmount>.25&&y>G.snowLine-G.snowFade*.35;
-    if(houseReserved(x,z)||y<G.water+.35||slope>.48||path<5.5||snowy||r()>abundance*(.18+patch*.72))continue;
-    const h=.16+Math.pow(r(),1.7)*(1.2+abundance*.95),width=.55+r()*1.25,yaw=r()*Math.PI*2;
-    q.setFromAxisAngle(axis,yaw);tone.copy(G.materials.grass).offsetHSL((r()-.5)*.018,(r()-.5)*.05,(r()-.5)*.1);
-    blades.push([x,y+h*.5,z,width,h,width,q.x,q.y,q.z,q.w,tone.r,tone.g,tone.b]);
-  }
-  instancesQ(new T.ConeGeometry(.07,1,3),mat(new T.Color(0xffffff),0,MAT_GRASS),blades);
-  return blades.length;
-}
 function ruin(x,z,type,stone,accent){let a=rnd()*6.28,box=new T.BoxGeometry(1,1,1),column=new T.CylinderGeometry(.8,1,1,7);function p(px,pz,w,h,d,g=box,up=0){let X=x+Math.cos(a)*px-Math.sin(a)*pz,Z=z+Math.sin(a)*px+Math.cos(a)*pz,o=mesh(g,stone,X,ground(X,Z)+h/2+up,Z,w,h,d);o.rotation.y=a}
 if(type===0){for(let j=-2;j<=2;j++)for(const side of[-1,1])if(rnd()>.25)p(side*5,j*4,1,5+rnd()*5,1,column);p(0,-9,11,.7,1)}
 else if(type===1)for(let l=0;l<4;l++){let w=11-l*1.5;for(let s=0;s<4;s++)if(rnd()>.16*l){let A=s*Math.PI/2;p(Math.cos(A)*w/2,Math.sin(A)*w/2,s%2?w:1.1,2.6,s%2?1.1:w,box,l*2.6)}}
@@ -345,7 +328,7 @@ function makeNightSky(){
   const ambient=new T.AmbientLight(col(G.hue,.08,.72),0);scene.add(ambient);
   return {group,dome,moons,stars,moonlight,ambient};
 }
-function updateNightSky(e,day,front,top,horizon,warmth){
+function updateNightSky(e,day,front,top,horizon){
   const sky=e.nightSky;
   sky.group.position.copy(cam.position);
   const night=1-day;
@@ -354,11 +337,10 @@ function updateNightSky(e,day,front,top,horizon,warmth){
   for(const moon of sky.moons)moon.material.color.setScalar(.7+night*.55);
   sky.stars.forEach((stars,i)=>{stars.material.opacity=night*night*(1-front*.65)*(i?.92:.65);});
   const p=sky.dome.geometry.attributes.position,a=sky.dome.geometry.attributes.color;
-  const tint=new T.Color(),direction=new T.Vector3(),sunDirection=e.light.position.clone().normalize(),sunset=new T.Color(0xf39a68);
+  const tint=new T.Color();
   for(let i=0;i<p.count;i++){
     const t=Math.pow(clamp(p.getY(i)/1080,0,1),.55);
-    direction.fromBufferAttribute(p,i).normalize();const sunGlow=Math.pow(Math.max(direction.dot(sunDirection),0),7)*(1-t*.72)*warmth;
-    tint.copy(horizon).lerp(top,t).lerp(sunset,sunGlow*.82);a.setXYZ(i,tint.r,tint.g,tint.b);
+    tint.copy(horizon).lerp(top,t);a.setXYZ(i,tint.r,tint.g,tint.b);
   }
   a.needsUpdate=true;
 }
@@ -525,7 +507,6 @@ regionStrength:Math.pow(rnd(),.72),regionScale:.0015+rnd()*.006,regionWidth:.12+
 terrainVariation:Math.pow(rnd(),1.15),roughness:.08+Math.pow(rnd(),1.3)*3.1,pathRelief:.12+rnd()*.88,
 forestCover:Math.pow(coverSeed,.72),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
 forestContrast:.25+rnd()*1.75,craters:[]};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;for(let i=0;i<15;i++)G.craters.push({x:(rnd()-.5)*760,z:(rnd()-.5)*760,r:25+rnd()*65,d:(2+rnd()*28)*(.12+G.relief/110)});
-const fogR=rng(G.hash^0x18f2a7),foggy=fogR()<.22+G.wet*.52;G.foggy=foggy;G.fogDensity=foggy?.00115+G.wet*.0018:.00011;
 const paletteR=rng(G.hash^0x6ca91),baseHue=G.hue,botanicalShift=(paletteR()-.5)*.11;
 let sky=col(baseHue,.2+paletteR()*.12,.46+paletteR()*.1),
 horizon=col(baseHue+.035+botanicalShift*.18,.22+paletteR()*.12,.64+paletteR()*.1),
@@ -535,29 +516,26 @@ paletteLeaf=col(baseHue+botanicalShift,.34+paletteR()*.18,.3+paletteR()*.13),
 leaf=col(.29+botanicalShift*.18,.48,.31).lerp(paletteLeaf,.4),
 accent=col(baseHue+(paletteR()<.72?.075:.48),.34+paletteR()*.16,.58+paletteR()*.12);
 const weatherRoll=rng(G.hash^0x57ea7)(),wt=kind===4?"dust":G.wet>.62?"rain":weatherRoll<.28?"snow":"spores";
-const greenAffinity=Math.exp(-Math.pow(hueDistance(baseHue,.3)/.14,2)),pinkAffinity=Math.exp(-Math.pow(hueDistance(baseHue,.93)/.13,2));
-const wood=col(.075,.44,.27).lerp(land,.3),grass=(pinkAffinity>greenAffinity?col(.94,.48,.4):col(.285,.5,.32)).lerp(paletteLeaf,.32),snow=new T.Color(0xf4f7fb).lerp(sky,.12);
+const wood=col(.075,.44,.27).lerp(land,.3),grass=col(.285,.5,.32).lerp(leaf,.38),snow=new T.Color(0xf4f7fb).lerp(sky,.12);
 G.materials={rock:rock.clone(),rockDark:rock.clone().multiplyScalar(.48),wood,woodDark:wood.clone().multiplyScalar(.42),leaf:leaf.clone(),grass,grassDark:grass.clone().multiplyScalar(.48),soil:land.clone(),soilDark:land.clone().multiplyScalar(.52),snow,snowShadow:snow.clone().lerp(horizon,.32)};
-const clearHorizon=new T.Color(0xc5dbea).lerp(horizon,.16);scene=new T.Scene;scene.background=new T.Color(0x6da9dc);scene.fog=new T.FogExp2(clearHorizon,G.fogDensity);let hemi=new T.HemisphereLight(clearHorizon,land,.9),light=new T.DirectionalLight(new T.Color(0xfff0cf),2);scene.add(hemi,light);
-planHomes();let geo=new T.PlaneGeometry(SIZE,SIZE,SEG,SEG);geo.rotateX(-Math.PI/2);let pos=geo.attributes.position,colors=[],surfaceLow=Infinity,surfaceHigh=-Infinity;for(let i=0;i<pos.count;i++){let x=pos.getX(i),z=pos.getZ(i),y=height(x,z);surfaceLow=Math.min(surfaceLow,y);surfaceHigh=Math.max(surfaceHigh,y);pos.setY(i,y);let slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2,c=land.clone().lerp(rock,clamp(slope*.6+(y-25)/80,0,1));c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors.push(c.r,c.g,c.b)}G.surfaceLow=surfaceLow;G.surfaceHigh=surfaceHigh;G.snowAmount=wt==="snow"?1:clamp((G.relief-42)/62,0,.82);G.snowLine=mix(surfaceLow,surfaceHigh,wt==="snow"?.52:.76);G.snowFade=Math.max(1.4,(surfaceHigh-surfaceLow)*(wt==="snow"?.1:.07));G.grassAbundance=clamp(Math.max(greenAffinity,pinkAffinity)*(.45+G.wet*.32+G.forestCover*.42),0,1)*(kind===4?.025:wt==="snow"?.08:1);geo.setAttribute("color",new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();landMesh=new T.Mesh(geo,procedural(new T.MeshStandardMaterial({vertexColors:true,roughness:1}),MAT_TERRAIN));scene.add(landMesh);const grassCount=growGrass();
+scene=new T.Scene;scene.background=sky;scene.fog=new T.FogExp2(horizon,.0014+G.wet*.0017);let hemi=new T.HemisphereLight(horizon,land,.9),light=new T.DirectionalLight(col(G.hue+.42,.3,.9),2);scene.add(hemi,light);
+planHomes();let geo=new T.PlaneGeometry(SIZE,SIZE,SEG,SEG);geo.rotateX(-Math.PI/2);let pos=geo.attributes.position,colors=[],surfaceLow=Infinity,surfaceHigh=-Infinity;for(let i=0;i<pos.count;i++){let x=pos.getX(i),z=pos.getZ(i),y=height(x,z);surfaceLow=Math.min(surfaceLow,y);surfaceHigh=Math.max(surfaceHigh,y);pos.setY(i,y);let slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2,c=land.clone().lerp(rock,clamp(slope*.6+(y-25)/80,0,1));c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors.push(c.r,c.g,c.b)}G.surfaceLow=surfaceLow;G.surfaceHigh=surfaceHigh;G.snowAmount=wt==="snow"?1:clamp((G.relief-42)/62,0,.82);G.snowLine=mix(surfaceLow,surfaceHigh,wt==="snow"?.52:.76);G.snowFade=Math.max(1.4,(surfaceHigh-surfaceLow)*(wt==="snow"?.1:.07));geo.setAttribute("color",new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();landMesh=new T.Mesh(geo,procedural(new T.MeshStandardMaterial({vertexColors:true,roughness:1}),MAT_TERRAIN));scene.add(landMesh);
 let wg=new T.PlaneGeometry(SIZE,SIZE);wg.rotateX(-Math.PI/2);water=new T.Mesh(wg,new T.MeshStandardMaterial({color:col(G.hue+.08,.5,.3),metalness:.35,roughness:.2,transparent:true,opacity:.86}));water.position.y=G.water;scene.add(water);
 let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({color:col(G.hue+.42,.25,.9),fog:false}),-260,160,-600);for(let i=0;i<Math.floor(rnd()*4);i++){rnd();rnd();}
 let flora=growLSystemFlora(land,leaf,rock),undergrowth=growGroundFlora(land,leaf,accent);
 let spawn;for(let z=140;z>-160;z-=4){let x=G.path+Math.sin(z*.011+G.phase)*G.curve,y=ground(x,z);if(y>G.water+.8){spawn=[x,y+1.75,z];break}}if(!spawn)spawn=[G.path,Math.max(ground(G.path,120),G.water)+1.75,120];cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();
 let sites=[],stone=mat(rock.clone().lerp(land,.2),0,MAT_ROCK),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
 buildHomes();weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
-let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · трава: "+grassCount+" · растительность: "+flora.plants+" растений, "+flora.species+" форм, поколения "+flora.generations+" · мхи: "+undergrowth.moss+" · грибы: "+undergrowth.mushrooms+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · растительность: "+flora.plants+" растений, "+flora.species+" форм, поколения "+flora.generations+" · мхи: "+undergrowth.moss+" · грибы: "+undergrowth.mushrooms+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
 function update(dt){
   const e=celestial;e.age+=dt;
   const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
-  const front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength;
-  const nightTop=new T.Color(0x061426),nightHorizon=new T.Color(0x1b2b3e),dayTop=new T.Color(0x438fd0),dayHorizon=new T.Color(0xc6dce9),sunset=new T.Color(0xee9466);
-  const top=nightTop.lerp(dayTop,day),h=nightHorizon.lerp(dayHorizon,day).lerp(sunset,tw*.64),fogColor=h.clone().lerp(e.horizon,.08+G.wet*.12);
-  scene.background.copy(top);scene.fog.color.copy(fogColor);scene.fog.density=e.fog*(1+front*(G.foggy?.9:.18));
-  e.hemi.color.copy(h);e.hemi.intensity=.72+day*1.08;
+  const front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength,night=col(G.hue,.25,.13),sunset=col(G.hue+.12,.4,.42);
+  const top=night.clone().lerp(e.sky,day),h=night.clone().lerp(e.horizon,day).lerp(sunset,tw*.35);
+  scene.background.copy(top);scene.fog.color.copy(h);scene.fog.density=e.fog*(1+front*.75);
+  e.hemi.color.copy(h).lerp(col(G.hue,.12,.64),(1-day)*.65);e.hemi.intensity=.85+day*.95;
   e.light.position.set(Math.cos(a)*450,alt*500,-400);e.light.intensity=(.05+day*2.5)*(1-front*.45);
-  e.light.color.set(0xfff0cf).lerp(sunset,tw*.38);
-  e.sun.position.set(cam.position.x+Math.cos(a)*430,cam.position.y+alt*480,cam.position.z-650);e.sun.visible=alt>-.12;updateNightSky(e,day,front,top,h,tw);
+  e.sun.position.set(cam.position.x+Math.cos(a)*430,cam.position.y+alt*480,cam.position.z-650);e.sun.visible=alt>-.12;updateNightSky(e,day,front,top,h);
 
   const p=weather.a,type=weather.type,stride=weather.stride;
   weather.points.position.copy(cam.position);
@@ -680,6 +658,8 @@ function updateSoundscape(dt){
   }
   audio.master.gain.setTargetAtTime(sound&&!soundTracks.has("wind")?.18:0,audio.ctx.currentTime,.2);
 }
+
+
 function setupMobileControls(){
   const stick=$("#stick"),nub=stick.querySelector("i"),jumpButton=$("#mjump"),boostButton=$("#mboost");
   let stickPointer=null,lookPointer=null,lastLookX=0,lastLookY=0;
