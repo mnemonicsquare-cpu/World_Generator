@@ -18,7 +18,47 @@ function smooth(x){return x*x*(3-2*x)}
 function noise(x,z){let X=Math.floor(x),Z=Math.floor(z),u=smooth(x-X),v=smooth(z-Z);function n(a,b){let q=Math.imul(a,374761393)^Math.imul(b,668265263)^G.hash;q=Math.imul(q^q>>>13,1274126177);return((q^q>>>16)>>>0)/4294967295}return mix(mix(n(X,Z),n(X+1,Z),u),mix(n(X,Z+1),n(X+1,Z+1),u),v)}
 function fbm(x,z,o=5){let v=0,a=.5,t=0;for(let i=0;i<o;i++){v+=noise(x,z)*a;t+=a;x=x*2.03+17;z=z*2.03-9;a*=.5}return v/t}
 function col(h,s,l){return new T.Color().setHSL((h%1+1)%1,s,l)}
-function mat(c,e=0){let m=new T.MeshStandardMaterial({color:c,roughness:.9,flatShading:true});if(e){m.emissive.copy(c);m.emissiveIntensity=e}return m}
+const MAT_PLAIN=0,MAT_ROCK=1,MAT_WOOD=2,MAT_LEAF=3,MAT_TERRAIN=4,MAT_GRASS=5;
+function procedural(m,kind){
+  if(!kind)return m;
+  m.onBeforeCompile=shader=>{
+    const p=G.materials;
+    Object.assign(shader.uniforms,{uRock:{value:p.rock},uRockDark:{value:p.rockDark},uWood:{value:p.wood},uWoodDark:{value:p.woodDark},uLeaf:{value:p.leaf},uGrass:{value:p.grass},uGrassDark:{value:p.grassDark},uSoil:{value:p.soil},uSoilDark:{value:p.soilDark},uSnow:{value:p.snow},uSnowShadow:{value:p.snowShadow},uSurfaceLow:{value:G.surfaceLow||-20},uSurfaceHigh:{value:G.surfaceHigh||40},uSnowLine:{value:G.snowLine||25},uSnowFade:{value:G.snowFade||5},uSnowAmount:{value:G.snowAmount||0},uWaterLevel:{value:G.water},uPatternDir:{value:new T.Vector2(Math.cos(G.angle),Math.sin(G.angle))}});
+    shader.vertexShader=`varying vec3 vProcWorld;varying vec3 vProcLocal;\n${shader.vertexShader}`
+      .replace('#include <begin_vertex>',`#include <begin_vertex>\nvProcLocal=position;`)
+      .replace('#include <project_vertex>',`#include <project_vertex>
+        #ifdef USE_INSTANCING
+          vProcWorld=(modelMatrix*instanceMatrix*vec4(transformed,1.)).xyz;
+        #else
+          vProcWorld=(modelMatrix*vec4(transformed,1.)).xyz;
+        #endif`);
+    const colorCode=kind===MAT_ROCK?`
+        vec3 procGeom=normalize(cross(dFdx(vProcWorld),dFdy(vProcWorld)));procHeight=procRock(vProcWorld,procGeom);procRough=.76+(1.-procHeight)*.22;diffuseColor.rgb=mix(uRockDark,uRock,.34+procHeight*.66);`
+      :kind===MAT_WOOD?`
+        vec2 bq=vec2(atan(vProcLocal.z,vProcLocal.x)*2.7,vProcLocal.y*8.5),bw=vec2(procFbm(bq*.42),procFbm(bq*.42+7.3))-.5;bq+=bw*1.15;float furrow=pow(abs(sin(bq.x*2.6+procFbm(bq*.7)*2.5)),.38);procHeight=furrow*.72+procFbm(bq*1.8)*.28;procRough=.7+(1.-procHeight)*.27;diffuseColor.rgb=mix(diffuseColor.rgb,mix(uWoodDark,uWood,.18+procHeight*.82),.88);`
+      :kind===MAT_LEAF?`
+        vec2 lq=vProcLocal.xy;float midVein=1.-smoothstep(.025,.13,abs(lq.x)),sideVeins=pow(.5+.5*sin(lq.y*20.+abs(lq.x)*15.),9.)*smoothstep(.06,.72,abs(lq.x));float leafCells=procFbm(lq*4.8+vProcWorld.xz*.07);procHeight=clamp(leafCells*.62+midVein*.25+sideVeins*.13,0.,1.);procRough=.6+(1.-leafCells)*.25;diffuseColor.rgb*=.68+leafCells*.45+midVein*.1;`
+      :kind===MAT_GRASS?`
+        vec2 gq=vProcWorld.xz;float blades=.5+.5*sin(dot(gq,vec2(-uPatternDir.y,uPatternDir.x))*17.+procNoise(gq*.8)*4.);float clumps=procFbm(gq*.75);procHeight=clamp(blades*.3+clumps*.7,0.,1.);procRough=.82+(1.-procHeight)*.16;diffuseColor.rgb=mix(diffuseColor.rgb,mix(uGrassDark,uGrass,.35+procHeight*.65),.72);`
+      :`
+        vec3 procGeom=normalize(cross(dFdx(vProcWorld),dFdy(vProcWorld)));float up=abs(procGeom.y),slope=1.-up,elev=clamp((vProcWorld.y-uSurfaceLow)/max(uSurfaceHigh-uSurfaceLow,.01),0.,1.);vec2 tq=vProcWorld.xz;float soilH=procFbm(tq*.72),grassFib=.5+.5*sin(dot(tq,vec2(-uPatternDir.y,uPatternDir.x))*18.+procNoise(tq*.65)*5.),grassH=grassFib*.3+procFbm(tq*.9)*.7,rockH=procRock(vProcWorld,procGeom),snowH=procFbm(tq*2.8)*.72+procNoise(tq*8.)*.28;float grassMask=smoothstep(.48,.76,up)*smoothstep(uWaterLevel+.35,uWaterLevel+3.2,vProcWorld.y),rockMask=smoothstep(.2,.56,slope+procFbm(tq*.08)*.12),snowEdge=(procFbm(tq*.12)-.5)*uSnowFade*1.6,snowMask=uSnowAmount*smoothstep(uSnowLine+snowEdge,uSnowLine+uSnowFade+snowEdge,vProcWorld.y)*smoothstep(.38,.72,up);vec3 soilColor=mix(uSoilDark,uSoil,.3+soilH*.7),grassColor=mix(uGrassDark,uGrass,.28+grassH*.72),rockColor=mix(uRockDark,uRock,.3+rockH*.7),snowColor=mix(uSnowShadow,uSnow,.55+snowH*.45),surface=mix(soilColor,grassColor,grassMask*(1.-rockMask));surface=mix(surface,rockColor,rockMask);surface=mix(surface,snowColor,snowMask);procHeight=mix(mix(soilH,grassH,grassMask*(1.-rockMask)),rockH,rockMask);procHeight=mix(procHeight,snowH*.35+.55,snowMask);procRough=mix(mix(.94,.82,grassMask),.72,rockMask);procRough=mix(procRough,.58,snowMask);diffuseColor.rgb=mix(diffuseColor.rgb,surface,.94);`;
+    shader.fragmentShader=`uniform vec3 uRock,uRockDark,uWood,uWoodDark,uLeaf,uGrass,uGrassDark,uSoil,uSoilDark,uSnow,uSnowShadow;uniform vec2 uPatternDir;uniform float uSurfaceLow,uSurfaceHigh,uSnowLine,uSnowFade,uSnowAmount,uWaterLevel;varying vec3 vProcWorld;varying vec3 vProcLocal;
+      float procHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+      vec2 procHash2(vec2 p){return fract(sin(vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3))))*43758.5453);}
+      float procNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(procHash(i),procHash(i+vec2(1,0)),f.x),mix(procHash(i+vec2(0,1)),procHash(i+vec2(1)),f.x),f.y);}
+      float procFbm(vec2 p){float v=0.,a=.57;for(int i=0;i<3;i++){v+=a*procNoise(p);p=p*2.03+vec2(17.1,-9.2);a*=.5;}return v/.9975;}
+      float procRock2(vec2 p){p*=.31;vec2 cell=floor(p),f=fract(p);float nearest=9.,tone=0.;for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 g=vec2(float(i),float(j)),id=cell+g,o=.18+.64*procHash2(id),r=g+o-f,d=dot(r,r);if(d<nearest){nearest=d;tone=procHash(id+13.7);}}return clamp(tone*.76+sqrt(nearest)*.24,0.,1.);}
+      float procRock(vec3 p,vec3 n){vec3 a=abs(n);if(a.x>a.y&&a.x>a.z)return procRock2(p.zy);if(a.y>a.z)return procRock2(p.xz);return procRock2(p.xy);}
+      ${shader.fragmentShader}`
+      .replace('#include <color_fragment>',`#include <color_fragment>\nfloat procHeight=.5,procRough=.9;${colorCode}`)
+      .replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>\nroughnessFactor=clamp(procRough,.45,1.);`)
+      .replace('#include <normal_fragment_begin>',`#include <normal_fragment_begin>
+        vec3 procSx=dFdx(vProcWorld),procSy=dFdy(vProcWorld),procR1=cross(procSy,normal),procR2=cross(normal,procSx);float procDet=dot(procSx,procR1);vec3 procGrad=sign(procDet)*(dFdx(procHeight)*procR1+dFdy(procHeight)*procR2);normal=normalize(abs(procDet)*normal-procGrad*.72);`);
+  };
+  m.customProgramCacheKey=()=>`procedural-material-${kind}`;
+  return m;
+}
+function mat(c,e=0,kind=MAT_PLAIN){let m=procedural(new T.MeshStandardMaterial({color:c,roughness:.9,flatShading:true}),kind);if(e){m.emissive.copy(c);m.emissiveIntensity=e}return m}
 function mesh(g,m,x,y,z,sx=1,sy=1,sz=1){let o=new T.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);scene.add(o);return o}
 function shape(k,x,z){let c=Math.cos(G.angle),s=Math.sin(G.angle),u=x*c-z*s,v=x*s+z*c;u+=(noise(x*.007+41,z*.007)-.5)*G.warp;v+=(noise(x*.007,z*.007+73)-.5)*G.warp;let n=fbm(u*G.freq,v*G.freq);
 if(k===0)return Math.pow(Math.max(0,(n-.39)*2.7),1.55)*G.relief-12;
@@ -167,11 +207,11 @@ function growLSystemFlora(land,leaf,rock){
     }
   }
   catalog.forEach((species,i)=>{
-    const branchColor=land.clone().multiplyScalar(.48+species.branchScale*.1);
-        instancesQ(new T.CylinderGeometry(1,1,1,5),mat(branchColor),groups[i].branches);
-    instancesQ(leafGeometry(species.leafForm),mat(new T.Color(0xffffff),species.glow),groups[i].foliage);
+    const branchColor=G.materials.wood.clone().multiplyScalar(.82+species.branchScale*.08);
+    instancesQ(new T.CylinderGeometry(1,1,1,5),mat(branchColor,0,MAT_WOOD),groups[i].branches);
+    instancesQ(leafGeometry(species.leafForm),mat(new T.Color(0xffffff),species.glow,MAT_LEAF),groups[i].foliage);
   });
-  instances(new T.IcosahedronGeometry(1,0),mat(rock),rocks);
+  instances(new T.IcosahedronGeometry(1,0),mat(rock,0,MAT_ROCK),rocks);
   const generations=[...new Set(catalog.map(s=>s.iterations))].sort().join(",");
   return {plants,species:catalog.length,generations};
 }
@@ -195,7 +235,7 @@ function growGroundFlora(land,leaf,accent){
       caps.push([x,y+stem,z,cap,cap*(.32+r()*.24),cap,0,0,0,1,capTone.r,capTone.g,capTone.b]);mushroomCount++;
     }
   }
-  const mossMat=mat(new T.Color(0xffffff));mossMat.side=T.DoubleSide;
+  const mossMat=mat(new T.Color(0xffffff),0,MAT_GRASS);mossMat.side=T.DoubleSide;
   instancesQ(new T.CircleGeometry(1,8),mossMat,moss);
   instances(new T.CylinderGeometry(.7,1,1,6),mat(land.clone().lerp(new T.Color(0xffffff),.28)),stems);
   instancesQ(new T.SphereGeometry(1,9,5,0,Math.PI*2,0,Math.PI/2),mat(new T.Color(0xffffff),.015),caps);
@@ -334,9 +374,9 @@ function buildHomes(){
   buildingSolids=[];
   for(const house of homes){
     const r=rng(house.seed),{x,z,base,cells}=house,box=new T.BoxGeometry(1,1,1);
-    const wall=mat(col(G.hue+(r()-.5)*.16,.1+r()*.2,.32+r()*.3));
-    const trim=mat(col(G.hue+.035,.16,.22+r()*.15));
-    const floorMat=mat(col(G.hue+.06,.15,.36+r()*.16));
+    const wall=mat(col(G.hue+(r()-.5)*.16,.1+r()*.2,.32+r()*.3),0,MAT_ROCK);
+    const trim=mat(G.materials.wood.clone().multiplyScalar(.72+r()*.22),0,MAT_WOOD);
+    const floorMat=mat(G.materials.wood.clone().multiplyScalar(.82+r()*.18),0,MAT_WOOD);
     const paints=Array.from({length:5},()=>mat(col(G.hue+(r()-.5)*.24,.1+r()*.2,.4+r()*.2)));
     function part(px,py,pz,w,h,d,m=wall,solid=true){
       mesh(box,m,x+px,base+py,z+pz,w,h,d);
@@ -472,16 +512,20 @@ let sky=col(baseHue,.2+paletteR()*.12,.46+paletteR()*.1),
 horizon=col(baseHue+.035+botanicalShift*.18,.22+paletteR()*.12,.64+paletteR()*.1),
 land=col(baseHue+botanicalShift*.32,.2+paletteR()*.14,.2+paletteR()*.1),
 rock=col(baseHue+botanicalShift*.12,.07+paletteR()*.09,.32+paletteR()*.12),
-leaf=col(baseHue+botanicalShift,.34+paletteR()*.18,.3+paletteR()*.13),
+paletteLeaf=col(baseHue+botanicalShift,.34+paletteR()*.18,.3+paletteR()*.13),
+leaf=col(.29+botanicalShift*.18,.48,.31).lerp(paletteLeaf,.4),
 accent=col(baseHue+(paletteR()<.72?.075:.48),.34+paletteR()*.16,.58+paletteR()*.12);
+const weatherRoll=rng(G.hash^0x57ea7)(),wt=kind===4?"dust":G.wet>.62?"rain":weatherRoll<.28?"snow":"spores";
+const wood=col(.075,.44,.27).lerp(land,.3),grass=col(.285,.5,.32).lerp(leaf,.38),snow=new T.Color(0xf4f7fb).lerp(sky,.12);
+G.materials={rock:rock.clone(),rockDark:rock.clone().multiplyScalar(.48),wood,woodDark:wood.clone().multiplyScalar(.42),leaf:leaf.clone(),grass,grassDark:grass.clone().multiplyScalar(.48),soil:land.clone(),soilDark:land.clone().multiplyScalar(.52),snow,snowShadow:snow.clone().lerp(horizon,.32)};
 scene=new T.Scene;scene.background=sky;scene.fog=new T.FogExp2(horizon,.0014+G.wet*.0017);let hemi=new T.HemisphereLight(horizon,land,.9),light=new T.DirectionalLight(col(G.hue+.42,.3,.9),2);scene.add(hemi,light);
-planHomes();let geo=new T.PlaneGeometry(SIZE,SIZE,SEG,SEG);geo.rotateX(-Math.PI/2);let pos=geo.attributes.position,colors=[];for(let i=0;i<pos.count;i++){let x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2,c=land.clone().lerp(rock,clamp(slope*.6+(y-25)/80,0,1));c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors.push(c.r,c.g,c.b)}geo.setAttribute("color",new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();landMesh=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));scene.add(landMesh);
+planHomes();let geo=new T.PlaneGeometry(SIZE,SIZE,SEG,SEG);geo.rotateX(-Math.PI/2);let pos=geo.attributes.position,colors=[],surfaceLow=Infinity,surfaceHigh=-Infinity;for(let i=0;i<pos.count;i++){let x=pos.getX(i),z=pos.getZ(i),y=height(x,z);surfaceLow=Math.min(surfaceLow,y);surfaceHigh=Math.max(surfaceHigh,y);pos.setY(i,y);let slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2,c=land.clone().lerp(rock,clamp(slope*.6+(y-25)/80,0,1));c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors.push(c.r,c.g,c.b)}G.surfaceLow=surfaceLow;G.surfaceHigh=surfaceHigh;G.snowAmount=wt==="snow"?1:clamp((G.relief-42)/62,0,.82);G.snowLine=mix(surfaceLow,surfaceHigh,wt==="snow"?.52:.76);G.snowFade=Math.max(1.4,(surfaceHigh-surfaceLow)*(wt==="snow"?.1:.07));geo.setAttribute("color",new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();landMesh=new T.Mesh(geo,procedural(new T.MeshStandardMaterial({vertexColors:true,roughness:1}),MAT_TERRAIN));scene.add(landMesh);
 let wg=new T.PlaneGeometry(SIZE,SIZE);wg.rotateX(-Math.PI/2);water=new T.Mesh(wg,new T.MeshStandardMaterial({color:col(G.hue+.08,.5,.3),metalness:.35,roughness:.2,transparent:true,opacity:.86}));water.position.y=G.water;scene.add(water);
 let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({color:col(G.hue+.42,.25,.9),fog:false}),-260,160,-600);for(let i=0;i<Math.floor(rnd()*4);i++){rnd();rnd();}
 let flora=growLSystemFlora(land,leaf,rock),undergrowth=growGroundFlora(land,leaf,accent);
 let spawn;for(let z=140;z>-160;z-=4){let x=G.path+Math.sin(z*.011+G.phase)*G.curve,y=ground(x,z);if(y>G.water+.8){spawn=[x,y+1.75,z];break}}if(!spawn)spawn=[G.path,Math.max(ground(G.path,120),G.water)+1.75,120];cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();
-let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
-buildHomes();$("#home").disabled=homes.length===0;$("#home").textContent=homes.length?"К строению":"Нет строений";const weatherRoll=rng(G.hash^0x57ea7)(),wt=kind===4?"dust":G.wet>.62?"rain":weatherRoll<.28?"snow":"spores";weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
+let sites=[],stone=mat(rock.clone().lerp(land,.2),0,MAT_ROCK),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
+buildHomes();$("#home").disabled=homes.length===0;$("#home").textContent=homes.length?"К строению":"Нет строений";weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
 let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · растительность: "+flora.plants+" растений, "+flora.species+" форм, поколения "+flora.generations+" · мхи: "+undergrowth.moss+" · грибы: "+undergrowth.mushrooms+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
 function update(dt){
   const e=celestial;e.age+=dt;
