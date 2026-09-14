@@ -1,8 +1,8 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Иные миры</title><style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;min-height:100dvh;overflow:hidden;background:#071018;color:#fff;font-family:system-ui}canvas{display:block;touch-action:none;width:100vw!important;height:100dvh!important}#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 2px 14px #000}header{position:absolute;top:22px;left:26px}h1{font:400 26px Georgia;margin:0 0 6px}p{margin:3px 0;color:#ffffffc7;font-size:13px}footer{position:absolute;bottom:20px;left:22px;right:22px;display:flex;gap:8px;flex-wrap:wrap}.ui{pointer-events:auto;color:#fff;background:#0a1621c9;border:1px solid #ffffff42;border-radius:7px;padding:10px 13px;backdrop-filter:blur(10px)}button{cursor:pointer}button:hover{background:#293c4b}input{width:130px}.cross{position:absolute;top:50%;left:50%;width:5px;height:5px;border-radius:50%;background:#ffffffa0}#start{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;background:#071018e8;transition:.5s}#start div{max-width:480px;padding:25px}#start h2{font:400 38px Georgia;margin:0 0 15px}#start p{line-height:1.7;margin-bottom:20px}.mobileHint,#mobile{display:none}#mobile{position:fixed;inset:0;width:100vw;height:100dvh;z-index:2;pointer-events:none;touch-action:none}#stick{position:absolute;left:24px;bottom:25px;width:116px;height:116px;border:2px solid #ffffff45;border-radius:50%;background:#07101870;backdrop-filter:blur(6px);pointer-events:auto}#stick i{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px;border-radius:50%;background:#ffffff45;box-shadow:0 0 20px #0008;transform:translate(0,0)}#mobileActions{position:absolute;right:24px;bottom:28px;display:flex;align-items:flex-end;gap:14px;pointer-events:auto}#mobileActions button{width:66px;height:66px;padding:0;border-radius:50%;font-size:25px;font-weight:700;touch-action:none}#mjump{transform:translateY(-35px)}@media(max-width:650px){header{left:14px}footer{left:12px;bottom:12px}}@media(pointer:coarse){#mobile,.mobileHint{display:block}.desktopHint{display:none}footer{bottom:158px;left:12px;right:12px}.ui{padding:9px 11px}header{top:14px}}@media(pointer:coarse) and (orientation:landscape){header{top:max(8px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left))}footer{top:max(8px,env(safe-area-inset-top));bottom:auto;left:210px;right:max(100px,env(safe-area-inset-right));justify-content:flex-end}.ui{padding:7px 9px}#stick{left:max(18px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));width:104px;height:104px}#mobileActions{right:max(18px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom))}#mobileActions button{width:58px;height:58px}#mjump{transform:translateY(-18px)}}</style></head><body>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;min-height:100dvh;overflow:hidden;background:#071018;color:#fff;font-family:system-ui}canvas{display:block;touch-action:none;width:100vw!important;height:100dvh!important}#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 2px 14px #000}header{position:absolute;top:22px;left:26px}h1{font:400 26px Georgia;margin:0 0 6px}p{margin:3px 0;color:#ffffffc7;font-size:13px}footer{position:absolute;right:22px;bottom:20px;pointer-events:auto}.ui{color:#fff;background:#0a1621d9;border:1px solid #ffffff42;border-radius:7px;padding:10px 13px;backdrop-filter:blur(10px)}button{cursor:pointer}button:hover{background:#293c4b}#menuToggle{min-width:86px}#menuPanel{position:absolute;right:0;bottom:calc(100% + 8px);width:190px;display:none;gap:7px;padding:9px;background:#07131edb;border:1px solid #ffffff33;border-radius:10px;box-shadow:0 12px 34px #0008;backdrop-filter:blur(14px)}#menuPanel.open{display:grid}#menuPanel .ui{width:100%;text-align:left}#menuPanel label{display:grid;gap:4px;color:#ffffffb8;font-size:11px}#menuPanel input{width:100%}.cross{position:absolute;top:50%;left:50%;width:5px;height:5px;border-radius:50%;background:#ffffffa0}#cinemaExit{display:none;position:fixed;z-index:6;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));width:42px;height:42px;padding:0;border-radius:50%;opacity:.32;font-size:18px}body.cinema #hud{display:none}body.cinema #cinemaExit{display:block}#start{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;background:#071018e8;transition:.5s}#start div{max-width:480px;padding:25px}#start h2{font:400 38px Georgia;margin:0 0 15px}#start p{line-height:1.7;margin-bottom:20px}.mobileHint,#mobile{display:none}#mobile{position:fixed;inset:0;width:100vw;height:100dvh;z-index:2;pointer-events:none;touch-action:none}#stick{position:absolute;left:24px;bottom:25px;width:116px;height:116px;border:2px solid #ffffff45;border-radius:50%;background:#07101870;backdrop-filter:blur(6px);pointer-events:auto}#stick i{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px;border-radius:50%;background:#ffffff45;box-shadow:0 0 20px #0008;transform:translate(0,0)}#mobileActions{position:absolute;right:24px;bottom:28px;display:flex;align-items:flex-end;gap:14px;pointer-events:auto}#mobileActions button{width:66px;height:66px;padding:0;border-radius:50%;font-size:25px;font-weight:700;touch-action:none}#mjump{transform:translateY(-35px)}@media(max-width:650px){header{left:14px}footer{right:12px;bottom:12px}}@media(pointer:coarse){#mobile,.mobileHint{display:block}.desktopHint{display:none}footer{bottom:158px;right:12px}.ui{padding:9px 11px}header{top:14px}}@media(pointer:coarse) and (orientation:landscape){header{top:max(8px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left))}footer{top:max(8px,env(safe-area-inset-top));bottom:auto;right:max(100px,env(safe-area-inset-right))}#menuPanel{top:calc(100% + 8px);bottom:auto}.ui{padding:7px 9px}#stick{left:max(18px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));width:104px;height:104px}#mobileActions{right:max(18px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom))}#mobileActions button{width:58px;height:58px}#mjump{transform:translateY(-18px)}}</style></head><body>
 <div id="start"><div><h2>Иные миры</h2><p>Каждый код создаёт собственный ландшафт, флору, руины, погоду и небо.</p><button class="ui" id="enter">Войти в мир</button><p><span class="desktopHint">WASD — идти · мышь — смотреть · Shift — суперускорение · пробел — прыжок</span><span class="mobileHint">Стик — идти · свайп справа — смотреть · ↑ — прыжок · ⚡ — суперускорение</span></p></div></div>
 <div id="mobile" aria-label="Сенсорное управление"><div id="stick"><i></i></div><div id="mobileActions"><button class="ui" id="mboost" aria-label="Суперускорение">⚡</button><button class="ui" id="mjump" aria-label="Прыжок">↑</button></div></div>
-<div id="hud"><header><h1 id="name">Создание мира</h1><p id="info"></p></header><i class="cross"></i><footer><button class="ui" id="new">Новый мир</button><input class="ui" id="seed"><button class="ui" id="open">Открыть</button><button class="ui" id="sound">Звук: выкл.</button><button class="ui" id="sounds" title="Резервная загрузка своих записей">Свои WAV</button><input type="file" id="audioFiles" accept=".wav,audio/*" multiple hidden><span id="audioStatus" role="status"></span><button class="ui" id="photo">Снимок</button><button class="ui" id="night">День / ночь</button><button class="ui" id="home">К дому</button></footer></div>
+<div id="hud"><header><h1 id="name">Создание мира</h1><p id="info"></p></header><i class="cross"></i><footer><button class="ui" id="menuToggle" aria-expanded="false">Меню</button><div id="menuPanel"><button class="ui" id="new">Новый мир</button><label>Код мира<input class="ui" id="seed" aria-label="Код мира"></label><button class="ui" id="sound">Звук: выкл.</button><button class="ui" id="photo">Снимок</button><button class="ui" id="night">День / ночь</button><button class="ui" id="cinema">Кинорежим</button></div></footer></div><button class="ui" id="cinemaExit" aria-label="Вернуть интерфейс" title="Вернуть интерфейс">◉</button>
 <script type="module">
 import*as T from"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js";
 const $=s=>document.querySelector(s),clamp=T.MathUtils.clamp,mix=T.MathUtils.lerp,rend=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
@@ -241,6 +241,23 @@ function growGroundFlora(land,leaf,accent){
   instancesQ(new T.SphereGeometry(1,9,5,0,Math.PI*2,0,Math.PI/2),mat(new T.Color(0xffffff),.015),caps);
   return {moss:mossCount,mushrooms:mushroomCount};
 }
+function hueDistance(a,b){const d=Math.abs(a-b)%1;return Math.min(d,1-d)}
+function growGrass(){
+  const abundance=G.grassAbundance,limit=Math.floor(abundance*4300);
+  if(limit<12)return 0;
+  const r=rng(G.hash^0x2c71af),blades=[],axis=new T.Vector3(0,1,0),q=new T.Quaternion(),tone=new T.Color();
+  for(let i=0;i<10500&&blades.length<limit;i++){
+    const x=(r()-.5)*790,z=(r()-.5)*790,y=height(x,z),slope=Math.hypot(height(x+.9,z)-y,height(x,z+.9)-y)/.9;
+    const path=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve),patch=noise(x*.021+91,z*.021-117);
+    const snowy=G.snowAmount>.25&&y>G.snowLine-G.snowFade*.35;
+    if(houseReserved(x,z)||y<G.water+.35||slope>.48||path<5.5||snowy||r()>abundance*(.18+patch*.72))continue;
+    const h=.16+Math.pow(r(),1.7)*(1.2+abundance*.95),width=.55+r()*1.25,yaw=r()*Math.PI*2;
+    q.setFromAxisAngle(axis,yaw);tone.copy(G.materials.grass).offsetHSL((r()-.5)*.018,(r()-.5)*.05,(r()-.5)*.1);
+    blades.push([x,y+h*.5,z,width,h,width,q.x,q.y,q.z,q.w,tone.r,tone.g,tone.b]);
+  }
+  instancesQ(new T.ConeGeometry(.07,1,3),mat(new T.Color(0xffffff),0,MAT_GRASS),blades);
+  return blades.length;
+}
 function ruin(x,z,type,stone,accent){let a=rnd()*6.28,box=new T.BoxGeometry(1,1,1),column=new T.CylinderGeometry(.8,1,1,7);function p(px,pz,w,h,d,g=box,up=0){let X=x+Math.cos(a)*px-Math.sin(a)*pz,Z=z+Math.sin(a)*px+Math.cos(a)*pz,o=mesh(g,stone,X,ground(X,Z)+h/2+up,Z,w,h,d);o.rotation.y=a}
 if(type===0){for(let j=-2;j<=2;j++)for(const side of[-1,1])if(rnd()>.25)p(side*5,j*4,1,5+rnd()*5,1,column);p(0,-9,11,.7,1)}
 else if(type===1)for(let l=0;l<4;l++){let w=11-l*1.5;for(let s=0;s<4;s++)if(rnd()>.16*l){let A=s*Math.PI/2;p(Math.cos(A)*w/2,Math.sin(A)*w/2,s%2?w:1.1,2.6,s%2?1.1:w,box,l*2.6)}}
@@ -328,7 +345,7 @@ function makeNightSky(){
   const ambient=new T.AmbientLight(col(G.hue,.08,.72),0);scene.add(ambient);
   return {group,dome,moons,stars,moonlight,ambient};
 }
-function updateNightSky(e,day,front,top,horizon){
+function updateNightSky(e,day,front,top,horizon,warmth){
   const sky=e.nightSky;
   sky.group.position.copy(cam.position);
   const night=1-day;
@@ -337,10 +354,11 @@ function updateNightSky(e,day,front,top,horizon){
   for(const moon of sky.moons)moon.material.color.setScalar(.7+night*.55);
   sky.stars.forEach((stars,i)=>{stars.material.opacity=night*night*(1-front*.65)*(i?.92:.65);});
   const p=sky.dome.geometry.attributes.position,a=sky.dome.geometry.attributes.color;
-  const tint=new T.Color();
+  const tint=new T.Color(),direction=new T.Vector3(),sunDirection=e.light.position.clone().normalize(),sunset=new T.Color(0xf39a68);
   for(let i=0;i<p.count;i++){
     const t=Math.pow(clamp(p.getY(i)/1080,0,1),.55);
-    tint.copy(horizon).lerp(top,t);a.setXYZ(i,tint.r,tint.g,tint.b);
+    direction.fromBufferAttribute(p,i).normalize();const sunGlow=Math.pow(Math.max(direction.dot(sunDirection),0),7)*(1-t*.72)*warmth;
+    tint.copy(horizon).lerp(top,t).lerp(sunset,sunGlow*.82);a.setXYZ(i,tint.r,tint.g,tint.b);
   }
   a.needsUpdate=true;
 }
@@ -507,6 +525,7 @@ regionStrength:Math.pow(rnd(),.72),regionScale:.0015+rnd()*.006,regionWidth:.12+
 terrainVariation:Math.pow(rnd(),1.15),roughness:.08+Math.pow(rnd(),1.3)*3.1,pathRelief:.12+rnd()*.88,
 forestCover:Math.pow(coverSeed,.72),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
 forestContrast:.25+rnd()*1.75,craters:[]};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;for(let i=0;i<15;i++)G.craters.push({x:(rnd()-.5)*760,z:(rnd()-.5)*760,r:25+rnd()*65,d:(2+rnd()*28)*(.12+G.relief/110)});
+const fogR=rng(G.hash^0x18f2a7),foggy=fogR()<.22+G.wet*.52;G.foggy=foggy;G.fogDensity=foggy?.00115+G.wet*.0018:.00011;
 const paletteR=rng(G.hash^0x6ca91),baseHue=G.hue,botanicalShift=(paletteR()-.5)*.11;
 let sky=col(baseHue,.2+paletteR()*.12,.46+paletteR()*.1),
 horizon=col(baseHue+.035+botanicalShift*.18,.22+paletteR()*.12,.64+paletteR()*.1),
@@ -516,26 +535,29 @@ paletteLeaf=col(baseHue+botanicalShift,.34+paletteR()*.18,.3+paletteR()*.13),
 leaf=col(.29+botanicalShift*.18,.48,.31).lerp(paletteLeaf,.4),
 accent=col(baseHue+(paletteR()<.72?.075:.48),.34+paletteR()*.16,.58+paletteR()*.12);
 const weatherRoll=rng(G.hash^0x57ea7)(),wt=kind===4?"dust":G.wet>.62?"rain":weatherRoll<.28?"snow":"spores";
-const wood=col(.075,.44,.27).lerp(land,.3),grass=col(.285,.5,.32).lerp(leaf,.38),snow=new T.Color(0xf4f7fb).lerp(sky,.12);
+const greenAffinity=Math.exp(-Math.pow(hueDistance(baseHue,.3)/.14,2)),pinkAffinity=Math.exp(-Math.pow(hueDistance(baseHue,.93)/.13,2));
+const wood=col(.075,.44,.27).lerp(land,.3),grass=(pinkAffinity>greenAffinity?col(.94,.48,.4):col(.285,.5,.32)).lerp(paletteLeaf,.32),snow=new T.Color(0xf4f7fb).lerp(sky,.12);
 G.materials={rock:rock.clone(),rockDark:rock.clone().multiplyScalar(.48),wood,woodDark:wood.clone().multiplyScalar(.42),leaf:leaf.clone(),grass,grassDark:grass.clone().multiplyScalar(.48),soil:land.clone(),soilDark:land.clone().multiplyScalar(.52),snow,snowShadow:snow.clone().lerp(horizon,.32)};
-scene=new T.Scene;scene.background=sky;scene.fog=new T.FogExp2(horizon,.0014+G.wet*.0017);let hemi=new T.HemisphereLight(horizon,land,.9),light=new T.DirectionalLight(col(G.hue+.42,.3,.9),2);scene.add(hemi,light);
-planHomes();let geo=new T.PlaneGeometry(SIZE,SIZE,SEG,SEG);geo.rotateX(-Math.PI/2);let pos=geo.attributes.position,colors=[],surfaceLow=Infinity,surfaceHigh=-Infinity;for(let i=0;i<pos.count;i++){let x=pos.getX(i),z=pos.getZ(i),y=height(x,z);surfaceLow=Math.min(surfaceLow,y);surfaceHigh=Math.max(surfaceHigh,y);pos.setY(i,y);let slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2,c=land.clone().lerp(rock,clamp(slope*.6+(y-25)/80,0,1));c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors.push(c.r,c.g,c.b)}G.surfaceLow=surfaceLow;G.surfaceHigh=surfaceHigh;G.snowAmount=wt==="snow"?1:clamp((G.relief-42)/62,0,.82);G.snowLine=mix(surfaceLow,surfaceHigh,wt==="snow"?.52:.76);G.snowFade=Math.max(1.4,(surfaceHigh-surfaceLow)*(wt==="snow"?.1:.07));geo.setAttribute("color",new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();landMesh=new T.Mesh(geo,procedural(new T.MeshStandardMaterial({vertexColors:true,roughness:1}),MAT_TERRAIN));scene.add(landMesh);
+const clearHorizon=new T.Color(0xc5dbea).lerp(horizon,.16);scene=new T.Scene;scene.background=new T.Color(0x6da9dc);scene.fog=new T.FogExp2(clearHorizon,G.fogDensity);let hemi=new T.HemisphereLight(clearHorizon,land,.9),light=new T.DirectionalLight(new T.Color(0xfff0cf),2);scene.add(hemi,light);
+planHomes();let geo=new T.PlaneGeometry(SIZE,SIZE,SEG,SEG);geo.rotateX(-Math.PI/2);let pos=geo.attributes.position,colors=[],surfaceLow=Infinity,surfaceHigh=-Infinity;for(let i=0;i<pos.count;i++){let x=pos.getX(i),z=pos.getZ(i),y=height(x,z);surfaceLow=Math.min(surfaceLow,y);surfaceHigh=Math.max(surfaceHigh,y);pos.setY(i,y);let slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2,c=land.clone().lerp(rock,clamp(slope*.6+(y-25)/80,0,1));c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors.push(c.r,c.g,c.b)}G.surfaceLow=surfaceLow;G.surfaceHigh=surfaceHigh;G.snowAmount=wt==="snow"?1:clamp((G.relief-42)/62,0,.82);G.snowLine=mix(surfaceLow,surfaceHigh,wt==="snow"?.52:.76);G.snowFade=Math.max(1.4,(surfaceHigh-surfaceLow)*(wt==="snow"?.1:.07));G.grassAbundance=clamp(Math.max(greenAffinity,pinkAffinity)*(.45+G.wet*.32+G.forestCover*.42),0,1)*(kind===4?.025:wt==="snow"?.08:1);geo.setAttribute("color",new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();landMesh=new T.Mesh(geo,procedural(new T.MeshStandardMaterial({vertexColors:true,roughness:1}),MAT_TERRAIN));scene.add(landMesh);const grassCount=growGrass();
 let wg=new T.PlaneGeometry(SIZE,SIZE);wg.rotateX(-Math.PI/2);water=new T.Mesh(wg,new T.MeshStandardMaterial({color:col(G.hue+.08,.5,.3),metalness:.35,roughness:.2,transparent:true,opacity:.86}));water.position.y=G.water;scene.add(water);
 let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({color:col(G.hue+.42,.25,.9),fog:false}),-260,160,-600);for(let i=0;i<Math.floor(rnd()*4);i++){rnd();rnd();}
 let flora=growLSystemFlora(land,leaf,rock),undergrowth=growGroundFlora(land,leaf,accent);
 let spawn;for(let z=140;z>-160;z-=4){let x=G.path+Math.sin(z*.011+G.phase)*G.curve,y=ground(x,z);if(y>G.water+.8){spawn=[x,y+1.75,z];break}}if(!spawn)spawn=[G.path,Math.max(ground(G.path,120),G.water)+1.75,120];cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();
 let sites=[],stone=mat(rock.clone().lerp(land,.2),0,MAT_ROCK),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
-buildHomes();$("#home").disabled=homes.length===0;$("#home").textContent=homes.length?"К строению":"Нет строений";weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
-let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · растительность: "+flora.plants+" растений, "+flora.species+" форм, поколения "+flora.generations+" · мхи: "+undergrowth.moss+" · грибы: "+undergrowth.mushrooms+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+buildHomes();weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
+let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · трава: "+grassCount+" · растительность: "+flora.plants+" растений, "+flora.species+" форм, поколения "+flora.generations+" · мхи: "+undergrowth.moss+" · грибы: "+undergrowth.mushrooms+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
 function update(dt){
   const e=celestial;e.age+=dt;
   const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
-  const front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength,night=col(G.hue,.25,.13),sunset=col(G.hue+.12,.4,.42);
-  const top=night.clone().lerp(e.sky,day),h=night.clone().lerp(e.horizon,day).lerp(sunset,tw*.35);
-  scene.background.copy(top);scene.fog.color.copy(h);scene.fog.density=e.fog*(1+front*.75);
-  e.hemi.color.copy(h).lerp(col(G.hue,.12,.64),(1-day)*.65);e.hemi.intensity=.85+day*.95;
+  const front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength;
+  const nightTop=new T.Color(0x061426),nightHorizon=new T.Color(0x1b2b3e),dayTop=new T.Color(0x438fd0),dayHorizon=new T.Color(0xc6dce9),sunset=new T.Color(0xee9466);
+  const top=nightTop.lerp(dayTop,day),h=nightHorizon.lerp(dayHorizon,day).lerp(sunset,tw*.64),fogColor=h.clone().lerp(e.horizon,.08+G.wet*.12);
+  scene.background.copy(top);scene.fog.color.copy(fogColor);scene.fog.density=e.fog*(1+front*(G.foggy?.9:.18));
+  e.hemi.color.copy(h);e.hemi.intensity=.72+day*1.08;
   e.light.position.set(Math.cos(a)*450,alt*500,-400);e.light.intensity=(.05+day*2.5)*(1-front*.45);
-  e.sun.position.set(cam.position.x+Math.cos(a)*430,cam.position.y+alt*480,cam.position.z-650);e.sun.visible=alt>-.12;updateNightSky(e,day,front,top,h);
+  e.light.color.set(0xfff0cf).lerp(sunset,tw*.38);
+  e.sun.position.set(cam.position.x+Math.cos(a)*430,cam.position.y+alt*480,cam.position.z-650);e.sun.visible=alt>-.12;updateNightSky(e,day,front,top,h,tw);
 
   const p=weather.a,type=weather.type,stride=weather.stride;
   weather.points.position.copy(cam.position);
@@ -606,7 +628,7 @@ async function installTrack(type,data){
 async function loadBundledSounds(){
   if(audioLoading)return audioLoading;
   audioLoading=(async()=>{
-    const status=$("#audioStatus"),missing=[];
+    const status=$("#audioStatus")||{textContent:""},missing=[];
     status.textContent=" · звук загружается…";
     for(const [type,url] of Object.entries(bundledSounds)){
       let data=null;
@@ -625,7 +647,7 @@ async function loadBundledSounds(){
 }
 async function loadSoundFiles(files){
   if(!audio){await toggleAudio();if(sound)await toggleAudio();}
-  const status=$("#audioStatus");let loaded=0;
+  const status=$("#audioStatus")||{textContent:""};let loaded=0;
   for(const file of files){
     const name=file.name.toLowerCase();
     const type=name.includes("rain")?"rain":name.includes("wind")?"wind":name.includes("snow")?"snow":name.includes("sand")||name.includes("gravel")?"gravel":name.includes("starlit")||name.includes("bough")||name.includes("music")?"music":null;
@@ -658,10 +680,6 @@ function updateSoundscape(dt){
   }
   audio.master.gain.setTargetAtTime(sound&&!soundTracks.has("wind")?.18:0,audio.ctx.currentTime,.2);
 }
-$("#sounds").onclick=()=>$("#audioFiles").click();
-$("#audioFiles").onchange=async e=>{try{await loadSoundFiles(e.target.files);}catch(error){$("#audioStatus").textContent=" · ошибка звука: "+error.message;}};
-
-
 function setupMobileControls(){
   const stick=$("#stick"),nub=stick.querySelector("i"),jumpButton=$("#mjump"),boostButton=$("#mboost");
   let stickPointer=null,lookPointer=null,lastLookX=0,lastLookY=0;
@@ -695,8 +713,12 @@ function setupMobileControls(){
 setupMobileControls();
 
 function fresh(){return crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}
-$("#enter").onclick=()=>{$("#start").style.opacity=0;setTimeout(()=>$("#start").remove(),500);if(matchMedia("(pointer:fine)").matches)rend.domElement.requestPointerLock()};rend.domElement.onclick=()=>{if(matchMedia("(pointer:fine)").matches)rend.domElement.requestPointerLock()};addEventListener("mousemove",e=>{if(document.pointerLockElement!==rend.domElement)return;yaw-=e.movementX*.0024;pitch=clamp(pitch-e.movementY*.0024,-1.45,1.45)});addEventListener("keydown",e=>{if(e.target.tagName==="INPUT"||document.pointerLockElement!==rend.domElement)return;if(["Space","KeyW","KeyA","KeyS","KeyD"].includes(e.code))e.preventDefault();keys.add(e.code);if(e.code==="Space"&&grounded){jump=8.2;grounded=false}});addEventListener("keyup",e=>keys.delete(e.code));addEventListener("blur",()=>keys.clear());document.addEventListener("pointerlockchange",()=>keys.clear());
-$("#new").onclick=()=>generate(fresh());$("#open").onclick=()=>{let s=$("#seed").value.trim().slice(0,60);if(s)generate(s)};$("#seed").onkeydown=e=>{if(e.key==="Enter")$("#open").click()};$("#sound").onclick=async()=>{await toggleAudio();if(sound)await loadBundledSounds();};$("#home").onclick=()=>{const h=homes[0];if(!h)return;cam.position.set(h.x,h.base+1.75,h.z+18);yaw=0;pitch=-.02;jump=0;grounded=true;keys.clear();};$("#night").onclick=()=>{const phase=(celestial.start+celestial.age/celestial.length)%1;celestial.start=phase<.5?.75:.25;celestial.age=0;update(0);};$("#photo").onclick=()=>rend.domElement.toBlob(b=>{let u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="world-"+G.hash+".png";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)});
+const menuPanel=$("#menuPanel"),menuToggle=$("#menuToggle");
+function toggleMenu(force){const open=force??!menuPanel.classList.contains("open");menuPanel.classList.toggle("open",open);menuToggle.setAttribute("aria-expanded",String(open))}
+function setCinema(on){document.body.classList.toggle("cinema",on);toggleMenu(false)}
+menuToggle.onclick=()=>toggleMenu();$("#cinema").onclick=()=>setCinema(true);$("#cinemaExit").onclick=()=>setCinema(false);
+$("#enter").onclick=()=>{$("#start").style.opacity=0;setTimeout(()=>$("#start").remove(),500);if(matchMedia("(pointer:fine)").matches)rend.domElement.requestPointerLock()};rend.domElement.onclick=()=>{if(matchMedia("(pointer:fine)").matches)rend.domElement.requestPointerLock()};addEventListener("mousemove",e=>{if(document.pointerLockElement!==rend.domElement)return;yaw-=e.movementX*.0024;pitch=clamp(pitch-e.movementY*.0024,-1.45,1.45)});addEventListener("keydown",e=>{if(e.code==="KeyC"&&e.target.tagName!=="INPUT"){setCinema(!document.body.classList.contains("cinema"));return}if(e.target.tagName==="INPUT"||document.pointerLockElement!==rend.domElement)return;if(["Space","KeyW","KeyA","KeyS","KeyD"].includes(e.code))e.preventDefault();keys.add(e.code);if(e.code==="Space"&&grounded){jump=8.2;grounded=false}});addEventListener("keyup",e=>keys.delete(e.code));addEventListener("blur",()=>keys.clear());document.addEventListener("pointerlockchange",()=>keys.clear());
+$("#new").onclick=()=>{generate(fresh());toggleMenu(false)};$("#seed").onkeydown=e=>{if(e.key==="Enter"){let s=e.target.value.trim().slice(0,60);if(s)generate(s);toggleMenu(false)}};$("#sound").onclick=async()=>{await toggleAudio();if(sound)await loadBundledSounds();};$("#night").onclick=()=>{const phase=(celestial.start+celestial.age/celestial.length)%1;celestial.start=phase<.5?.75:.25;celestial.age=0;update(0);};$("#photo").onclick=()=>rend.domElement.toBlob(b=>{let u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="world-"+G.hash+".png";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)});
 function resizeView(){
   const w=Math.round(visualViewport?.width||innerWidth),h=Math.round(visualViewport?.height||innerHeight);
   cam.aspect=w/h;cam.updateProjectionMatrix();rend.setSize(w,h);
