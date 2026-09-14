@@ -24,10 +24,33 @@ function shape(k,x,z){let c=Math.cos(G.angle),s=Math.sin(G.angle),u=x*c-z*s,v=x*
 if(k===0)return Math.pow(Math.max(0,(n-.39)*2.7),1.55)*G.relief-12;
 if(k===1){let r=n*5,q=Math.floor(r)+smooth(clamp(((r%1)-.25)/.5,0,1));return(q/5-.38)*G.relief}
 if(k===2)return(n-.46)*G.relief*.45+Math.pow(1-Math.abs(Math.sin(u*G.freq*8+n*8)),1.7)*G.relief*.65;
-if(k===3){let h=(n-.46)*18;for(const c of G.craters){let d=Math.hypot(x-c.x,z-c.z)/c.r;h+=Math.exp(-(((d-1)/.18)**2))*c.d*.55-Math.exp(-((d/.7)**4))*c.d}return h}
-if(k===4){let w=.5+.5*Math.sin(u*G.freq*7+fbm(u*G.freq,v*G.freq*.5)*9);return w**2.5*G.relief*.3+(n-.42)*18}
-let ch=Math.abs(Math.sin(u*G.freq*3+fbm(u*G.freq,v*G.freq)*5));return(n-.41)*G.relief-Math.exp(-ch*ch*28)*22}
-function height(x,z){let region=smooth(clamp((fbm(x*.0035+130,z*.0035-80)-.34)/.32,0,1)),h=mix(shape(G.kind,x,z),shape(G.second,x,z),region),p=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve),c=Math.exp(-p*p/190);h=mix(h,(fbm(x*.004,z*.004)-.42)*10+G.water+3,c*.88)+(noise(x*.065,z*.065)-.5)*1.4*(1-c);for(const home of homes){const d=Math.max(Math.abs(x-home.x-4)/27,Math.abs(z-home.z)/23);const blend=1-smooth(clamp((d-1)/.4,0,1));h=mix(h,home.base-.05,blend);if(home.basement&&home.cells.some(([ix,iz])=>Math.abs(x-home.x-ix*8)<4.4&&Math.abs(z-home.z-iz*8)<4.4))h=home.base-4.25;}return h}
+if(k===3){let h=(n-.46)*G.relief*.26;for(const c of G.craters){let d=Math.hypot(x-c.x,z-c.z)/c.r;h+=Math.exp(-(((d-1)/.18)**2))*c.d*.55-Math.exp(-((d/.7)**4))*c.d}return h}
+if(k===4){let w=.5+.5*Math.sin(u*G.freq*7+fbm(u*G.freq,v*G.freq*.5)*9);return w**2.5*G.relief*.3+(n-.42)*G.relief*.18}
+let ch=Math.abs(Math.sin(u*G.freq*3+fbm(u*G.freq,v*G.freq)*5));return(n-.41)*G.relief-Math.exp(-ch*ch*28)*(2+G.relief*.2)}
+function height(x,z){
+  const rawRegion=fbm(x*G.regionScale+130,z*G.regionScale-80);
+  const region=smooth(clamp((rawRegion-(.5-G.regionWidth))/(G.regionWidth*2),0,1))*G.regionStrength;
+  let h=mix(shape(G.kind,x,z),shape(G.second,x,z),region);
+  const reliefField=fbm(x*.0027-91,z*.0027+147);
+  h*=mix(1,.34+reliefField*1.32,G.terrainVariation);
+  const p=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve),pathBlend=Math.exp(-p*p/190);
+  h=mix(h,(fbm(x*.004,z*.004)-.42)*10*G.pathRelief+G.water+3,pathBlend*.88);
+  h+=(noise(x*.065,z*.065)-.5)*G.roughness*(1-pathBlend);
+  for(const home of homes){
+    const d=Math.max(Math.abs(x-home.x-4)/27,Math.abs(z-home.z)/23),blend=1-smooth(clamp((d-1)/.4,0,1));
+    h=mix(h,home.base-.05,blend);
+    if(home.basement&&home.cells.some(([ix,iz])=>Math.abs(x-home.x-ix*8)<4.4&&Math.abs(z-home.z-iz*8)<4.4))h=home.base-4.25;
+  }
+  return h;
+}
+function floraDensity(x,z){
+  const broad=fbm(x*G.forestScale+G.phase*37,z*G.forestScale-G.phase*23);
+  const fine=fbm(x*G.forestScale*3.7-71,z*G.forestScale*3.7+119);
+  const field=broad*.76+fine*.24;
+  const deviation=(field-.5)*G.forestContrast*mix(.18,1.55,G.forestPatchiness);
+  const moisture=clamp((height(x,z)-G.water)/18,0,1);
+  return smooth(clamp(G.forestCover+deviation+(moisture-.5)*.1,0,1));
+}
 function ground(x,z){let gx=clamp((x+SIZE/2)/STEP,0,SEG-.001),gz=clamp((z+SIZE/2)/STEP,0,SEG-.001),X=Math.floor(gx),Z=Math.floor(gz),u=gx-X,v=gz-Z,a=(Z*(SEG+1)+X)*3+1,p=landMesh.geometry.attributes.position.array,A=p[a],B=p[a+3],C=p[a+(SEG+1)*3],D=p[a+(SEG+2)*3];return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
 function clear(){if(!scene)return;let gs=new Set,ms=new Set;scene.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose())}
 function instances(g,m,a){if(!a.length){g.dispose();m.dispose();return;}let o=new T.InstancedMesh(g,m,a.length);a.forEach((v,i)=>{temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);temp.rotation.set(v[6]||0,v[7]||0,v[8]||0);temp.updateMatrix();o.setMatrixAt(i,temp.matrix)});scene.add(o)}
@@ -86,7 +109,7 @@ function makeLSystemPlant(species){
   return {segments,tips,height:maxY};
 }
 function makeFloraCatalog(){
-  const r=rng(G.hash^0x4f19ab),count=3+Math.floor(r()*3),catalog=[];
+  const r=rng(G.hash^0x4f19ab),count=3+Math.floor(r()*4),catalog=[];
   for(let i=0;i<count;i++){
     const species={
       form:(G.form+i*2+Math.floor(r()*2))%5,
@@ -106,15 +129,16 @@ function leafGeometry(form){
 function growLSystemFlora(land,leaf,rock){
   const catalog=makeFloraCatalog(),groups=catalog.map(()=>({branches:[],foliage:[]})),rocks=[];
   const r=rng(G.hash^0x91b44d),yawQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3(),yAxis=new T.Vector3(0,1,0);
-  const plantLimit=280+Math.floor(r()*141);let plants=0;
-  for(let i=0;i<3400;i++){
+  const plantLimit=8+Math.floor(G.forestCover*720);let plants=0;
+  for(let i=0;i<4200;i++){
     const x=(r()-.5)*790,z=(r()-.5)*790,y=height(x,z);
     const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
     const path=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve);
-    if(!houseReserved(x,z)&&plants<plantLimit&&y>G.water+.7&&slope<.75&&path>7&&fbm(x*.017+80,z*.017)<G.density){
+    const localDensity=floraDensity(x,z);
+    if(!houseReserved(x,z)&&plants<plantLimit&&y>G.water+.7&&slope<.82&&path>7&&r()<localDensity){
       const patch=noise(x*.009+211,z*.009-173),index=Math.min(catalog.length-1,Math.floor((patch*.78+r()*.22)*catalog.length));
       const species=catalog[index],prototype=species.prototype,group=groups[index];
-      const h=(2.5+r()*11.5)*(1+G.slender*.75),scale=h/prototype.height,yaw=r()*Math.PI*2;
+      const h=(1.1+r()*(6+localDensity*8))*(.72+G.slender*.75),scale=h/prototype.height,yaw=r()*Math.PI*2;
       yawQ.setFromAxisAngle(yAxis,yaw);
       for(const branch of prototype.segments){
         p.copy(branch.mid).multiplyScalar(scale).applyQuaternion(yawQ);
@@ -129,7 +153,7 @@ function growLSystemFlora(land,leaf,rock){
         group.foliage.push([x+p.x,y+p.y,z+p.z,s,s*(species.form===2?.42:.65+G.slender*.35),s,worldQ.x,worldQ.y,worldQ.z,worldQ.w]);
       }
       plants++;
-    }else if(y>G.water&&r()<.16){
+    }else if(y>G.water&&r()<.06+(1-localDensity)*.18){
       const s=.5+r()*3;rocks.push([x,y+s*.3,z,s,s*(.6+G.slender),s*.8,r()*.2,r()*6.28,r()*.2]);
     }
   }
@@ -364,7 +388,24 @@ function bodyBlocked(x,z,feet){
     Math.abs(x-b.x)<b.w+.28&&Math.abs(z-b.z)<b.d+.28&&
     b.y+b.h>feet+.24&&b.y-b.h<feet+1.7);
 }
+function unstickFromBuildings(){
+  const feet=cam.position.y-1.75,radius=.32;
+  for(let pass=0;pass<8;pass++){
+    let shifted=false;
+    for(const b of buildingSolids){
+      if(b.y+b.h<=feet+.22||b.y-b.h>=feet+1.72)continue;
+      const dx=b.w+radius-Math.abs(cam.position.x-b.x),dz=b.d+radius-Math.abs(cam.position.z-b.z);
+      if(dx<=0||dz<=0)continue;
+      if(dx<dz)cam.position.x=b.x+(cam.position.x>=b.x?b.w+radius:-b.w-radius);
+      else cam.position.z=b.z+(cam.position.z>=b.z?b.d+radius:-b.d-radius);
+      shifted=true;
+    }
+    if(!shifted)break;
+  }
+  cam.position.x=clamp(cam.position.x,-395,395);cam.position.z=clamp(cam.position.z,-395,395);
+}
 function walkFrame(dt,dx,dz){
+  unstickFromBuildings();
   let feet=cam.position.y-1.75;
   for(const axis of ["x","z"]){
     const x=clamp(cam.position.x+(axis==="x"?dx:0),-395,395);
@@ -382,9 +423,16 @@ function walkFrame(dt,dx,dz){
   const floor=supportAt(cam.position.x,cam.position.z,cam.position.y-1.75)+1.75;
   if(target<=floor){cam.position.y=floor;jump=0;grounded=true;}
   else{cam.position.y=target;grounded=false;}
+  unstickFromBuildings();
 }
 
-function generate(seed){clear();homes=[];buildingSolids=[];rnd=rng(hash(seed));let kind=Math.floor(rnd()*6),near=[[5,2,3],[2,4,3],[1,5,0],[4,0,1],[1,3,5],[0,2,4]];G={hash:hash(seed),kind,second:near[kind][Math.floor(rnd()*3)],hue:rnd(),relief:38+rnd()*72,freq:.004+rnd()*.009,angle:rnd()*6.28,warp:30+rnd()*70,phase:rnd()*6.28,path:rnd()*100-50,curve:20+rnd()*55,wet:rnd(),slender:rnd(),density:.3+rnd()*.5,form:Math.floor(rnd()*5),craters:[]};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;for(let i=0;i<15;i++)G.craters.push({x:(rnd()-.5)*760,z:(rnd()-.5)*760,r:25+rnd()*65,d:9+rnd()*23});
+function generate(seed){clear();homes=[];buildingSolids=[];rnd=rng(hash(seed));let kind=Math.floor(rnd()*6),near=[[5,2,3],[2,4,3],[1,5,0],[4,0,1],[1,3,5],[0,2,4]];const reliefSeed=rnd(),coverSeed=rnd();G={hash:hash(seed),kind,second:near[kind][Math.floor(rnd()*3)],hue:rnd(),
+relief:2+Math.pow(reliefSeed,1.35)*108,freq:.003+rnd()*.011,angle:rnd()*6.28,warp:18+rnd()*92,phase:rnd()*6.28,
+path:rnd()*100-50,curve:8+rnd()*72,wet:rnd(),slender:rnd(),form:Math.floor(rnd()*5),
+regionStrength:Math.pow(rnd(),.72),regionScale:.0015+rnd()*.006,regionWidth:.12+rnd()*.22,
+terrainVariation:Math.pow(rnd(),1.15),roughness:.08+Math.pow(rnd(),1.3)*3.1,pathRelief:.12+rnd()*.88,
+forestCover:smooth(coverSeed),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
+forestContrast:.25+rnd()*1.75,craters:[]};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;for(let i=0;i<15;i++)G.craters.push({x:(rnd()-.5)*760,z:(rnd()-.5)*760,r:25+rnd()*65,d:(2+rnd()*28)*(.12+G.relief/110)});
 let sky=col(G.hue,.25,.5),horizon=col(G.hue+.08,.3,.7),land=col(G.hue+.03,.28,.25),rock=col(G.hue-.03,.12,.38),leaf=col(G.hue+.12+rnd()*.22,.44,.38),accent=col(G.hue+.38,.48,.68);
 scene=new T.Scene;scene.background=sky;scene.fog=new T.FogExp2(horizon,.0014+G.wet*.0017);let hemi=new T.HemisphereLight(horizon,land,.9),light=new T.DirectionalLight(col(G.hue+.42,.3,.9),2);scene.add(hemi,light);
 planHomes();let geo=new T.PlaneGeometry(SIZE,SIZE,SEG,SEG);geo.rotateX(-Math.PI/2);let pos=geo.attributes.position,colors=[];for(let i=0;i<pos.count;i++){let x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2,c=land.clone().lerp(rock,clamp(slope*.6+(y-25)/80,0,1));c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors.push(c.r,c.g,c.b)}geo.setAttribute("color",new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();landMesh=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));scene.add(landMesh);
@@ -394,7 +442,7 @@ let flora=growLSystemFlora(land,leaf,rock);
 let spawn;for(let z=140;z>-160;z-=4){let x=G.path+Math.sin(z*.011+G.phase)*G.curve,y=ground(x,z);if(y>G.water+.8){spawn=[x,y+1.75,z];break}}if(!spawn)spawn=[G.path,Math.max(ground(G.path,120),G.water)+1.75,120];cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();
 let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
 buildHomes();$("#home").disabled=homes.length===0;$("#home").textContent=homes.length?"К строению":"Нет строений";const weatherRoll=rng(G.hash^0x57ea7)(),wt=kind===4?"dust":G.wet>.62?"rain":weatherRoll<.28?"snow":"spores";weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
-let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · L-флора: "+flora.species+" видов, поколения "+flora.generations+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · растительность: "+flora.plants+" растений, "+flora.species+" форм, поколения "+flora.generations+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
 function update(dt){
   const e=celestial;e.age+=dt;
   const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
