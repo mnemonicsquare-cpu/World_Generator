@@ -397,7 +397,20 @@ function createChunk(cx,cz,detailed){
     pos.setXYZ(i,pos.getX(i)+CHUNK_SIZE/2,y,pos.getZ(i)+CHUNK_SIZE/2);
     const hx=height(x-CHUNK_STEP,z)-height(x+CHUNK_STEP,z),hz=height(x,z-CHUNK_STEP)-height(x,z+CHUNK_STEP);
     normal.set(hx,CHUNK_STEP*2,hz).normalize();normals[i*3]=normal.x;normals[i*3+1]=normal.y;normals[i*3+2]=normal.z;
-    const slope=Math.hypot(hx,hz)/(CHUNK_STEP*2),c=worldPalette.land.clone().lerp(worldPalette.rock,clamp(slope*.6+(y-25)/80,0,1));
+    const slope=Math.hypot(hx,hz)/(CHUNK_STEP*2);
+    const warpedY=y+(noise(x*.0031+211,z*.0031-97)-.5)*worldPalette.altitudeWarp;
+    const altitude=smooth(clamp((warpedY-worldPalette.altitudeBase)/worldPalette.altitudeSpan,0,1)),mid=worldPalette.altitudeMid;
+    let c,rc;
+    if(altitude<mid){
+      const t=smooth(clamp(altitude/mid,0,1));
+      c=worldPalette.landLow.clone().lerp(worldPalette.landMid,t);
+      rc=worldPalette.rockLow.clone().lerp(worldPalette.rockMid,t);
+    }else{
+      const t=smooth(clamp((altitude-mid)/(1-mid),0,1));
+      c=worldPalette.landMid.clone().lerp(worldPalette.landHigh,t);
+      rc=worldPalette.rockMid.clone().lerp(worldPalette.rockHigh,t);
+    }
+    c.lerp(rc,clamp(slope*.6+(y-25)/80,0,1));
     c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;
   }
   geo.setAttribute("normal",new T.BufferAttribute(normals,3));geo.setAttribute("color",new T.BufferAttribute(colors,3));
@@ -699,8 +712,26 @@ land=col(baseHue+botanicalShift*.32,.2+paletteR()*.14,.2+paletteR()*.1),
 rock=col(baseHue+botanicalShift*.12,.07+paletteR()*.09,.32+paletteR()*.12),
 leaf=col(baseHue+botanicalShift,.34+paletteR()*.18,.3+paletteR()*.13),
 accent=col(baseHue+(paletteR()<.72?.075:.48),.34+paletteR()*.16,.58+paletteR()*.12);
+
+// Independent altitude-colour DNA: visible world-specific hue bands without changing the main RNG stream.
+const terrainR=rng(G.hash^0x2df487),terrainProfile=Math.floor(terrainR()*6),terrainDirection=terrainR()<.5?-1:1;
+const terrainRare=terrainR()<.09,terrainHueSpan=(terrainRare?40+terrainR()*16:12+terrainR()*25)/360;
+const terrainProfiles=[
+  [-.28,.02,.78],[-.72,-.04,.38],[-.58,.25,.82],
+  [.48,-.22,-.76],[-.18,.5,-.42],[-.16,.02,.18]
+];
+const terrainHueScale=terrainProfile===5?.45:1,terrainStops=terrainProfiles[terrainProfile].map(v=>v*terrainDirection*terrainHueSpan*terrainHueScale);
+const terrainLowLight=(terrainR()-.5)*.055,terrainMidLight=(terrainR()-.5)*.025,terrainHighLight=.025+terrainR()*.07;
+const terrainLowSat=(terrainR()-.5)*.06,terrainMidSat=(terrainR()-.5)*.035,terrainHighSat=(terrainR()-.5)*.075-.012;
+const landLow=land.clone().offsetHSL(terrainStops[0],terrainLowSat,terrainLowLight);
+const landMid=land.clone().offsetHSL(terrainStops[1],terrainMidSat,terrainMidLight);
+const landHigh=land.clone().offsetHSL(terrainStops[2],terrainHighSat,terrainHighLight);
+const rockLow=rock.clone().offsetHSL(terrainStops[0]*.55,terrainLowSat*.35,terrainLowLight*.55);
+const rockMid=rock.clone().offsetHSL(terrainStops[1]*.55,terrainMidSat*.35,terrainMidLight*.55);
+const rockHigh=rock.clone().offsetHSL(terrainStops[2]*.55,terrainHighSat*.35,terrainHighLight*.55);
+const altitudeBase=G.water+.8,altitudeSpan=clamp(16+G.relief*(.4+terrainR()*.3),20,78),altitudeWarp=3+terrainR()*(5+G.relief*.07),altitudeMid=.38+terrainR()*.24;
 scene=new T.Scene;scene.background=sky;scene.fog=new T.FogExp2(horizon,G.fogDensity);let hemi=new T.HemisphereLight(horizon,land,.9),light=new T.DirectionalLight(col(G.hue+.42,.3,.9),2);scene.add(hemi,light);
-worldPalette={land,rock,leaf,accent};floraCatalog=makeFloraCatalog();planHomes();
+worldPalette={land,rock,leaf,accent,landLow,landMid,landHigh,rockLow,rockMid,rockHigh,altitudeBase,altitudeSpan,altitudeWarp,altitudeMid};floraCatalog=makeFloraCatalog();planHomes();
 let spawn;for(let z=140;z>-160;z-=4){let x=G.path+Math.sin(z*.011+G.phase)*G.curve,y=ground(x,z);if(y>G.water+.8){spawn=[x,y+1.75,z];break}}if(!spawn)spawn=[G.path,Math.max(ground(G.path,120),G.water)+1.75,120];cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();
 let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
 buildHomes();
