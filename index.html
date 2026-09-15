@@ -74,7 +74,7 @@ function expandLSystem(axiom,rule,iterations){
   for(let i=0;i<iterations;i++)sentence=[...sentence].map(ch=>ch==="F"?rule:ch).join("");
   return sentence;
 }
-function makeLSystemPlant(species){
+function makeLSystemPlant(species,random=null,maturity=1){
   const rules=[
     "F[+F]F[-F][&F]",
     "F[&F][/+F]F[^F]",
@@ -89,30 +89,96 @@ function makeLSystemPlant(species){
   const position=new T.Vector3(),orientation=new T.Quaternion(),stack=[],segments=[],tips=[];
   const up=new T.Vector3(0,1,0),axis=new T.Vector3(),turn=new T.Quaternion();
   let depth=0;
-  function rotate(x,y,z,amount){
-    axis.set(x,y,z).normalize().applyQuaternion(orientation);
-    turn.setFromAxisAngle(axis,amount);orientation.premultiply(turn).normalize();
-  }
-  for(let i=0;i<sentence.length;i++){
-    const ch=sentence[i];
-    if(ch==="F"){
-      const length=Math.pow(species.shrink,depth);
-      const direction=up.clone().applyQuaternion(orientation).normalize();
-      const start=position.clone(),end=start.clone().addScaledVector(direction,length);
-      const q=new T.Quaternion().setFromUnitVectors(up,direction);
-      segments.push({mid:start.clone().add(end).multiplyScalar(.5),q,length,depth});
-      position.copy(end);
-      if(sentence[i+1]==="]"||i===sentence.length-1||depth>1&&sentence[i+1]!=="F")tips.push({position:end.clone(),q});
-    }else if(ch==="["){
-      stack.push({position:position.clone(),orientation:orientation.clone(),depth});depth++;
-    }else if(ch==="]"){
-      const state=stack.pop();position.copy(state.position);orientation.copy(state.orientation);depth=state.depth;
-    }else if(ch==="+")rotate(0,0,1,species.angle);
-    else if(ch==="-")rotate(0,0,1,-species.angle);
-    else if(ch==="&")rotate(1,0,0,species.angle);
-    else if(ch==="^")rotate(1,0,0,-species.angle);
-    else if(ch==="/")rotate(0,1,0,species.roll);
-    else if(ch==="\\")rotate(0,1,0,-species.roll);
+  if(!random){
+    function rotate(x,y,z,amount){
+      axis.set(x,y,z).normalize().applyQuaternion(orientation);
+      turn.setFromAxisAngle(axis,amount);orientation.premultiply(turn).normalize();
+    }
+    for(let i=0;i<sentence.length;i++){
+      const ch=sentence[i];
+      if(ch==="F"){
+        const length=Math.pow(species.shrink,depth);
+        const direction=up.clone().applyQuaternion(orientation).normalize();
+        const start=position.clone(),end=start.clone().addScaledVector(direction,length);
+        const q=new T.Quaternion().setFromUnitVectors(up,direction);
+        segments.push({mid:start.clone().add(end).multiplyScalar(.5),q,length,depth});
+        position.copy(end);
+        if(sentence[i+1]==="]"||i===sentence.length-1||depth>1&&sentence[i+1]!=="F")tips.push({position:end.clone(),q});
+      }else if(ch==="["){
+        stack.push({position:position.clone(),orientation:orientation.clone(),depth});depth++;
+      }else if(ch==="]"){
+        const state=stack.pop();position.copy(state.position);orientation.copy(state.orientation);depth=state.depth;
+      }else if(ch==="+")rotate(0,0,1,species.angle);
+      else if(ch==="-")rotate(0,0,1,-species.angle);
+      else if(ch==="&")rotate(1,0,0,species.angle);
+      else if(ch==="^")rotate(1,0,0,-species.angle);
+      else if(ch==="/")rotate(0,1,0,species.roll);
+      else if(ch==="\\")rotate(0,1,0,-species.roll);
+    }
+  }else{
+    const angleScale=(.88+random()*.24)*mix(.82,1,maturity);
+    const rollScale=.84+random()*.32;
+    const shrink=clamp(species.shrink+(random()-.5)*.065,.5,.9);
+    const asymmetry=(random()-.5)*.22;
+    const lengthVariance=.07+random()*.09;
+    const pruneBase=.025+random()*.055+(1-maturity)*.07;
+    const extraChance=(.008+random()*.014)*mix(.45,1,maturity);
+    const driftAngle=(random()-.5)*.018,driftAzimuth=random()*6.28;
+    const driftAxis=new T.Vector3(Math.cos(driftAzimuth),0,Math.sin(driftAzimuth));
+    function rotate(x,y,z,amount,roll=false){
+      axis.set(x,y,z).normalize().applyQuaternion(orientation);
+      const side=roll?1:(amount>=0?1+asymmetry:1-asymmetry);
+      const scale=roll?rollScale:angleScale;
+      turn.setFromAxisAngle(axis,amount*scale*side*(.9+random()*.2));
+      orientation.premultiply(turn).normalize();
+    }
+    function skipBranch(i){
+      let nesting=1,j=i+1;
+      for(;j<sentence.length&&nesting;j++){
+        if(sentence[j]==="[")nesting++;
+        else if(sentence[j]==="]")nesting--;
+      }
+      return j-1;
+    }
+    for(let i=0;i<sentence.length;i++){
+      const ch=sentence[i];
+      if(ch==="F"){
+        if(depth&&driftAngle){
+          turn.setFromAxisAngle(driftAxis,driftAngle*(.35+depth*.22));
+          orientation.premultiply(turn).normalize();
+        }
+        const length=Math.pow(shrink,depth)*(1+(random()-.5)*2*lengthVariance);
+        const direction=up.clone().applyQuaternion(orientation).normalize();
+        const start=position.clone(),end=start.clone().addScaledVector(direction,length);
+        const q=new T.Quaternion().setFromUnitVectors(up,direction);
+        segments.push({mid:start.clone().add(end).multiplyScalar(.5),q,length,depth});
+        position.copy(end);
+        if(sentence[i+1]==="]"||i===sentence.length-1||depth>1&&sentence[i+1]!=="F")tips.push({position:end.clone(),q});
+        if(depth>0&&random()<extraChance){
+          const sideOrientation=orientation.clone();
+          const sideAxis=new T.Vector3(random()<.5?1:0,0,random()<.5?1:-1).normalize().applyQuaternion(sideOrientation);
+          const sideTurn=new T.Quaternion().setFromAxisAngle(sideAxis,(random()<.5?-1:1)*species.angle*(.7+random()*.65));
+          sideOrientation.premultiply(sideTurn).normalize();
+          const sideDirection=up.clone().applyQuaternion(sideOrientation).normalize();
+          const sideLength=length*shrink*(.42+random()*.42);
+          const sideEnd=end.clone().addScaledVector(sideDirection,sideLength);
+          const sideQ=new T.Quaternion().setFromUnitVectors(up,sideDirection);
+          segments.push({mid:end.clone().add(sideEnd).multiplyScalar(.5),q:sideQ,length:sideLength,depth:depth+1});
+          tips.push({position:sideEnd,q:sideQ});
+        }
+      }else if(ch==="["){
+        const pruneChance=pruneBase*(depth===0?.55:1+depth*.35);
+        if(random()<pruneChance){i=skipBranch(i);continue;}
+        stack.push({position:position.clone(),orientation:orientation.clone(),depth});depth++;
+      }else if(ch==="]"){
+        const state=stack.pop();if(state){position.copy(state.position);orientation.copy(state.orientation);depth=state.depth;}
+      }else if(ch==="+")rotate(0,0,1,species.angle);
+      else if(ch==="-")rotate(0,0,1,-species.angle);
+      else if(ch==="&")rotate(1,0,0,species.angle);
+      else if(ch==="^")rotate(1,0,0,-species.angle);
+      else if(ch==="/")rotate(0,1,0,species.roll,true);
+      else if(ch==="\\")rotate(0,1,0,-species.roll,true);
+    }
   }
   let maxY=1;for(const s of segments)maxY=Math.max(maxY,s.mid.y+s.length*.5);
   return {segments,tips,height:maxY};
@@ -140,7 +206,7 @@ function leafGeometry(form){
 }
 function growLSystemFlora(parent,cx,cz,land,leaf,rock,catalog=floraCatalog){
   const groups=catalog.map(()=>({branches:[],foliage:[]})),rocks=[],baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE;
-  const r=rng(chunkSeed(cx,cz,0x91b44d)),yawQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3(),yAxis=new T.Vector3(0,1,0);
+  const r=rng(chunkSeed(cx,cz,0x91b44d)),yawQ=new T.Quaternion(),leanQ=new T.Quaternion(),treeQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3(),yAxis=new T.Vector3(0,1,0),leanAxis=new T.Vector3();
   const plantLimit=1+Math.floor((24+Math.pow(G.forestCover,.82)*1150)*(CHUNK_SIZE*CHUNK_SIZE)/(790*790));let plants=0;
   for(let i=0;i<270;i++){
     const x=baseX+r()*CHUNK_SIZE,z=baseZ+r()*CHUNK_SIZE,y=height(x,z);
@@ -149,21 +215,33 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,catalog=floraCatalog){
     const localDensity=floraDensity(x,z,y);
     if(!houseReserved(x,z)&&plants<plantLimit&&y>G.water+.7&&slope<.82&&path>7&&r()<localDensity){
       const patch=noise(x*.009+211,z*.009-173),index=Math.min(catalog.length-1,Math.floor((patch*.78+r()*.22)*catalog.length));
-      const species=catalog[index],prototype=species.prototype,group=groups[index];
-      const h=mix(species.heightMin,species.heightMax,Math.pow(r(),species.heightCurve))*(.72+localDensity*.52)*( .72+G.slender*.45),scale=h/prototype.height,yaw=r()*Math.PI*2;
+      const species=catalog[index],group=groups[index];
+      const h=mix(species.heightMin,species.heightMax,Math.pow(r(),species.heightCurve))*(.72+localDensity*.52)*( .72+G.slender*.45),yaw=r()*Math.PI*2;
       const treeHue=(r()-.5)*.014,treeLight=(r()-.5)*.09;
+      for(let burn=0;burn<species.prototype.tips.length*3;burn++)r();
+      const treeSeed=(chunkSeed(cx,cz,0x4d3a21)^Math.imul(i+1,0x9e3779b1)^Math.imul(index+1,0x85ebca6b))>>>0;
+      const treeR=rng(treeSeed);
+      const relativeHeight=clamp((h-species.heightMin)/Math.max(.001,species.heightMax-species.heightMin),0,1);
+      const maturity=clamp(.56+relativeHeight*.4+(treeR()-.5)*.12,.48,1);
+      const prototype=makeLSystemPlant(species,treeR,maturity),scale=h/prototype.height;
+      const leanAzimuth=treeR()*Math.PI*2,leanAngle=(treeR()-.5)*.18;
+      const trunkVariation=.86+treeR()*.28,foliageKeep=clamp(mix(.76,.98,maturity)+(treeR()-.5)*.08,.68,1);
       yawQ.setFromAxisAngle(yAxis,yaw);
+      leanAxis.set(Math.cos(leanAzimuth),0,Math.sin(leanAzimuth));
+      leanQ.setFromAxisAngle(leanAxis,leanAngle);
+      treeQ.copy(yawQ).multiply(leanQ);
       for(const branch of prototype.segments){
-        p.copy(branch.mid).multiplyScalar(scale).applyQuaternion(yawQ);
-        worldQ.copy(yawQ).multiply(branch.q);
-        const radius=h*(.014+G.slender*.007)*species.branchScale*Math.pow(.61,branch.depth);
+        p.copy(branch.mid).multiplyScalar(scale).applyQuaternion(treeQ);
+        worldQ.copy(treeQ).multiply(branch.q);
+        const radius=h*(.014+G.slender*.007)*species.branchScale*Math.pow(.61,branch.depth)*trunkVariation*(.94+treeR()*.12);
         group.branches.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,radius,branch.length*scale,radius,worldQ.x,worldQ.y,worldQ.z,worldQ.w]);
       }
       for(const tip of prototype.tips){
-        p.copy(tip.position).multiplyScalar(scale).applyQuaternion(yawQ);
-        worldQ.copy(yawQ).multiply(tip.q);
-        const s=h*(.035+G.slender*.035)*species.leafScale*(.8+r()*.45);
-        const tint=leaf.clone().offsetHSL(species.hueShift+treeHue+(r()-.5)*species.leafHueVariance,.015,species.lightShift+treeLight+(r()-.5)*.07);
+        if(treeR()>foliageKeep)continue;
+        p.copy(tip.position).multiplyScalar(scale).applyQuaternion(treeQ);
+        worldQ.copy(treeQ).multiply(tip.q);
+        const s=h*(.035+G.slender*.035)*species.leafScale*(.8+treeR()*.45);
+        const tint=leaf.clone().offsetHSL(species.hueShift+treeHue+(treeR()-.5)*species.leafHueVariance,.015,species.lightShift+treeLight+(treeR()-.5)*.07);
         group.foliage.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,s,s*(species.leafForm===2?.42:.65+G.slender*.35),s,worldQ.x,worldQ.y,worldQ.z,worldQ.w,tint.r,tint.g,tint.b]);
       }
       plants++;
