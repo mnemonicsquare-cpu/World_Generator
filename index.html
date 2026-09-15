@@ -10,7 +10,7 @@ rend.setPixelRatio(Math.min(devicePixelRatio,1.7));rend.setSize(innerWidth,inner
 const cam=new T.PerspectiveCamera(66,innerWidth/innerHeight,.1,1200);cam.rotation.order="YXZ";
 let scene,water,G,rnd,weather,celestial,audio,sound=false,yaw=0,pitch=-.05,jump=0,grounded=true;
 const keys=new Set,clock=new T.Clock,temp=new T.Object3D,CHUNK_SIZE=160,CHUNK_SEG=28,CHUNK_STEP=CHUNK_SIZE/CHUNK_SEG;
-const chunks=new Map;let chunkQueue=[],chunkX=Infinity,chunkZ=Infinity,floraCatalog=[],worldPalette;
+const chunks=new Map;let chunkQueue=[],chunkX=Infinity,chunkZ=Infinity,floraCatalog=[],faunaCatalog=[],faunaAgents=[],worldPalette;
 const TERRAIN_RADIUS=matchMedia("(pointer:coarse)").matches?5:6,FLORA_RADIUS=2;
 let mobileForward=0,mobileSide=0,mobileBoost=false;
 const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost;
@@ -85,7 +85,7 @@ function treeDensity(x,z,y,base=floraDensity(x,z,y)){
 }
 function ground(x,z){let X=Math.floor(x/CHUNK_STEP)*CHUNK_STEP,Z=Math.floor(z/CHUNK_STEP)*CHUNK_STEP,u=(x-X)/CHUNK_STEP,v=(z-Z)/CHUNK_STEP,A=height(X,Z),B=height(X+CHUNK_STEP,Z),C=height(X,Z+CHUNK_STEP),D=height(X+CHUNK_STEP,Z+CHUNK_STEP);return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
 function disposeTree(root){let gs=new Set,ms=new Set;root.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose())}
-function clear(){if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity}
+function clear(){if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity;faunaAgents=[];faunaCatalog=[]}
 function instances(g,m,a,parent=scene){if(!a.length){g.dispose();m.dispose();return null;}let o=new T.InstancedMesh(g,m,a.length);a.forEach((v,i)=>{temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);temp.rotation.set(v[6]||0,v[7]||0,v[8]||0);temp.updateMatrix();o.setMatrixAt(i,temp.matrix)});o.instanceMatrix.setUsage(T.StaticDrawUsage);parent.add(o);return o}
 function instancesQ(g,m,a,parent=scene){
   if(!a.length){g.dispose();m.dispose();return;}
@@ -376,14 +376,173 @@ function growGroundFlora(parent,cx,cz,land,leaf,accent){
   instancesQ(new T.SphereGeometry(1,9,5,0,Math.PI*2,0,Math.PI/2),mat(new T.Color(0xffffff),.015),caps,parent);
   return {moss:mossCount,mushrooms:mushroomCount};
 }
+function makeFaunaCatalog(){
+  const r=rng(G.hash^0x41ac97),count=5+Math.floor(r()*4),catalog=[];
+  for(let i=0;i<count;i++){
+    const predator=i===count-1||i>2&&r()<.18,plan=Math.floor(r()*4);
+    const size=.55+r()*1.55,bodyLength=.9+r()*1.35,bodyHeight=.55+r()*.9,bodyWidth=.5+r()*.75;
+    let legLength=.45+r()*1.05,neck=.12+r()*.85,tail=.25+r()*1.5;
+    if(plan===1){legLength*=1.45;neck*=1.8;}
+    else if(plan===2){legLength*=.52;tail*=1.35;}
+    else if(plan===3){legLength*=1.55;neck*=.5;}
+    const source=(predator?worldPalette.rock:worldPalette.land).clone().lerp(worldPalette.leaf,predator?.12:.28+r()*.24);
+    const bodyColor=source.offsetHSL((r()-.5)*.09,(r()-.5)*.08,(r()-.5)*.11);
+    const accentColor=worldPalette.accent.clone().lerp(bodyColor,.28+r()*.28);
+    catalog.push({
+      predator,plan,size,bodyLength,bodyHeight,bodyWidth,legLength,neck,tail,
+      head:.32+r()*.42,limb:.08+r()*.11,
+      horns:r()<.32?1+r()*.9:0,ears:.12+r()*.24,
+      forestAffinity:r(),waterAffinity:r(),altitudeAffinity:r(),
+      speed:predator?2.1+r()*2.1:1.15+r()*1.7,
+      roam:14+r()*28,turn:.7+r()*1.25,
+      groupMin:predator?1:2+Math.floor(r()*3),
+      groupMax:predator?1+Math.floor(r()*2):5+Math.floor(r()*6),
+      bodyColor,accentColor
+    });
+  }
+  return catalog;
+}
+function faunaEcology(x,z,y=height(x,z)){
+  const base=floraDensity(x,z,y),forest=treeDensity(x,z,y,base);
+  const slope=Math.hypot(height(x+3,z)-y,height(x,z+3)-y)/3;
+  const altitude=clamp((y-G.water)/Math.max(18,24+G.relief*.55),0,1);
+  const moisture=Math.exp(-Math.max(0,y-G.water-1)/22);
+  const fertility=smooth(clamp(base*.52+(1-clamp(slope/.85,0,1))*.23+moisture*.16+(fbm(x*.0031+73,z*.0031-91)-.5)*.24,0,1));
+  const migration=fbm(x*.00115+311,z*.00115-227),prey=smooth(clamp(fertility*(.42+migration*.95)*(1-forest*.16),0,1));
+  const hunt=fbm(x*.0017-419,z*.0017+157),predator=smooth(clamp(prey*(hunt-.33)*1.15,0,1));
+  return {base,forest,slope,altitude,moisture,fertility,prey,predator,life:Math.max(prey,predator)};
+}
+function faunaSuitability(species,e){
+  const density=species.predator?e.predator:e.prey;
+  const forestFit=1-Math.abs(e.forest-species.forestAffinity);
+  const waterFit=1-Math.abs(e.moisture-species.waterAffinity);
+  const altitudeFit=1-Math.abs(e.altitude-species.altitudeAffinity);
+  return density*(.3+.7*forestFit)*(.45+.55*waterFit)*(.5+.5*altitudeFit)*clamp(1-e.slope*.85,0,1);
+}
+function makeFaunaBody(species,seed){
+  const r=rng(seed),root=new T.Group(),visual=new T.Group();root.add(visual);
+  const individuality=.82+r()*.38,scale=species.size*individuality;
+  const bodyColor=species.bodyColor.clone().offsetHSL((r()-.5)*.035,(r()-.5)*.045,(r()-.5)*.07);
+  const accentColor=species.accentColor.clone().offsetHSL((r()-.5)*.025,(r()-.5)*.04,(r()-.5)*.05);
+  const bodyMat=mat(bodyColor),accentMat=mat(accentColor),darkMat=mat(bodyColor.clone().multiplyScalar(.62));
+  const sphere=new T.SphereGeometry(1,7,5),cyl=new T.CylinderGeometry(1,1,1,5),cone=new T.ConeGeometry(1,1,5);
+  const L=species.bodyLength*scale,H=species.bodyHeight*scale,W=species.bodyWidth*scale,leg=species.legLength*scale,limb=species.limb*scale;
+  const bodyY=leg+H*.52,legs=[];
+  function part(g,m,x,y,z,sx,sy,sz,rx=0,ry=0,rz=0,parent=visual){
+    const o=new T.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);o.rotation.set(rx,ry,rz);parent.add(o);return o;
+  }
+  part(sphere,bodyMat,0,bodyY,0,W*.58,H*.56,L*.58);
+  part(sphere,bodyMat,0,bodyY+H*.04,L*.2,W*.5,H*.5,L*.42);
+  const longNeck=species.plan===1,hopper=species.plan===3,low=species.plan===2;
+  const headY=hopper?bodyY+H*.72:longNeck?bodyY+species.neck*scale*.82:bodyY+H*.18+species.neck*scale*.18;
+  const headZ=hopper?L*.32:L*.55+species.neck*scale*(longNeck?.28:.1);
+  if(species.neck>.18){
+    const neckLen=Math.max(.12,species.neck*scale);
+    part(cyl,bodyMat,0,(bodyY+headY)*.5,L*.46,W*.18,neckLen,W*.18,longNeck?-.18:0);
+  }
+  const headSize=species.head*scale;
+  part(sphere,bodyMat,0,headY,headZ,headSize*.78,headSize*.68,headSize);
+  part(sphere,accentMat,0,headY-headSize*.05,headZ+headSize*.76,headSize*.48,headSize*.38,headSize*.52);
+  for(const side of[-1,1])part(cone,accentMat,side*headSize*.54,headY+headSize*.55,headZ-headSize*.04,headSize*.2,species.ears*scale,headSize*.18,0,0,side*.12);
+  if(species.horns)for(const side of[-1,1])part(cone,darkMat,side*headSize*.38,headY+headSize*.8,headZ-headSize*.05,headSize*.12,species.horns*headSize*.55,headSize*.12,0,0,side*.22);
+  const tailLen=species.tail*scale;
+  if(tailLen>.12)part(cyl,darkMat,0,bodyY+H*.08,-L*.58-tailLen*.46,limb*.7,tailLen,limb*.7,Math.PI/2);
+  function addLeg(x,z,len,thick,phase){
+    const pivot=new T.Group();pivot.position.set(x,bodyY-H*.2,z);visual.add(pivot);
+    part(cyl,darkMat,0,-len*.5,0,thick,len,thick,0,0,0,pivot);
+    part(sphere,accentMat,0,-len,thick*.16,thick*1.15,thick*.7,thick*1.4,0,0,0,pivot);
+    legs.push({pivot,phase});
+  }
+  if(hopper){
+    addLeg(-W*.42,-L*.23,leg*1.08,limb*1.45,0);addLeg(W*.42,-L*.23,leg*1.08,limb*1.45,Math.PI);
+    addLeg(-W*.33,L*.3,leg*.42,limb*.72,Math.PI);addLeg(W*.33,L*.3,leg*.42,limb*.72,0);
+  }else{
+    const back=low?L*.34:L*.32,front=L*.34;
+    addLeg(-W*.43,-back,leg,limb,0);addLeg(W*.43,-back,leg,limb,Math.PI);
+    addLeg(-W*.43,front,leg*(longNeck?1.02:.94),limb,Math.PI);addLeg(W*.43,front,leg*(longNeck?1.02:.94),limb,0);
+  }
+  return {root,visual,legs,scale,height:bodyY+H*.8};
+}
+function populateChunkFauna(chunk){
+  if(chunk.fauna)return {animals:chunk.faunaAgents?.length||0};
+  const group=new T.Group();chunk.group.add(group);chunk.fauna=group;chunk.faunaAgents=[];
+  const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE,cell=180;
+  const minX=Math.floor(baseX/cell)-1,maxX=Math.floor((baseX+CHUNK_SIZE)/cell)+1,minZ=Math.floor(baseZ/cell)-1,maxZ=Math.floor((baseZ+CHUNK_SIZE)/cell)+1;
+  for(let cz=minZ;cz<=maxZ;cz++)for(let cx=minX;cx<=maxX;cx++){
+    if(worldRandom(cx,cz,0x73f1)>.58)continue;
+    const ax=(cx+.12+worldRandom(cx,cz,0x892d)*.76)*cell,az=(cz+.12+worldRandom(cx,cz,0xb147)*.76)*cell;
+    if(ax<baseX||ax>=baseX+CHUNK_SIZE||az<baseZ||az>=baseZ+CHUNK_SIZE)continue;
+    const r=rng((chunkSeed(cx,cz,0xd41b)^0x9e3779b9)>>>0),ay=height(ax,az);
+    if(ay<G.water+.8||houseReserved(ax,az))continue;
+    const e=faunaEcology(ax,az,ay);if(e.slope>.72||e.life<.08)continue;
+    const weights=faunaCatalog.map(sp=>faunaSuitability(sp,e)),total=weights.reduce((a,b)=>a+b,0);
+    if(total<.08||r()>clamp(.12+e.life*.72+total/faunaCatalog.length*.55,0,.86))continue;
+    let pick=r()*total,index=0;for(;index<weights.length-1;index++){pick-=weights[index];if(pick<=0)break;}
+    const species=faunaCatalog[index],density=clamp(weights[index]*1.6,0,1);
+    const target=species.groupMin+Math.floor(r()*(species.groupMax-species.groupMin+1));
+    const count=Math.max(1,Math.round(target*(.6+density*.65)));
+    for(let n=0;n<count;n++){
+      const angle=r()*6.28,rad=Math.sqrt(r())*(4+species.roam*.32),x=ax+Math.cos(angle)*rad,z=az+Math.sin(angle)*rad,y=height(x,z);
+      const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
+      if(x<baseX+2||x>baseX+CHUNK_SIZE-2||z<baseZ+2||z>baseZ+CHUNK_SIZE-2||y<G.water+.65||slope>.82||houseReserved(x,z))continue;
+      const seed=(chunkSeed(chunk.cx,chunk.cz,0x5ab7)^Math.imul(cx+31,0x85ebca6b)^Math.imul(cz-17,0xc2b2ae35)^Math.imul(n+1,0x27d4eb2f)^Math.imul(index+1,0x165667b1))>>>0;
+      const body=makeFaunaBody(species,seed),ar=rng(seed^0x61c88647),heading=ar()*6.28;
+      body.root.position.set(x-baseX,y,z-baseZ);body.root.rotation.y=heading;group.add(body.root);
+      const agent={chunk,species,group:body.root,visual:body.visual,legs:body.legs,random:ar,heading,targetHeading:heading,
+        homeX:ax,homeZ:az,roam:species.roam*(.75+ar()*.5),speed:species.speed*(.78+ar()*.38),turnTimer:.5+ar()*2.5,phase:ar()*6.28};
+      chunk.faunaAgents.push(agent);faunaAgents.push(agent);
+    }
+  }
+  return {animals:chunk.faunaAgents.length};
+}
+function removeChunkFauna(chunk){
+  if(!chunk.fauna)return;
+  faunaAgents=faunaAgents.filter(a=>a.chunk!==chunk);
+  chunk.group.remove(chunk.fauna);disposeTree(chunk.fauna);chunk.fauna=null;chunk.faunaAgents=null;
+}
+function updateFauna(dt){
+  for(const a of faunaAgents){
+    const baseX=a.chunk.cx*CHUNK_SIZE,baseZ=a.chunk.cz*CHUNK_SIZE;
+    const wx=baseX+a.group.position.x,wz=baseZ+a.group.position.z;
+    const homeDx=a.homeX-wx,homeDz=a.homeZ-wz,homeDist=Math.hypot(homeDx,homeDz);
+    const playerDx=wx-cam.position.x,playerDz=wz-cam.position.z,playerDist=Math.hypot(playerDx,playerDz);
+    a.turnTimer-=dt;
+    let desired=a.targetHeading,moveScale=1;
+    if(playerDist<9){
+      desired=Math.atan2(playerDx,playerDz);moveScale=1.75;a.turnTimer=.35;
+    }else if(a.turnTimer<=0||homeDist>a.roam){
+      const toward=Math.atan2(homeDx,homeDz);
+      desired=homeDist>a.roam*.72?toward+(a.random()-.5)*.65:a.heading+(a.random()-.5)*1.7;
+      a.turnTimer=1.2+a.random()*3.4;
+    }
+    a.targetHeading=desired;
+    const diff=Math.atan2(Math.sin(desired-a.heading),Math.cos(desired-a.heading));
+    a.heading+=clamp(diff,-a.species.turn*dt,a.species.turn*dt);
+    const step=a.speed*moveScale*dt,nx=wx+Math.sin(a.heading)*step,nz=wz+Math.cos(a.heading)*step,ny=height(nx,nz);
+    const slope=Math.hypot(height(nx+1.5,nz)-ny,height(nx,nz+1.5)-ny)/1.5;
+    if(ny>G.water+.55&&slope<.9&&!houseReserved(nx,nz)){
+      a.group.position.x=nx-baseX;a.group.position.z=nz-baseZ;a.group.position.y=ny;
+    }else{
+      a.targetHeading=a.heading+Math.PI*(.65+a.random()*.7);a.turnTimer=.45;
+    }
+    a.group.rotation.y=a.heading;
+    a.phase+=dt*a.speed*2.7*moveScale;
+    const gait=Math.sin(a.phase),amp=clamp(.18+a.speed*.055,.2,.42);
+    a.visual.position.y=Math.abs(Math.sin(a.phase*2))*.045*a.species.size;
+    a.visual.rotation.z=Math.sin(a.phase*.5)*.018;
+    for(let i=0;i<a.legs.length;i++)a.legs[i].pivot.rotation.x=Math.sin(a.phase+a.legs[i].phase)*amp;
+  }
+}
 function populateChunkFlora(chunk){
   if(chunk.flora)return;
   const group=new T.Group();chunk.group.add(group);chunk.flora=group;
   const trees=growLSystemFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.rock,worldPalette.accent,floraCatalog);
   const groundCover=growGroundFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.accent);
-  chunk.stats={plants:trees.plants,moss:groundCover.moss,mushrooms:groundCover.mushrooms};
+  const fauna=populateChunkFauna(chunk);
+  chunk.stats={plants:trees.plants,moss:groundCover.moss,mushrooms:groundCover.mushrooms,animals:fauna.animals};
 }
 function removeChunkFlora(chunk){
+  removeChunkFauna(chunk);
   if(!chunk.flora)return;
   chunk.group.remove(chunk.flora);disposeTree(chunk.flora);chunk.flora=null;chunk.stats=null;
 }
@@ -415,7 +574,7 @@ function createChunk(cx,cz,detailed){
   }
   geo.setAttribute("normal",new T.BufferAttribute(normals,3));geo.setAttribute("color",new T.BufferAttribute(colors,3));
   const terrain=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));terrain.receiveShadow=true;group.add(terrain);
-  const chunk={key,cx,cz,group,terrain,flora:null,stats:null};chunks.set(key,chunk);if(detailed)populateChunkFlora(chunk);return chunk;
+  const chunk={key,cx,cz,group,terrain,flora:null,fauna:null,faunaAgents:null,stats:null};chunks.set(key,chunk);if(detailed)populateChunkFlora(chunk);return chunk;
 }
 function removeChunk(key){const chunk=chunks.get(key);if(!chunk)return;scene.remove(chunk.group);disposeTree(chunk.group);chunks.delete(key)}
 function scheduleChunks(force=false){
@@ -731,7 +890,7 @@ const rockMid=rock.clone().offsetHSL(terrainStops[1]*.72,terrainMidSat*.45,terra
 const rockHigh=rock.clone().offsetHSL(terrainStops[2]*.72,terrainHighSat*.45,terrainHighLight*.65);
 const altitudeBase=G.water+.8,altitudeSpan=clamp(12+G.relief*(.28+terrainR()*.2),16,58),altitudeWarp=2.5+terrainR()*(4+G.relief*.045),altitudeMid=.36+terrainR()*.28;
 scene=new T.Scene;scene.background=sky;scene.fog=new T.FogExp2(horizon,G.fogDensity);let hemi=new T.HemisphereLight(horizon,land,.9),light=new T.DirectionalLight(col(G.hue+.42,.3,.9),2);scene.add(hemi,light);
-worldPalette={land,rock,leaf,accent,landLow,landMid,landHigh,rockLow,rockMid,rockHigh,altitudeBase,altitudeSpan,altitudeWarp,altitudeMid};floraCatalog=makeFloraCatalog();planHomes();
+worldPalette={land,rock,leaf,accent,landLow,landMid,landHigh,rockLow,rockMid,rockHigh,altitudeBase,altitudeSpan,altitudeWarp,altitudeMid};floraCatalog=makeFloraCatalog();faunaCatalog=makeFaunaCatalog();planHomes();
 let spawn;for(let z=140;z>-160;z-=4){let x=G.path+Math.sin(z*.011+G.phase)*G.curve,y=ground(x,z);if(y>G.water+.8){spawn=[x,y+1.75,z];break}}if(!spawn)spawn=[G.path,Math.max(ground(G.path,120),G.water)+1.75,120];cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();
 let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
 buildHomes();
@@ -739,7 +898,7 @@ let wg=new T.PlaneGeometry((TERRAIN_RADIUS*2+2)*CHUNK_SIZE,(TERRAIN_RADIUS*2+2)*
 let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({color:col(G.hue+.42,.25,.9),fog:false}),-260,160,-600);for(let i=0;i<Math.floor(rnd()*4);i++){rnd();rnd();}
 scheduleChunks(true);
 const weatherRoll=rng(G.hash^0x57ea7)(),wt=kind===4?"dust":G.wet>.62?"rain":weatherRoll<.28?"snow":"spores";weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
-let flora=[...chunks.values()].reduce((a,c)=>(a.plants+=c.stats?.plants||0,a.moss+=c.stats?.moss||0,a.mushrooms+=c.stats?.mushrooms||0,a),{plants:0,moss:0,mushrooms:0}),generations=[...new Set(floraCatalog.map(s=>s.iterations))].sort().join(","),names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · бескрайний · "+wx[wt]+": "+weather.count+" частиц · рядом: "+flora.plants+" растений, "+floraCatalog.length+" форм, поколения "+generations+" · мхи: "+flora.moss+" · грибы: "+flora.mushrooms+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+let flora=[...chunks.values()].reduce((a,c)=>(a.plants+=c.stats?.plants||0,a.moss+=c.stats?.moss||0,a.mushrooms+=c.stats?.mushrooms||0,a.animals+=c.stats?.animals||0,a),{plants:0,moss:0,mushrooms:0,animals:0}),generations=[...new Set(floraCatalog.map(s=>s.iterations))].sort().join(","),names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · бескрайний · "+wx[wt]+": "+weather.count+" частиц · рядом: "+flora.plants+" растений, "+floraCatalog.length+" форм, поколения "+generations+" · мхи: "+flora.moss+" · грибы: "+flora.mushrooms+" · фауна: "+flora.animals+" / "+faunaCatalog.length+" видов · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
 function update(dt){
   const e=celestial;e.age+=dt;
   const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
@@ -927,6 +1086,6 @@ rend.setAnimationLoop(()=>{
   // Substeps keep walls and stair risers solid even during fast movement.
   const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.1));
   for(let i=0;i<steps;i++)walkFrame(dt/steps,dx/steps,dz/steps);
-  cam.rotation.set(pitch,yaw,0);cam.fov=mix(cam.fov,boosting()&&Math.hypot(f,s)?79:66,1-Math.exp(-dt*8));cam.updateProjectionMatrix();updateChunks();update(dt);updateSoundscape(dt);rend.render(scene,cam);
+  cam.rotation.set(pitch,yaw,0);cam.fov=mix(cam.fov,boosting()&&Math.hypot(f,s)?79:66,1-Math.exp(-dt*8));cam.updateProjectionMatrix();updateChunks();updateFauna(dt);update(dt);updateSoundscape(dt);rend.render(scene,cam);
 });
 </script><!-- atmosphere-sky-fog-experiment --></body></html>
