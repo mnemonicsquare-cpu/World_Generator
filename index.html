@@ -352,7 +352,7 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,accent,catalog=floraCatalo
 }
 function growGroundFlora(parent,cx,cz,land,leaf,accent){
   const r=rng(chunkSeed(cx,cz,0x35a7c1)),stems=[],caps=[],baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE,area=(CHUNK_SIZE*CHUNK_SIZE)/(780*780);
-  // Preserve the old ground-cover RNG consumption so removing moss does not reshuffle mushrooms.
+  // Preserve the legacy ground-cover RNG consumption so mushrooms keep their previous deterministic layout.
   const compatibilityLimit=Math.floor((80+G.forestCover*720)*(.45+G.wet*.75)*area);
   const mushroomLimit=Math.floor((8+G.forestCover*150)*(.25+G.wet)*area);
   let compatibilityCount=0,mushroomCount=0;
