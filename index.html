@@ -1149,12 +1149,12 @@ function planeTerrainPenetration(pos,q){
     [new T.Vector3(-1.03,-.78,.52),.25],[new T.Vector3(1.03,-.78,.52),.25],[new T.Vector3(0,-.75,-1.67),.22],
     [new T.Vector3(-3.45,0,-.18),.1],[new T.Vector3(3.45,0,-.18),.1],[new T.Vector3(0,.1,2.35),.12]
   ];
-  let penetration=0,waterHit=false;
+  let penetration=0;
   for(const [local,radius] of probes){
-    const p=planeProbeWorld(local,pos,q),terrain=ground(p.x,p.z),surface=Math.max(terrain,G.water);
-    penetration=Math.max(penetration,surface-(p.y-radius));if(G.water>terrain&&surface>p.y-radius)waterHit=true;
+    const p=planeProbeWorld(local,pos,q),surface=Math.max(ground(p.x,p.z),G.water);
+    penetration=Math.max(penetration,surface-(p.y-radius));
   }
-  return {penetration,waterHit};
+  return {penetration};
 }
 function createPlane(sites=[]){
   const r=rng(G.hash^0x2a9f31);let best=null;
@@ -1214,7 +1214,7 @@ function updatePlaneInteractionUI(){
     button.textContent=canExit?"Покинуть самолёт · E":"Посадите и остановите самолёт";
     hud.style.display="block";
     const altitude=Math.max(0,plane.group.position.y-ground(plane.group.position.x,plane.group.position.z));
-    const controls=matchMedia("(pointer:coarse)").matches?"Стик: тангаж / крен · +/− газ":"W/S: тангаж · A/D: крен · Shift/Ctrl: газ · E: выйти";
+    const controls=matchMedia("(pointer:coarse)").matches?"Стик: тангаж / крен · +/− газ":"W/S: тангаж · A/D: крен · Shift/Z: газ · E: выйти";
     hud.textContent=controls+" · "+Math.round(plane.speed*3.6)+" км/ч · газ "+Math.round(plane.throttle*100)+"% · высота "+Math.round(altitude)+" м";
   }else{
     hud.style.display="none";button.disabled=false;
@@ -1234,7 +1234,7 @@ function updatePlane(dt){
   if(plane.occupied){
     const pitchInput=clamp((+keys.has("KeyS")-+keys.has("KeyW"))-mobileForward,-1,1);
     const rollInput=clamp((+keys.has("KeyA")-+keys.has("KeyD"))-mobileSide,-1,1);
-    const throttleInput=(keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost?1:0)-(keys.has("ControlLeft")||keys.has("ControlRight")||mobileThrottleDown?1:0);
+    const throttleInput=(keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost?1:0)-(keys.has("KeyZ")||mobileThrottleDown?1:0);
     plane.throttle=clamp(plane.throttle+throttleInput*.34*dt,0,1);
     plane.pitch=clamp(plane.pitch+pitchInput*.58*dt,-.48,.5);
     if(!pitchInput)plane.pitch*=Math.exp(-dt*.08);
@@ -1271,8 +1271,7 @@ function updatePlane(dt){
   const contactQ=plane.group.quaternion.clone(),contact=planeTerrainPenetration(plane.group.position,contactQ);
   if(contact.penetration>0){
     plane.group.position.y+=contact.penetration;
-    if(!plane.onGround&&plane.verticalSpeed<-5)plane.speed*=contact.waterHit?.25:.58;
-    if(contact.waterHit)plane.speed*=.7;
+    if(!plane.onGround&&plane.verticalSpeed<-5)plane.speed*=.58;
     plane.verticalSpeed=0;plane.onGround=true;plane.roll*=.45;plane.pitch*=.72;
   }
   plane.group.rotation.set(plane.pitch,plane.yaw,plane.roll);
@@ -1498,7 +1497,7 @@ const menuPanel=$("#menuPanel"),menuToggle=$("#menuToggle");
 function toggleMenu(force){const open=force??!menuPanel.classList.contains("open");menuPanel.classList.toggle("open",open);menuToggle.setAttribute("aria-expanded",String(open))}
 function setCinema(on){document.body.classList.toggle("cinema",on);toggleMenu(false)}
 menuToggle.onclick=()=>toggleMenu();$("#cinema").onclick=()=>setCinema(true);$("#cinemaExit").onclick=()=>setCinema(false);$("#interact").onclick=e=>{e.stopPropagation();interactPlane();if(matchMedia("(pointer:fine)").matches&&document.pointerLockElement!==rend.domElement)rend.domElement.requestPointerLock()};
-$("#enter").onclick=()=>{$("#start").style.opacity=0;setTimeout(()=>$("#start").remove(),500);if(matchMedia("(pointer:fine)").matches)rend.domElement.requestPointerLock()};rend.domElement.onclick=()=>{if(matchMedia("(pointer:fine)").matches)rend.domElement.requestPointerLock()};addEventListener("mousemove",e=>{if(document.pointerLockElement!==rend.domElement)return;if(plane?.occupied){planeLookYaw=clamp(planeLookYaw-e.movementX*.0024,-1.55,1.55);planeLookPitch=clamp(planeLookPitch-e.movementY*.0024,-1.15,1.15)}else{yaw-=e.movementX*.0024;pitch=clamp(pitch-e.movementY*.0024,-1.45,1.45)}});addEventListener("keydown",e=>{if(e.code==="KeyC"&&e.target.tagName!=="INPUT"){setCinema(!document.body.classList.contains("cinema"));return}if(e.target.tagName==="INPUT"||document.pointerLockElement!==rend.domElement)return;if(e.code==="KeyE"){e.preventDefault();interactPlane();return}if(["Space","KeyW","KeyA","KeyS","KeyD","ShiftLeft","ShiftRight","ControlLeft","ControlRight"].includes(e.code))e.preventDefault();keys.add(e.code);if(!plane?.occupied&&e.code==="Space"&&grounded){jump=8.2;grounded=false}});addEventListener("keyup",e=>keys.delete(e.code));addEventListener("blur",()=>keys.clear());document.addEventListener("pointerlockchange",()=>keys.clear());
+$("#enter").onclick=()=>{$("#start").style.opacity=0;setTimeout(()=>$("#start").remove(),500);if(matchMedia("(pointer:fine)").matches)rend.domElement.requestPointerLock()};rend.domElement.onclick=()=>{if(matchMedia("(pointer:fine)").matches)rend.domElement.requestPointerLock()};addEventListener("mousemove",e=>{if(document.pointerLockElement!==rend.domElement)return;if(plane?.occupied){planeLookYaw=clamp(planeLookYaw-e.movementX*.0024,-1.55,1.55);planeLookPitch=clamp(planeLookPitch-e.movementY*.0024,-1.15,1.15)}else{yaw-=e.movementX*.0024;pitch=clamp(pitch-e.movementY*.0024,-1.45,1.45)}});addEventListener("keydown",e=>{if(e.code==="KeyC"&&e.target.tagName!=="INPUT"){setCinema(!document.body.classList.contains("cinema"));return}if(e.target.tagName==="INPUT"||document.pointerLockElement!==rend.domElement)return;if(e.code==="KeyE"){e.preventDefault();interactPlane();return}if(["Space","KeyW","KeyA","KeyS","KeyD","ShiftLeft","ShiftRight","KeyZ"].includes(e.code))e.preventDefault();keys.add(e.code);if(!plane?.occupied&&e.code==="Space"&&grounded){jump=8.2;grounded=false}});addEventListener("keyup",e=>keys.delete(e.code));addEventListener("blur",()=>keys.clear());document.addEventListener("pointerlockchange",()=>keys.clear());
 $("#new").onclick=()=>{generate(fresh());toggleMenu(false)};$("#seed").onkeydown=e=>{if(e.key==="Enter"){let s=e.target.value.trim().slice(0,60);if(s)generate(s);toggleMenu(false)}};$("#sound").onclick=async()=>{await toggleAudio();if(sound)await loadBundledSounds();};$("#night").onclick=()=>{const phase=(celestial.start+celestial.age/celestial.length)%1;celestial.start=phase<.5?.75:.25;celestial.age=0;update(0);};$("#photo").onclick=()=>rend.domElement.toBlob(b=>{let u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="world-"+G.hash+".png";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)});
 function resizeView(){
   const w=Math.round(visualViewport?.width||innerWidth),h=Math.round(visualViewport?.height||innerHeight);
