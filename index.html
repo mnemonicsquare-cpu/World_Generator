@@ -403,23 +403,36 @@ function makeFaunaCatalog(){
   return catalog;
 }
 function makeBirdCatalog(){
-  const r=rng(G.hash^0x5bc31d),count=2+Math.floor(r()*3),catalog=[];
+  const r=rng(G.hash^0x5bc31d),count=3+Math.floor(r()*3),catalog=[];
   for(let i=0;i<count;i++){
-    const plan=Math.floor(r()*4),size=.55+r()*1.05;
-    let wingSpan=1.75+r()*2.55,wingChord=.38+r()*.48,bodyLength=.72+r()*.75,bodyWidth=.28+r()*.38,tail=.28+r()*.72;
-    if(plan===0){wingSpan*=1.28;wingChord*=1.18;}
-    else if(plan===1){wingSpan*=1.45;wingChord*=.68;bodyWidth*=.78;}
-    else if(plan===2){wingSpan*=.82;wingChord*=1.05;bodyLength*=.78;}
-    else {tail*=1.55;wingSpan*=1.08;}
+    // flightStyle is continuous: 0 = tight social circling, 1 = solitary long-range soaring.
+    const flightStyle=clamp(i/Math.max(1,count-1)+(r()-.5)*.18,0,1);
+    const sociality=clamp(1-flightStyle*.94+(r()-.5)*.16,.03,1);
+    const soar=clamp(flightStyle*.88+r()*.18,0,1);
+    const migration=clamp(flightStyle*.92+(r()-.5)*.18,0,1);
+    const plan=Math.floor(r()*4),size=.5+r()*1.05;
+    let wingSpan=(1.55+r()*2.25)*mix(.94,1.58,soar),wingChord=(.38+r()*.5)*mix(1.08,.78,soar);
+    let bodyLength=.7+r()*.78,bodyWidth=(.28+r()*.4)*mix(1.05,.8,soar),tail=.28+r()*.78;
+    if(plan===0){wingSpan*=1.2;wingChord*=1.15;}
+    else if(plan===1){wingSpan*=1.3;wingChord*=.76;bodyWidth*=.8;}
+    else if(plan===2){wingSpan*=.86;wingChord*=1.08;bodyLength*=.82;}
+    else {tail*=1.5;wingSpan*=1.08;}
     const bodyColor=worldPalette.accent.clone().lerp(worldPalette.land,.28+r()*.35).offsetHSL((r()-.5)*.08,(r()-.5)*.08,.04+(r()-.5)*.08);
     const wingColor=bodyColor.clone().lerp(worldPalette.leaf,.16+r()*.34).offsetHSL((r()-.5)*.045,.02,(r()-.5)*.06);
     const beakColor=worldPalette.accent.clone().lerp(bodyColor,.18+r()*.3);
+    const flockMin=Math.max(1,Math.round(mix(1,5,sociality))),flockMax=Math.max(flockMin,Math.round(mix(2,13,sociality)));
     catalog.push({
       plan,size,wingSpan,wingChord,bodyLength,bodyWidth,tail,
-      head:.22+r()*.26,beak:.13+r()*.25,
-      speed:6.5+r()*8.5,altitude:13+r()*27,clearance:8+r()*12,
-      orbit:20+r()*35,flapRate:2.2+r()*4.8,flapAmp:.36+r()*.48,glide:.18+r()*.67,
-      flockMin:4+Math.floor(r()*3),flockMax:8+Math.floor(r()*7),
+      head:.2+r()*.3,beak:.11+r()*.3,
+      flightStyle,sociality,soar,migration,
+      speed:mix(10.5,5.6,soar)+r()*2.2,
+      altitude:mix(12,28,soar)+r()*20,clearance:mix(7,15,soar)+r()*7,
+      orbit:mix(18,62,flightStyle)*( .82+r()*.38),
+      routeX:mix(35,330,migration)*( .78+r()*.44),routeZ:mix(30,260,migration)*( .78+r()*.44),
+      flapRate:mix(6.2,1.35,soar)*( .82+r()*.34),
+      flapAmp:mix(.76,.28,soar)*( .86+r()*.25),
+      glide:clamp(.12+soar*.8+(r()-.5)*.12,.05,.94),
+      flockMin,flockMax,
       forestAffinity:r(),waterAffinity:r(),bodyColor,wingColor,beakColor
     });
   }
@@ -427,39 +440,53 @@ function makeBirdCatalog(){
 }
 function makeBirdBody(species,seed){
   const r=rng(seed),root=new T.Group(),visual=new T.Group();root.add(visual);
-  const scale=species.size*(.82+r()*.36);
+  const scale=species.size*(.86+r()*.3);
+  const bodyLengthMul=.78+r()*.46,bodyWidthMul=.82+r()*.38,wingMul=.76+r()*.52,beakMul=.68+r()*.68,headMul=.84+r()*.3,tailMul=.76+r()*.5;
   const bodyMat=mat(species.bodyColor.clone().offsetHSL((r()-.5)*.03,(r()-.5)*.04,(r()-.5)*.06));
   const wingMat=mat(species.wingColor.clone().offsetHSL((r()-.5)*.025,(r()-.5)*.035,(r()-.5)*.055));wingMat.side=T.DoubleSide;
   const beakMat=mat(species.beakColor.clone().offsetHSL((r()-.5)*.02,.02,(r()-.5)*.04));
   const sphere=new T.SphereGeometry(1,7,5),cone=new T.ConeGeometry(1,1,5);
   const wingGeo=new T.BufferGeometry();
   wingGeo.setAttribute("position",new T.Float32BufferAttribute([0,0,-.46,0,0,.46,1,0,0],3));wingGeo.computeVertexNormals();
-  const L=species.bodyLength*scale,W=species.bodyWidth*scale,H=W*.82,span=species.wingSpan*scale*.5,chord=species.wingChord*scale;
+  const L=species.bodyLength*scale*bodyLengthMul,W=species.bodyWidth*scale*bodyWidthMul,H=W*.82;
+  const span=species.wingSpan*scale*.5*wingMul,chord=species.wingChord*scale*(.9+r()*.2);
   function part(g,m,x,y,z,sx,sy,sz,rx=0,ry=0,rz=0,parent=visual){
     const o=new T.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);o.rotation.set(rx,ry,rz);parent.add(o);return o;
   }
   part(sphere,bodyMat,0,0,0,W,H,L);
-  const head=species.head*scale;
+  const head=species.head*scale*headMul;
   part(sphere,bodyMat,0,H*.1,L*.72,head,head*.86,head*1.02);
-  part(cone,beakMat,0,H*.04,L*.72+head*1.48,species.beak*scale,species.beak*scale*1.65,species.beak*scale,Math.PI/2);
+  const beak=species.beak*scale*beakMul;
+  part(cone,beakMat,0,H*.04,L*.72+head*1.48,beak,beak*1.65,beak,Math.PI/2);
   const leftPivot=new T.Group(),rightPivot=new T.Group();leftPivot.position.x=-W*.55;rightPivot.position.x=W*.55;visual.add(leftPivot,rightPivot);
   const leftWing=new T.Mesh(wingGeo,wingMat),rightWing=new T.Mesh(wingGeo,wingMat);
   leftWing.scale.set(-span,1,chord);rightWing.scale.set(span,1,chord);leftPivot.add(leftWing);rightPivot.add(rightWing);
-  const tail=species.tail*scale;
+  const tail=species.tail*scale*tailMul;
   part(cone,wingMat,-tail*.12,0,-L*.78-tail*.34,tail*.36,tail,tail*.42,-Math.PI/2,0,-.12);
   part(cone,wingMat,tail*.12,0,-L*.78-tail*.34,tail*.36,tail,tail*.42,-Math.PI/2,0,.12);
-  return {root,visual,leftPivot,rightPivot,scale};
+  return {root,visual,leftPivot,rightPivot,scale,wingMul,bodyLengthMul,beakMul};
 }
 function addBirdAgent(chunk,species,index,homeX,homeZ,homeY,seed,phaseOffset=0){
   const body=makeBirdBody(species,seed),r=rng(seed^0x3c6ef372);
-  const radius=species.orbit*(.72+r()*.62),orbit=r()*6.28+phaseOffset,dir=r()<.5?-1:1;
-  const wx=homeX+Math.cos(orbit)*radius,wz=homeZ+Math.sin(orbit)*radius;
+  const style=clamp(species.flightStyle+(r()-.5)*.18,0,1),soar=clamp(species.soar+(body.wingMul-1)*.3+(r()-.5)*.08,0,1);
+  const sociality=clamp(species.sociality+(r()-.5)*.12,0,1),migration=clamp(species.migration+(r()-.5)*.14,0,1);
+  const radius=species.orbit*(.72+r()*.58),routeX=species.routeX*(.75+r()*.48),routeZ=species.routeZ*(.75+r()*.48);
+  const dir=r()<.5?-1:1,travel=r()*6.28+phaseOffset*(1-sociality*.82);
+  const pathScale=mix(radius,(routeX+routeZ)*.5,smooth(style)),speed=species.speed*(.82+r()*.34)*mix(1,.84,soar);
+  const angular=dir*speed/Math.max(12,pathScale)*( .78+r()*.32);
+  const vertical=mix(1.5,9,style)*( .7+r()*.6),phase=r()*6.28;
+  const localX=Math.cos(travel)*radius,localZ=Math.sin(travel)*radius;
+  const wideX=Math.cos(travel*.43+phase)*routeX+Math.cos(travel*1.11-phase)*routeX*.16;
+  const wideZ=Math.sin(travel*.31+phase)*routeZ+Math.sin(travel*.89+phase)*routeZ*.18;
+  const blend=smooth(style),wx=homeX+mix(localX,wideX,blend),wz=homeZ+mix(localZ,wideZ,blend);
   const wy=Math.max(homeY+(r()-.5)*5,height(wx,wz)+species.clearance);
   const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE;
-  body.root.position.set(wx-baseX,wy,wz-baseZ);body.root.rotation.y=orbit+Math.PI*.5;chunk.birds.add(body.root);
+  body.root.position.set(wx-baseX,wy,wz-baseZ);body.root.rotation.y=travel+Math.PI*.5;chunk.birds.add(body.root);
   const agent={chunk,species,group:body.root,visual:body.visual,leftWing:body.leftPivot,rightWing:body.rightPivot,
-    homeX,homeZ,homeY,radius,orbit,dir,angular:dir*species.speed/radius*(.7+r()*.35),
-    vertical:2+r()*6,phase:r()*6.28,flapPhase:r()*6.28,random:r};
+    homeX,homeZ,homeY,radius,routeX,routeZ,travel,dir,angular,vertical,phase,
+    style,soar,sociality,migration,speed,
+    flapRate:species.flapRate*(.82+r()*.34),flapAmp:species.flapAmp*(.84+r()*.3),glide:clamp(species.glide+(r()-.5)*.1,0,.97),
+    flapPhase:r()*6.28,random:r,lastYaw:body.root.rotation.y};
   chunk.birdAgents.push(agent);birdAgents.push(agent);
 }
 function populateChunkBirds(chunk){
@@ -474,24 +501,39 @@ function populateChunkBirds(chunk){
     const r=rng((chunkSeed(cx,cz,0x74e1)^0x7f4a7c15)>>>0),e=faunaEcology(ax,az),airField=fbm(ax*.0014-187,az*.0014+263);
     if(r()>clamp(.24+e.life*.34+airField*.35,0,.78))continue;
     const weights=birdCatalog.map(sp=>(.42+.58*(1-Math.abs(e.forest-sp.forestAffinity)))*(.58+.42*(1-Math.abs(e.moisture-sp.waterAffinity))));
-    let total=weights.reduce((a,b)=>a+b,0),pick=r()*total,index=0;for(;index<weights.length-1;index++){pick-=weights[index];if(pick<=0)break;}
+    let total=weights.reduce((aa,bb)=>aa+bb,0),pick=r()*total,index=0;for(;index<weights.length-1;index++){pick-=weights[index];if(pick<=0)break;}
     const species=birdCatalog[index],count=species.flockMin+Math.floor(r()*(species.flockMax-species.flockMin+1));
     const homeY=height(ax,az)+species.altitude*(.82+r()*.4);
+    const homeJitter=mix(10,2,species.sociality),phaseGap=mix(.42,.06,species.sociality);
     for(let n=0;n<count;n++){
       const seed=(chunkSeed(chunk.cx,chunk.cz,0x1f83)^Math.imul(cx+19,0x85ebca6b)^Math.imul(cz-29,0xc2b2ae35)^Math.imul(n+1,0x27d4eb2f)^Math.imul(index+1,0x165667b1))>>>0;
-      addBirdAgent(chunk,species,index,ax+(r()-.5)*8,az+(r()-.5)*8,homeY,seed,n*.22);
+      addBirdAgent(chunk,species,index,ax+(r()-.5)*homeJitter,az+(r()-.5)*homeJitter,homeY+(r()-.5)*mix(7,2,species.sociality),seed,n*phaseGap);
     }
   }
   const playerCx=Math.floor(cam.position.x/CHUNK_SIZE),playerCz=Math.floor(cam.position.z/CHUNK_SIZE);
-  if(!birdStarterPlaced&&chunk.cx===playerCx&&chunk.cz===playerCz&&chunk.birdAgents.length<3){
-    const r=rng(chunkSeed(chunk.cx,chunk.cz,0xb529)),angle=r()*6.28,dist=34+r()*32;
+  if(!birdStarterPlaced&&chunk.cx===playerCx&&chunk.cz===playerCz&&chunk.birdAgents.length<4){
+    const r=rng(chunkSeed(chunk.cx,chunk.cz,0xb529)),angle=r()*6.28,dist=34+r()*26;
     const ax=clamp(cam.position.x+Math.cos(angle)*dist,baseX+18,baseX+CHUNK_SIZE-18);
     const az=clamp(cam.position.z+Math.sin(angle)*dist,baseZ+18,baseZ+CHUNK_SIZE-18);
-    const index=Math.floor(r()*birdCatalog.length),species=birdCatalog[index],count=6+Math.floor(r()*5);
-    const homeY=Math.max(cam.position.y+17,height(ax,az)+18+species.altitude*.45);
-    for(let n=0;n<count;n++){
-      const seed=(chunkSeed(chunk.cx,chunk.cz,0x91e1)^Math.imul(n+1,0x27d4eb2f)^Math.imul(index+1,0x165667b1))>>>0;
-      addBirdAgent(chunk,species,index,ax+(r()-.5)*5,az+(r()-.5)*5,homeY,seed,n*.28);
+    let socialIndex=0,soarIndex=0,socialScore=-1,soarScore=-1;
+    birdCatalog.forEach((sp,i)=>{
+      if(sp.sociality>socialScore){socialScore=sp.sociality;socialIndex=i;}
+      const score=sp.soar*.55+sp.migration*.45;if(score>soarScore){soarScore=score;soarIndex=i;}
+    });
+    const social=birdCatalog[socialIndex],flockCount=Math.max(5,Math.min(9,social.flockMax));
+    const flockY=Math.max(cam.position.y+16,height(ax,az)+14+social.altitude*.38);
+    for(let n=0;n<flockCount;n++){
+      const seed=(chunkSeed(chunk.cx,chunk.cz,0x91e1)^Math.imul(n+1,0x27d4eb2f)^Math.imul(socialIndex+1,0x165667b1))>>>0;
+      addBirdAgent(chunk,social,socialIndex,ax+(r()-.5)*3,az+(r()-.5)*3,flockY+(r()-.5)*2,seed,n*.07);
+    }
+    const soarer=birdCatalog[soarIndex],soarAngle=angle+1.2+r()*.8,soarDist=45+r()*26;
+    const sx=clamp(cam.position.x+Math.cos(soarAngle)*soarDist,baseX+20,baseX+CHUNK_SIZE-20);
+    const sz=clamp(cam.position.z+Math.sin(soarAngle)*soarDist,baseZ+20,baseZ+CHUNK_SIZE-20);
+    const soarY=Math.max(cam.position.y+25,height(sx,sz)+22+soarer.altitude*.45);
+    const soarCount=soarIndex===socialIndex?1:1+(r()<.25?1:0);
+    for(let n=0;n<soarCount;n++){
+      const seed=(chunkSeed(chunk.cx,chunk.cz,0x7ab9)^Math.imul(n+1,0x85ebca6b)^Math.imul(soarIndex+1,0xc2b2ae35))>>>0;
+      addBirdAgent(chunk,soarer,soarIndex,sx,sz,soarY,seed,n*.6);
     }
     birdStarterPlaced=true;
   }
@@ -506,21 +548,34 @@ function updateBirds(dt){
   for(const a of birdAgents){
     const baseX=a.chunk.cx*CHUNK_SIZE,baseZ=a.chunk.cz*CHUNK_SIZE;
     const oldX=baseX+a.group.position.x,oldY=a.group.position.y,oldZ=baseZ+a.group.position.z;
-    a.orbit+=a.angular*dt;
-    const wobble=Math.sin(a.orbit*1.73+a.phase)*a.radius*.18;
-    const wx=a.homeX+Math.cos(a.orbit)*a.radius+Math.cos(a.orbit*.47+a.phase)*wobble;
-    const wz=a.homeZ+Math.sin(a.orbit)*a.radius+Math.sin(a.orbit*.61+a.phase)*wobble;
-    const terrain=height(wx,wz),wy=Math.max(a.homeY+Math.sin(a.orbit*1.31+a.phase)*a.vertical,terrain+a.species.clearance);
+    a.travel+=a.angular*dt;
+    const localWobble=Math.sin(a.travel*1.73+a.phase)*a.radius*.16;
+    const localX=Math.cos(a.travel)*a.radius+Math.cos(a.travel*.47+a.phase)*localWobble;
+    const localZ=Math.sin(a.travel)*a.radius+Math.sin(a.travel*.61+a.phase)*localWobble;
+    const wideX=Math.cos(a.travel*.43+a.phase)*a.routeX+Math.cos(a.travel*1.11-a.phase)*a.routeX*.16;
+    const wideZ=Math.sin(a.travel*.31+a.phase)*a.routeZ+Math.sin(a.travel*.89+a.phase)*a.routeZ*.18;
+    const blend=smooth(a.style),wx=a.homeX+mix(localX,wideX,blend),wz=a.homeZ+mix(localZ,wideZ,blend);
+    const terrain=height(wx,wz),verticalWave=Math.sin(a.travel*mix(1.35,.48,a.style)+a.phase)*a.vertical;
+    const wy=Math.max(a.homeY+verticalWave,terrain+a.species.clearance);
     a.group.position.set(wx-baseX,wy,wz-baseZ);
     const dx=wx-oldX,dz=wz-oldZ,dy=wy-oldY;
-    if(dx*dx+dz*dz>1e-7)a.group.rotation.y=Math.atan2(dx,dz);
-    a.visual.rotation.z=clamp(-a.angular*a.radius/a.species.speed*.18,-.28,.28)+Math.sin(a.orbit*.7+a.phase)*.035;
-    a.visual.rotation.x=clamp(-dy*.14,-.18,.18);
-    a.flapPhase+=dt*a.species.flapRate*6.28;
-    const glide=.45+.55*Math.sin(a.flapPhase*.13+a.phase),amp=a.species.flapAmp*(1-a.species.glide*.62*Math.max(0,glide));
-    const flap=Math.sin(a.flapPhase)*amp;
-    a.leftWing.rotation.z=flap;a.rightWing.rotation.z=-flap;
-    a.visual.position.y=Math.sin(a.flapPhase*2)*.025*a.species.size;
+    if(dx*dx+dz*dz>1e-7){
+      const yaw=Math.atan2(dx,dz),yawDiff=Math.atan2(Math.sin(yaw-a.lastYaw),Math.cos(yaw-a.lastYaw));
+      a.group.rotation.y=yaw;a.lastYaw=yaw;
+      a.visual.rotation.z=clamp(-yawDiff/Math.max(.01,dt)*.11,-.34,.34);
+    }
+    a.visual.rotation.x=clamp(-dy*.13,-.18,.18);
+    a.flapPhase+=dt*a.flapRate*6.28;
+    const cycle=.5+.5*Math.sin(a.flapPhase*.11+a.phase);
+    const active=smooth(clamp((cycle-a.glide)/Math.max(.05,1-a.glide),0,1));
+    const idleFlex=.035+.055*a.soar,amp=a.flapAmp*mix(.08,1,active);
+    const flap=Math.sin(a.flapPhase)*amp,dihedral=.035+a.soar*.11;
+    a.leftWing.rotation.z=dihedral+flap;a.rightWing.rotation.z=-dihedral-flap;
+    a.visual.position.y=Math.sin(a.flapPhase*2)*.018*a.species.size*mix(1,.35,a.soar);
+    if(active<.12){
+      a.leftWing.rotation.z+=Math.sin(a.flapPhase*.19+a.phase)*idleFlex;
+      a.rightWing.rotation.z-=Math.sin(a.flapPhase*.19+a.phase)*idleFlex;
+    }
   }
 }
 function faunaEcology(x,z,y=height(x,z)){
