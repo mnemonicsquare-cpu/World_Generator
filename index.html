@@ -576,7 +576,7 @@ function createChunk(cx,cz,detailed){
   const terrain=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));terrain.receiveShadow=true;group.add(terrain);
   const chunk={key,cx,cz,group,terrain,flora:null,fauna:null,faunaAgents:null,stats:null};chunks.set(key,chunk);if(detailed)populateChunkFlora(chunk);return chunk;
 }
-function removeChunk(key){const chunk=chunks.get(key);if(!chunk)return;scene.remove(chunk.group);disposeTree(chunk.group);chunks.delete(key)}
+function removeChunk(key){const chunk=chunks.get(key);if(!chunk)return;removeChunkFauna(chunk);scene.remove(chunk.group);disposeTree(chunk.group);chunks.delete(key)}
 function scheduleChunks(force=false){
   const cx=Math.floor(cam.position.x/CHUNK_SIZE),cz=Math.floor(cam.position.z/CHUNK_SIZE);chunkX=cx;chunkZ=cz;
   const wanted=new Map,order=[];
