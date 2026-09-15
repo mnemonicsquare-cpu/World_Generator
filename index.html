@@ -1,6 +1,6 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Иные миры</title><style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;min-height:100dvh;overflow:hidden;background:#071018;color:#fff;font-family:system-ui}canvas{display:block;touch-action:none;width:100vw!important;height:100dvh!important}#hud{position:fixed;inset:0;pointer-events:none;text-shadow:0 2px 14px #000}header{position:absolute;top:22px;left:26px}h1{font:400 26px Georgia;margin:0 0 6px}p{margin:3px 0;color:#ffffffc7;font-size:13px}footer{position:absolute;right:22px;bottom:20px;pointer-events:auto}.ui{color:#fff;background:#0a1621d9;border:1px solid #ffffff42;border-radius:7px;padding:10px 13px;backdrop-filter:blur(10px)}button{cursor:pointer}button:hover{background:#293c4b}#menuToggle{min-width:86px}#menuPanel{position:absolute;right:0;bottom:calc(100% + 8px);width:190px;display:none;gap:7px;padding:9px;background:#07131edb;border:1px solid #ffffff33;border-radius:10px;box-shadow:0 12px 34px #0008;backdrop-filter:blur(14px)}#menuPanel.open{display:grid}#menuPanel .ui{width:100%;text-align:left}#menuPanel label{display:grid;gap:4px;color:#ffffffb8;font-size:11px}#menuPanel input{width:100%}.cross{position:absolute;top:50%;left:50%;width:5px;height:5px;border-radius:50%;background:#ffffffa0}#cinemaExit{display:none;position:fixed;z-index:6;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));width:42px;height:42px;padding:0;border-radius:50%;opacity:.32;font-size:18px}body.cinema #hud{display:none}body.cinema #cinemaExit{display:block}#start{position:fixed;inset:0;z-index:3;display:grid;place-items:center;text-align:center;background:#071018e8;transition:.5s}#start div{max-width:480px;padding:25px}#start h2{font:400 38px Georgia;margin:0 0 15px}#start p{line-height:1.7;margin-bottom:20px}.mobileHint,#mobile{display:none}#mobile{position:fixed;inset:0;width:100vw;height:100dvh;z-index:2;pointer-events:none;touch-action:none}#stick{position:absolute;left:24px;bottom:25px;width:116px;height:116px;border:2px solid #ffffff45;border-radius:50%;background:#07101870;backdrop-filter:blur(6px);pointer-events:auto}#stick i{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px;border-radius:50%;background:#ffffff45;box-shadow:0 0 20px #0008;transform:translate(0,0)}#mobileActions{position:absolute;right:24px;bottom:28px;display:flex;align-items:flex-end;gap:14px;pointer-events:auto}#mobileActions button{width:66px;height:66px;padding:0;border-radius:50%;font-size:25px;font-weight:700;touch-action:none}#mjump{transform:translateY(-35px)}@media(max-width:650px){header{left:14px}footer{right:12px;bottom:12px}}@media(pointer:coarse){#mobile,.mobileHint{display:block}.desktopHint{display:none}footer{bottom:158px;right:12px}.ui{padding:9px 11px}header{top:14px}}@media(pointer:coarse) and (orientation:landscape){header{top:max(8px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left))}footer{top:max(8px,env(safe-area-inset-top));bottom:auto;right:max(100px,env(safe-area-inset-right))}#menuPanel{top:calc(100% + 8px);bottom:auto}.ui{padding:7px 9px}#stick{left:max(18px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));width:104px;height:104px}#mobileActions{right:max(18px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom))}#mobileActions button{width:58px;height:58px}#mjump{transform:translateY(-18px)}}</style></head><body>
-<div id="start"><div><h2>Иные миры</h2><p>Каждый код создаёт собственный ландшафт, флору, руины, погоду и небо.</p><button class="ui" id="enter">Войти в мир</button><p><span class="desktopHint">WASD — идти · мышь — смотреть · Shift — суперускорение · пробел — прыжок</span><span class="mobileHint">Стик — идти · свайп справа — смотреть · ↑ — прыжок · ⚡ — суперускорение</span></p></div></div>
+<div id="start"><div><h2>Иные миры</h2><p>Каждый код создаёт собственный бескрайний ландшафт, флору, руины, погоду и небо.</p><button class="ui" id="enter">Войти в мир</button><p><span class="desktopHint">WASD — идти · мышь — смотреть · Shift — суперускорение · пробел — прыжок</span><span class="mobileHint">Стик — идти · свайп справа — смотреть · ↑ — прыжок · ⚡ — суперускорение</span></p></div></div>
 <div id="mobile" aria-label="Сенсорное управление"><div id="stick"><i></i></div><div id="mobileActions"><button class="ui" id="mboost" aria-label="Суперускорение">⚡</button><button class="ui" id="mjump" aria-label="Прыжок">↑</button></div></div>
 <div id="hud"><header><h1 id="name">Создание мира</h1><p id="info"></p></header><i class="cross"></i><footer><button class="ui" id="menuToggle" aria-expanded="false">Меню</button><div id="menuPanel"><button class="ui" id="new">Новый мир</button><label>Код мира<input class="ui" id="seed" aria-label="Код мира"></label><button class="ui" id="sound">Звук: выкл.</button><button class="ui" id="photo">Снимок</button><button class="ui" id="night">День / ночь</button><button class="ui" id="cinema">Кинорежим</button></div></footer></div><button class="ui" id="cinemaExit" aria-label="Вернуть интерфейс" title="Вернуть интерфейс">◉</button>
 <script type="module">
@@ -8,8 +8,10 @@ import*as T from"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.j
 const $=s=>document.querySelector(s),clamp=T.MathUtils.clamp,mix=T.MathUtils.lerp,rend=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
 rend.setPixelRatio(Math.min(devicePixelRatio,1.7));rend.setSize(innerWidth,innerHeight);rend.toneMapping=T.ACESFilmicToneMapping;rend.toneMappingExposure=1.08;document.body.prepend(rend.domElement);
 const cam=new T.PerspectiveCamera(66,innerWidth/innerHeight,.1,1200);cam.rotation.order="YXZ";
-let scene,landMesh,water,G,rnd,weather,celestial,audio,sound=false,yaw=0,pitch=-.05,jump=0,grounded=true;
-const keys=new Set,clock=new T.Clock,temp=new T.Object3D,SIZE=820,SEG=170,STEP=SIZE/SEG;
+let scene,water,G,rnd,weather,celestial,audio,sound=false,yaw=0,pitch=-.05,jump=0,grounded=true;
+const keys=new Set,clock=new T.Clock,temp=new T.Object3D,CHUNK_SIZE=160,CHUNK_SEG=28,CHUNK_STEP=CHUNK_SIZE/CHUNK_SEG;
+const chunks=new Map;let chunkQueue=[],chunkX=Infinity,chunkZ=Infinity,floraCatalog=[],worldPalette;
+const TERRAIN_RADIUS=matchMedia("(pointer:coarse)").matches?5:6,FLORA_RADIUS=2;
 let mobileForward=0,mobileSide=0,mobileBoost=false;
 const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost;
 function hash(s){let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(),16777619);return h>>>0}
@@ -17,6 +19,8 @@ function rng(s){return()=>{s|=0;s=s+0x6d2b79f5|0;let t=Math.imul(s^s>>>15,1|s);t
 function smooth(x){return x*x*(3-2*x)}
 function noise(x,z){let X=Math.floor(x),Z=Math.floor(z),u=smooth(x-X),v=smooth(z-Z);function n(a,b){let q=Math.imul(a,374761393)^Math.imul(b,668265263)^G.hash;q=Math.imul(q^q>>>13,1274126177);return((q^q>>>16)>>>0)/4294967295}return mix(mix(n(X,Z),n(X+1,Z),u),mix(n(X,Z+1),n(X+1,Z+1),u),v)}
 function fbm(x,z,o=5){let v=0,a=.5,t=0;for(let i=0;i<o;i++){v+=noise(x,z)*a;t+=a;x=x*2.03+17;z=z*2.03-9;a*=.5}return v/t}
+function worldRandom(x,z,salt=0){let q=Math.imul(x|0,374761393)^Math.imul(z|0,668265263)^G.hash^salt;q=Math.imul(q^q>>>13,1274126177);return((q^q>>>16)>>>0)/4294967296}
+function chunkSeed(x,z,salt=0){return Math.floor(worldRandom(x,z,salt)*4294967295)>>>0}
 function col(h,s,l){return new T.Color().setHSL((h%1+1)%1,s,l)}
 function mat(c,e=0){let m=new T.MeshStandardMaterial({color:c,roughness:.9,flatShading:true});if(e){m.emissive.copy(c);m.emissiveIntensity=e}return m}
 function mesh(g,m,x,y,z,sx=1,sy=1,sz=1){let o=new T.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);scene.add(o);return o}
@@ -24,7 +28,7 @@ function shape(k,x,z){let c=Math.cos(G.angle),s=Math.sin(G.angle),u=x*c-z*s,v=x*
 if(k===0)return Math.pow(Math.max(0,(n-.39)*2.7),1.55)*G.relief-12;
 if(k===1){let r=n*5,q=Math.floor(r)+smooth(clamp(((r%1)-.25)/.5,0,1));return(q/5-.38)*G.relief}
 if(k===2)return(n-.46)*G.relief*.45+Math.pow(1-Math.abs(Math.sin(u*G.freq*8+n*8)),1.7)*G.relief*.65;
-if(k===3){let h=(n-.46)*G.relief*.26;for(const c of G.craters){let d=Math.hypot(x-c.x,z-c.z)/c.r;h+=Math.exp(-(((d-1)/.18)**2))*c.d*.55-Math.exp(-((d/.7)**4))*c.d}return h}
+if(k===3){let h=(n-.46)*G.relief*.26,cell=180,cx=Math.floor(x/cell),cz=Math.floor(z/cell);for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){let X=cx+dx,Z=cz+dz;if(worldRandom(X,Z,0x391a)<.44)continue;let px=(X+worldRandom(X,Z,0x711))*cell,pz=(Z+worldRandom(X,Z,0x9b3))*cell,r=25+worldRandom(X,Z,0x4d1)*65,deep=(2+worldRandom(X,Z,0x8c7)*28)*(.12+G.relief/110),d=Math.hypot(x-px,z-pz)/r;h+=Math.exp(-(((d-1)/.18)**2))*deep*.55-Math.exp(-((d/.7)**4))*deep}return h}
 if(k===4){let w=.5+.5*Math.sin(u*G.freq*7+fbm(u*G.freq,v*G.freq*.5)*9);return w**2.5*G.relief*.3+(n-.42)*G.relief*.18}
 let ch=Math.abs(Math.sin(u*G.freq*3+fbm(u*G.freq,v*G.freq)*5));return(n-.41)*G.relief-Math.exp(-ch*ch*28)*(2+G.relief*.2)}
 function height(x,z){
@@ -51,10 +55,11 @@ function floraDensity(x,z,y){
   const moisture=clamp((y-G.water)/18,0,1);
   return smooth(clamp(G.forestCover+deviation+(moisture-.5)*.1,0,1));
 }
-function ground(x,z){let gx=clamp((x+SIZE/2)/STEP,0,SEG-.001),gz=clamp((z+SIZE/2)/STEP,0,SEG-.001),X=Math.floor(gx),Z=Math.floor(gz),u=gx-X,v=gz-Z,a=(Z*(SEG+1)+X)*3+1,p=landMesh.geometry.attributes.position.array,A=p[a],B=p[a+3],C=p[a+(SEG+1)*3],D=p[a+(SEG+2)*3];return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
-function clear(){if(!scene)return;let gs=new Set,ms=new Set;scene.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose())}
-function instances(g,m,a){if(!a.length){g.dispose();m.dispose();return;}let o=new T.InstancedMesh(g,m,a.length);a.forEach((v,i)=>{temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);temp.rotation.set(v[6]||0,v[7]||0,v[8]||0);temp.updateMatrix();o.setMatrixAt(i,temp.matrix)});scene.add(o)}
-function instancesQ(g,m,a){
+function ground(x,z){let X=Math.floor(x/CHUNK_STEP)*CHUNK_STEP,Z=Math.floor(z/CHUNK_STEP)*CHUNK_STEP,u=(x-X)/CHUNK_STEP,v=(z-Z)/CHUNK_STEP,A=height(X,Z),B=height(X+CHUNK_STEP,Z),C=height(X,Z+CHUNK_STEP),D=height(X+CHUNK_STEP,Z+CHUNK_STEP);return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
+function disposeTree(root){let gs=new Set,ms=new Set;root.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose())}
+function clear(){if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity}
+function instances(g,m,a,parent=scene){if(!a.length){g.dispose();m.dispose();return null;}let o=new T.InstancedMesh(g,m,a.length);a.forEach((v,i)=>{temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);temp.rotation.set(v[6]||0,v[7]||0,v[8]||0);temp.updateMatrix();o.setMatrixAt(i,temp.matrix)});o.instanceMatrix.setUsage(T.StaticDrawUsage);parent.add(o);return o}
+function instancesQ(g,m,a,parent=scene){
   if(!a.length){g.dispose();m.dispose();return;}
   const o=new T.InstancedMesh(g,m,a.length),tint=new T.Color();let colored=false;
   a.forEach((v,i)=>{
@@ -62,7 +67,7 @@ function instancesQ(g,m,a){
     temp.quaternion.set(v[6],v[7],v[8],v[9]);temp.updateMatrix();o.setMatrixAt(i,temp.matrix);
     if(v.length>=13){tint.setRGB(v[10],v[11],v[12]);o.setColorAt(i,tint);colored=true;}
   });
-  o.instanceMatrix.setUsage(T.StaticDrawUsage);if(colored)o.instanceColor.needsUpdate=true;scene.add(o);
+  o.instanceMatrix.setUsage(T.StaticDrawUsage);if(colored)o.instanceColor.needsUpdate=true;parent.add(o);return o;
 }
 function expandLSystem(axiom,rule,iterations){
   let sentence=axiom;
@@ -133,12 +138,12 @@ function makeFloraCatalog(){
 function leafGeometry(form){
   return form===0?new T.IcosahedronGeometry(1,0):form===1?new T.ConeGeometry(1,1.8,6):form===2?new T.SphereGeometry(1,7,5,0,6.28,0,Math.PI/2):form===3?new T.OctahedronGeometry(1):new T.CapsuleGeometry(.45,1.2,3,6);
 }
-function growLSystemFlora(land,leaf,rock){
-  const catalog=makeFloraCatalog(),groups=catalog.map(()=>({branches:[],foliage:[]})),rocks=[];
-  const r=rng(G.hash^0x91b44d),yawQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3(),yAxis=new T.Vector3(0,1,0);
-  const plantLimit=24+Math.floor(Math.pow(G.forestCover,.82)*1150);let plants=0;
-  for(let i=0;i<6200;i++){
-    const x=(r()-.5)*790,z=(r()-.5)*790,y=height(x,z);
+function growLSystemFlora(parent,cx,cz,land,leaf,rock,catalog=floraCatalog){
+  const groups=catalog.map(()=>({branches:[],foliage:[]})),rocks=[],baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE;
+  const r=rng(chunkSeed(cx,cz,0x91b44d)),yawQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3(),yAxis=new T.Vector3(0,1,0);
+  const plantLimit=1+Math.floor((24+Math.pow(G.forestCover,.82)*1150)*(CHUNK_SIZE*CHUNK_SIZE)/(790*790));let plants=0;
+  for(let i=0;i<270;i++){
+    const x=baseX+r()*CHUNK_SIZE,z=baseZ+r()*CHUNK_SIZE,y=height(x,z);
     const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
     const path=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve);
     const localDensity=floraDensity(x,z,y);
@@ -152,54 +157,101 @@ function growLSystemFlora(land,leaf,rock){
         p.copy(branch.mid).multiplyScalar(scale).applyQuaternion(yawQ);
         worldQ.copy(yawQ).multiply(branch.q);
         const radius=h*(.014+G.slender*.007)*species.branchScale*Math.pow(.61,branch.depth);
-        group.branches.push([x+p.x,y+p.y,z+p.z,radius,branch.length*scale,radius,worldQ.x,worldQ.y,worldQ.z,worldQ.w]);
+        group.branches.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,radius,branch.length*scale,radius,worldQ.x,worldQ.y,worldQ.z,worldQ.w]);
       }
       for(const tip of prototype.tips){
         p.copy(tip.position).multiplyScalar(scale).applyQuaternion(yawQ);
         worldQ.copy(yawQ).multiply(tip.q);
         const s=h*(.035+G.slender*.035)*species.leafScale*(.8+r()*.45);
         const tint=leaf.clone().offsetHSL(species.hueShift+treeHue+(r()-.5)*species.leafHueVariance,.015,species.lightShift+treeLight+(r()-.5)*.07);
-        group.foliage.push([x+p.x,y+p.y,z+p.z,s,s*(species.leafForm===2?.42:.65+G.slender*.35),s,worldQ.x,worldQ.y,worldQ.z,worldQ.w,tint.r,tint.g,tint.b]);
+        group.foliage.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,s,s*(species.leafForm===2?.42:.65+G.slender*.35),s,worldQ.x,worldQ.y,worldQ.z,worldQ.w,tint.r,tint.g,tint.b]);
       }
       plants++;
     }else if(y>G.water&&r()<.06+(1-localDensity)*.18){
-      const s=.5+r()*3;rocks.push([x,y+s*.3,z,s,s*(.6+G.slender),s*.8,r()*.2,r()*6.28,r()*.2]);
+      const s=.5+r()*3;rocks.push([x-baseX,y+s*.3,z-baseZ,s,s*(.6+G.slender),s*.8,r()*.2,r()*6.28,r()*.2]);
     }
   }
   catalog.forEach((species,i)=>{
     const branchColor=land.clone().multiplyScalar(.48+species.branchScale*.1);
-        instancesQ(new T.CylinderGeometry(1,1,1,5),mat(branchColor),groups[i].branches);
-    instancesQ(leafGeometry(species.leafForm),mat(new T.Color(0xffffff),species.glow),groups[i].foliage);
+    instancesQ(new T.CylinderGeometry(1,1,1,5),mat(branchColor),groups[i].branches,parent);
+    instancesQ(leafGeometry(species.leafForm),mat(new T.Color(0xffffff),species.glow),groups[i].foliage,parent);
   });
-  instances(new T.IcosahedronGeometry(1,0),mat(rock),rocks);
+  instances(new T.IcosahedronGeometry(1,0),mat(rock),rocks,parent);
   const generations=[...new Set(catalog.map(s=>s.iterations))].sort().join(",");
   return {plants,species:catalog.length,generations};
 }
-function growGroundFlora(land,leaf,accent){
-  const r=rng(G.hash^0x35a7c1),moss=[],stems=[],caps=[],flatQ=new T.Quaternion().setFromAxisAngle(new T.Vector3(1,0,0),-Math.PI/2);
-  const mossLimit=Math.floor((80+G.forestCover*720)*(.45+G.wet*.75));
-  const mushroomLimit=Math.floor((8+G.forestCover*150)*(.25+G.wet));
+function growGroundFlora(parent,cx,cz,land,leaf,accent){
+  const r=rng(chunkSeed(cx,cz,0x35a7c1)),moss=[],stems=[],caps=[],baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE,area=(CHUNK_SIZE*CHUNK_SIZE)/(780*780),flatQ=new T.Quaternion().setFromAxisAngle(new T.Vector3(1,0,0),-Math.PI/2);
+  const mossLimit=Math.floor((80+G.forestCover*720)*(.45+G.wet*.75)*area);
+  const mushroomLimit=Math.floor((8+G.forestCover*150)*(.25+G.wet)*area);
   let mossCount=0,mushroomCount=0;
-  for(let i=0;i<4200&&(mossCount<mossLimit||mushroomCount<mushroomLimit);i++){
-    const x=(r()-.5)*780,z=(r()-.5)*780,y=height(x,z),density=floraDensity(x,z,y);
+  for(let i=0;i<180&&(mossCount<mossLimit||mushroomCount<mushroomLimit);i++){
+    const x=baseX+r()*CHUNK_SIZE,z=baseZ+r()*CHUNK_SIZE,y=height(x,z),density=floraDensity(x,z,y);
     const slope=Math.hypot(height(x+1.2,z)-y,height(x,z+1.2)-y)/1.2;
     if(houseReserved(x,z)||y<G.water+.15||slope>.72)continue;
     if(mossCount<mossLimit&&r()<density*(.15+G.wet*.3)){
       const s=.35+r()*(1.2+density*2.4),tone=leaf.clone().multiplyScalar(.42+r()*.28).offsetHSL((r()-.5)*.018,-.08,(r()-.5)*.04);
-      moss.push([x,y+.025,z,s,.6+r()*.5,s,flatQ.x,flatQ.y,flatQ.z,flatQ.w,tone.r,tone.g,tone.b]);mossCount++;
+      moss.push([x-baseX,y+.025,z-baseZ,s,.6+r()*.5,s,flatQ.x,flatQ.y,flatQ.z,flatQ.w,tone.r,tone.g,tone.b]);mossCount++;
     }
     if(mushroomCount<mushroomLimit&&r()<density*G.wet*.095){
       const stem=.18+r()*(.35+density*.7),cap=.16+r()*(.25+density*.55);
       const capTone=accent.clone().lerp(leaf,.28+r()*.28).offsetHSL((r()-.5)*.025,-.04,(r()-.5)*.08);
-      stems.push([x,y+stem/2,z,cap*.28,stem,cap*.28,0,r()*6.28,0]);
-      caps.push([x,y+stem,z,cap,cap*(.32+r()*.24),cap,0,0,0,1,capTone.r,capTone.g,capTone.b]);mushroomCount++;
+      stems.push([x-baseX,y+stem/2,z-baseZ,cap*.28,stem,cap*.28,0,r()*6.28,0]);
+      caps.push([x-baseX,y+stem,z-baseZ,cap,cap*(.32+r()*.24),cap,0,0,0,1,capTone.r,capTone.g,capTone.b]);mushroomCount++;
     }
   }
   const mossMat=mat(new T.Color(0xffffff));mossMat.side=T.DoubleSide;
-  instancesQ(new T.CircleGeometry(1,8),mossMat,moss);
-  instances(new T.CylinderGeometry(.7,1,1,6),mat(land.clone().lerp(new T.Color(0xffffff),.28)),stems);
-  instancesQ(new T.SphereGeometry(1,9,5,0,Math.PI*2,0,Math.PI/2),mat(new T.Color(0xffffff),.015),caps);
+  instancesQ(new T.CircleGeometry(1,8),mossMat,moss,parent);
+  instances(new T.CylinderGeometry(.7,1,1,6),mat(land.clone().lerp(new T.Color(0xffffff),.28)),stems,parent);
+  instancesQ(new T.SphereGeometry(1,9,5,0,Math.PI*2,0,Math.PI/2),mat(new T.Color(0xffffff),.015),caps,parent);
   return {moss:mossCount,mushrooms:mushroomCount};
+}
+function populateChunkFlora(chunk){
+  if(chunk.flora)return;
+  const group=new T.Group();chunk.group.add(group);chunk.flora=group;
+  const trees=growLSystemFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.rock,floraCatalog);
+  const groundCover=growGroundFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.accent);
+  chunk.stats={plants:trees.plants,moss:groundCover.moss,mushrooms:groundCover.mushrooms};
+}
+function removeChunkFlora(chunk){
+  if(!chunk.flora)return;
+  chunk.group.remove(chunk.flora);disposeTree(chunk.flora);chunk.flora=null;chunk.stats=null;
+}
+function createChunk(cx,cz,detailed){
+  const key=cx+","+cz;if(chunks.has(key))return chunks.get(key);
+  const baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE,group=new T.Group();group.position.set(baseX,0,baseZ);scene.add(group);
+  const geo=new T.PlaneGeometry(CHUNK_SIZE,CHUNK_SIZE,CHUNK_SEG,CHUNK_SEG);geo.rotateX(-Math.PI/2);
+  const pos=geo.attributes.position,colors=new Float32Array(pos.count*3),normals=new Float32Array(pos.count*3),normal=new T.Vector3();
+  for(let i=0;i<pos.count;i++){
+    const x=baseX+pos.getX(i)+CHUNK_SIZE/2,z=baseZ+pos.getZ(i)+CHUNK_SIZE/2,y=height(x,z);
+    pos.setXYZ(i,pos.getX(i)+CHUNK_SIZE/2,y,pos.getZ(i)+CHUNK_SIZE/2);
+    const hx=height(x-CHUNK_STEP,z)-height(x+CHUNK_STEP,z),hz=height(x,z-CHUNK_STEP)-height(x,z+CHUNK_STEP);
+    normal.set(hx,CHUNK_STEP*2,hz).normalize();normals[i*3]=normal.x;normals[i*3+1]=normal.y;normals[i*3+2]=normal.z;
+    const slope=Math.hypot(hx,hz)/(CHUNK_STEP*2),c=worldPalette.land.clone().lerp(worldPalette.rock,clamp(slope*.6+(y-25)/80,0,1));
+    c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;
+  }
+  geo.setAttribute("normal",new T.BufferAttribute(normals,3));geo.setAttribute("color",new T.BufferAttribute(colors,3));
+  const terrain=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));terrain.receiveShadow=true;group.add(terrain);
+  const chunk={key,cx,cz,group,terrain,flora:null,stats:null};chunks.set(key,chunk);if(detailed)populateChunkFlora(chunk);return chunk;
+}
+function removeChunk(key){const chunk=chunks.get(key);if(!chunk)return;scene.remove(chunk.group);disposeTree(chunk.group);chunks.delete(key)}
+function scheduleChunks(force=false){
+  const cx=Math.floor(cam.position.x/CHUNK_SIZE),cz=Math.floor(cam.position.z/CHUNK_SIZE);chunkX=cx;chunkZ=cz;
+  const wanted=new Map,order=[];
+  for(let dz=-TERRAIN_RADIUS;dz<=TERRAIN_RADIUS;dz++)for(let dx=-TERRAIN_RADIUS;dx<=TERRAIN_RADIUS;dx++){
+    const d=Math.max(Math.abs(dx),Math.abs(dz)),x=cx+dx,z=cz+dz,key=x+","+z,detailed=d<=FLORA_RADIUS;
+    wanted.set(key,{x,z,d,detailed});order.push({key,x,z,d,detailed});
+  }
+  for(const key of [...chunks.keys()])if(!wanted.has(key))removeChunk(key);
+  for(const [key,chunk] of chunks){const detail=wanted.get(key)?.detailed;if(!detail&&chunk.flora)removeChunkFlora(chunk)}
+  chunkQueue=order.filter(c=>!chunks.has(c.key)||c.detailed&&!chunks.get(c.key).flora).map(c=>({...c,upgrade:chunks.has(c.key)})).sort((a,b)=>a.d-b.d);
+  if(force)while(chunkQueue.length&&chunkQueue[0].d<=1){const c=chunkQueue.shift();createChunk(c.x,c.z,c.detailed)}
+}
+function updateChunks(){
+  const cx=Math.floor(cam.position.x/CHUNK_SIZE),cz=Math.floor(cam.position.z/CHUNK_SIZE);
+  if(cx!==chunkX||cz!==chunkZ)scheduleChunks();
+  for(let i=0;i<2&&chunkQueue.length;i++){const c=chunkQueue.shift();if(c.upgrade)populateChunkFlora(chunks.get(c.key));else createChunk(c.x,c.z,c.detailed)}
+  if(water){water.position.x=cam.position.x;water.position.z=cam.position.z;}
 }
 function ruin(x,z,type,stone,accent){let a=rnd()*6.28,box=new T.BoxGeometry(1,1,1),column=new T.CylinderGeometry(.8,1,1,7);function p(px,pz,w,h,d,g=box,up=0){let X=x+Math.cos(a)*px-Math.sin(a)*pz,Z=z+Math.sin(a)*px+Math.cos(a)*pz,o=mesh(g,stone,X,ground(X,Z)+h/2+up,Z,w,h,d);o.rotation.y=a}
 if(type===0){for(let j=-2;j<=2;j++)for(const side of[-1,1])if(rnd()>.25)p(side*5,j*4,1,5+rnd()*5,1,column);p(0,-9,11,.7,1)}
@@ -214,8 +266,8 @@ function makeWeather(type,c){
   const a=new Float32Array(n*stride),speed=new Float32Array(n),streak=.65+r()*1.5;
   for(let i=0;i<n;i++){
     const k=i*stride,x=(r()-.5)*110,y=r()*70-22,z=(r()-.5)*110;
-    a[k]=x;a[k+1]=y;a[k+2]=z;speed[i]=.55+r()*.9;
-    if(rain){a[k+3]=x;a[k+4]=y+streak;a[k+5]=z;}
+    a[k]=cam.position.x+x;a[k+1]=cam.position.y+y;a[k+2]=cam.position.z+z;speed[i]=.55+r()*.9;
+    if(rain){a[k+3]=a[k];a[k+4]=a[k+1]+streak;a[k+5]=a[k+2];}
   }
   const g=new T.BufferGeometry();g.setAttribute("position",new T.BufferAttribute(a,3));
   let material,points;
@@ -229,7 +281,7 @@ function makeWeather(type,c){
   const windAngle=r()*Math.PI*2,blizzard=type==="snow"?r():0;
   points.frustumCulled=false;scene.add(points);
   return {
-    type,points,a,speed,stride,streak,count:n,phase:r()*6.28,strength:.32+r()*.68,windSpeed,
+    type,points,a,speed,stride,streak,count:n,phase:r()*6.28,strength:.32+r()*.68,windSpeed,random:r,
     windX:Math.cos(windAngle),windZ:Math.sin(windAngle),
     drift:type==="snow"?2+blizzard*24:type==="dust"?5+r()*10:type==="rain"?.15+r()*.75:.08+r()*.3,
     fall:type==="rain"?30+r()*22:type==="snow"?.55+(1-blizzard)*4:type==="dust"?.08+r()*.35:0,
@@ -439,14 +491,13 @@ function unstickFromBuildings(){
     }
     if(!shifted)break;
   }
-  cam.position.x=clamp(cam.position.x,-395,395);cam.position.z=clamp(cam.position.z,-395,395);
 }
 function walkFrame(dt,dx,dz){
   unstickFromBuildings();
   let feet=cam.position.y-1.75;
   for(const axis of ["x","z"]){
-    const x=clamp(cam.position.x+(axis==="x"?dx:0),-395,395);
-    const z=clamp(cam.position.z+(axis==="z"?dz:0),-395,395);
+    const x=cam.position.x+(axis==="x"?dx:0);
+    const z=cam.position.z+(axis==="z"?dz:0);
     const old=supportAt(cam.position.x,cam.position.z,feet);
     const next=supportAt(x,z,feet);
     if(next-old<=Math.max(.23,Math.hypot(dx,dz)*1.25)&&!bodyBlocked(x,z,Math.max(feet,next))){
@@ -469,7 +520,7 @@ path:rnd()*100-50,curve:8+rnd()*72,wet:rnd(),slender:rnd(),form:Math.floor(rnd()
 regionStrength:Math.pow(rnd(),.72),regionScale:.0015+rnd()*.006,regionWidth:.12+rnd()*.22,
 terrainVariation:Math.pow(rnd(),1.15),roughness:.08+Math.pow(rnd(),1.3)*3.1,pathRelief:.12+rnd()*.88,
 forestCover:Math.pow(coverSeed,.72),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
-forestContrast:.25+rnd()*1.75,craters:[]};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;for(let i=0;i<15;i++)G.craters.push({x:(rnd()-.5)*760,z:(rnd()-.5)*760,r:25+rnd()*65,d:(2+rnd()*28)*(.12+G.relief/110)});
+forestContrast:.25+rnd()*1.75};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;
 const fogR=rng(G.hash^0x18f2a7),foggy=fogR()<.22+G.wet*.52;G.foggy=foggy;G.fogDensity=foggy?.00115+G.wet*.0018:.00011;
 const paletteR=rng(G.hash^0x6ca91),baseHue=G.hue,botanicalShift=(paletteR()-.5)*.11;
 let sky=col(baseHue,.2+paletteR()*.12,.46+paletteR()*.1),
@@ -479,14 +530,15 @@ rock=col(baseHue+botanicalShift*.12,.07+paletteR()*.09,.32+paletteR()*.12),
 leaf=col(baseHue+botanicalShift,.34+paletteR()*.18,.3+paletteR()*.13),
 accent=col(baseHue+(paletteR()<.72?.075:.48),.34+paletteR()*.16,.58+paletteR()*.12);
 scene=new T.Scene;scene.background=sky;scene.fog=new T.FogExp2(horizon,G.fogDensity);let hemi=new T.HemisphereLight(horizon,land,.9),light=new T.DirectionalLight(col(G.hue+.42,.3,.9),2);scene.add(hemi,light);
-planHomes();let geo=new T.PlaneGeometry(SIZE,SIZE,SEG,SEG);geo.rotateX(-Math.PI/2);let pos=geo.attributes.position,colors=[];for(let i=0;i<pos.count;i++){let x=pos.getX(i),z=pos.getZ(i),y=height(x,z);pos.setY(i,y);let slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2,c=land.clone().lerp(rock,clamp(slope*.6+(y-25)/80,0,1));c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors.push(c.r,c.g,c.b)}geo.setAttribute("color",new T.Float32BufferAttribute(colors,3));geo.computeVertexNormals();landMesh=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));scene.add(landMesh);
-let wg=new T.PlaneGeometry(SIZE,SIZE);wg.rotateX(-Math.PI/2);water=new T.Mesh(wg,new T.MeshStandardMaterial({color:col(G.hue+.08,.5,.3),metalness:.35,roughness:.2,transparent:true,opacity:.86}));water.position.y=G.water;scene.add(water);
-let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({color:col(G.hue+.42,.25,.9),fog:false}),-260,160,-600);for(let i=0;i<Math.floor(rnd()*4);i++){rnd();rnd();}
-let flora=growLSystemFlora(land,leaf,rock),undergrowth=growGroundFlora(land,leaf,accent);
+worldPalette={land,rock,leaf,accent};floraCatalog=makeFloraCatalog();planHomes();
 let spawn;for(let z=140;z>-160;z-=4){let x=G.path+Math.sin(z*.011+G.phase)*G.curve,y=ground(x,z);if(y>G.water+.8){spawn=[x,y+1.75,z];break}}if(!spawn)spawn=[G.path,Math.max(ground(G.path,120),G.water)+1.75,120];cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();
 let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
-buildHomes();const weatherRoll=rng(G.hash^0x57ea7)(),wt=kind===4?"dust":G.wet>.62?"rain":weatherRoll<.28?"snow":"spores";weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
-let names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · "+wx[wt]+": "+weather.count+" частиц · растительность: "+flora.plants+" растений, "+flora.species+" форм, поколения "+flora.generations+" · мхи: "+undergrowth.moss+" · грибы: "+undergrowth.mushrooms+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+buildHomes();
+let wg=new T.PlaneGeometry((TERRAIN_RADIUS*2+2)*CHUNK_SIZE,(TERRAIN_RADIUS*2+2)*CHUNK_SIZE);wg.rotateX(-Math.PI/2);water=new T.Mesh(wg,new T.MeshStandardMaterial({color:col(G.hue+.08,.5,.3),metalness:.35,roughness:.2,transparent:true,opacity:.86}));water.position.set(cam.position.x,G.water,cam.position.z);scene.add(water);
+let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({color:col(G.hue+.42,.25,.9),fog:false}),-260,160,-600);for(let i=0;i<Math.floor(rnd()*4);i++){rnd();rnd();}
+scheduleChunks(true);
+const weatherRoll=rng(G.hash^0x57ea7)(),wt=kind===4?"dust":G.wet>.62?"rain":weatherRoll<.28?"snow":"spores";weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
+let flora=[...chunks.values()].reduce((a,c)=>(a.plants+=c.stats?.plants||0,a.moss+=c.stats?.moss||0,a.mushrooms+=c.stats?.mushrooms||0,a),{plants:0,moss:0,mushrooms:0}),generations=[...new Set(floraCatalog.map(s=>s.iterations))].sort().join(","),names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · бескрайний · "+wx[wt]+": "+weather.count+" частиц · рядом: "+flora.plants+" растений, "+floraCatalog.length+" форм, поколения "+generations+" · мхи: "+flora.moss+" · грибы: "+flora.mushrooms+" · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
 function update(dt){
   const e=celestial;e.age+=dt;
   const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
@@ -499,8 +551,7 @@ function update(dt){
   e.light.position.set(Math.cos(a)*450,alt*500,-400);e.light.intensity=(.05+day*2.5)*(1-front*.45);
   e.sun.position.set(cam.position.x+Math.cos(a)*430,cam.position.y+alt*480,cam.position.z-650);e.sun.visible=alt>-.12;updateNightSky(e,day,front,top,h,tw);
 
-  const p=weather.a,type=weather.type,stride=weather.stride;
-  weather.points.position.copy(cam.position);
+  const p=weather.a,type=weather.type,stride=weather.stride,half=70,low=cam.position.y-24,high=cam.position.y+52;
   weather.points.material.opacity=front*(type==="rain"?.58:type==="spores"?.72:.66);
   for(let i=0;i<weather.speed.length;i++){
     const k=i*stride,s=weather.speed[i];
@@ -511,9 +562,11 @@ function update(dt){
       dy=Math.sin(e.age*.28+weather.phase+i*.37)*.2*dt;
     }
     p[k]+=dx;p[k+1]+=dy;p[k+2]+=dz;
-    if(p[k]>55)p[k]-=110;if(p[k]<-55)p[k]+=110;
-    if(p[k+2]>55)p[k+2]-=110;if(p[k+2]<-55)p[k+2]+=110;
-    if(p[k+1]<-22)p[k+1]+=70;if(p[k+1]>48)p[k+1]-=70;
+    let rx=p[k]-cam.position.x,rz=p[k+2]-cam.position.z;
+    if(rx>half)p[k]-=half*2;else if(rx<-half)p[k]+=half*2;
+    if(rz>half)p[k+2]-=half*2;else if(rz<-half)p[k+2]+=half*2;
+    if(p[k+1]<low){p[k+1]=high+weather.random()*8;if(type!=="spores"){p[k]-=weather.windX*half*.35;p[k+2]-=weather.windZ*half*.35}}
+    else if(p[k+1]>high+10)p[k+1]=low+weather.random()*(high-low);
     if(stride===6){
       const ratio=weather.fall?weather.streak/weather.fall:0;
       p[k+3]=p[k]-weather.windX*weather.drift*ratio;p[k+4]=p[k+1]+weather.streak;p[k+5]=p[k+2]-weather.windZ*weather.drift*ratio;
@@ -673,6 +726,6 @@ rend.setAnimationLoop(()=>{
   // Substeps keep walls and stair risers solid even during fast movement.
   const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.1));
   for(let i=0;i<steps;i++)walkFrame(dt/steps,dx/steps,dz/steps);
-  cam.rotation.set(pitch,yaw,0);cam.fov=mix(cam.fov,boosting()&&Math.hypot(f,s)?79:66,1-Math.exp(-dt*8));cam.updateProjectionMatrix();update(dt);updateSoundscape(dt);rend.render(scene,cam);
+  cam.rotation.set(pitch,yaw,0);cam.fov=mix(cam.fov,boosting()&&Math.hypot(f,s)?79:66,1-Math.exp(-dt*8));cam.updateProjectionMatrix();updateChunks();update(dt);updateSoundscape(dt);rend.render(scene,cam);
 });
 </script><!-- atmosphere-sky-fog-experiment --></body></html>
