@@ -1234,7 +1234,7 @@ function updateSoundscape(dt){
     if(type==="wind")volume=(.1+front*.13)*(indoors?.18:1);
     if(type==="rain"&&weather.type==="rain")volume=(.06+front*.28)*(indoors?.25:1);
     if(type==="music")volume=indoors?.095:.075;
-    if(type===(weather.type==="snow"?"snow":"gravel")&&walking&&!indoors)volume=boosting()?.36:.27;
+    if(type==="snow"&&walking&&!indoors)volume=boosting()?.36:.27;
     track.gain.gain.setTargetAtTime(sound?volume:0,audio.ctx.currentTime,.14);
     if(type==="snow"||type==="gravel")track.source.playbackRate.setTargetAtTime(boosting()?1.65:1,audio.ctx.currentTime,.2);
   }
