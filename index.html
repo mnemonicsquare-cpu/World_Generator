@@ -55,15 +55,33 @@ function floraDensity(x,z,y){
   const moisture=clamp((y-G.water)/18,0,1);
   return smooth(clamp(G.forestCover+deviation+(moisture-.5)*.1,0,1));
 }
+function groveField(x,z){
+  // Coordinate-seeded grove centres add visible clumps without tying them to chunk borders.
+  const cell=220,cx=Math.floor(x/cell),cz=Math.floor(z/cell);let field=0;
+  for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){
+    const X=cx+dx,Z=cz+dz;
+    if(worldRandom(X,Z,0x51a7)<.38)continue;
+    const px=(X+.1+worldRandom(X,Z,0x7bd1)*.8)*cell;
+    const pz=(Z+.1+worldRandom(X,Z,0x31e9)*.8)*cell;
+    const radius=48+worldRandom(X,Z,0xa4c3)*105;
+    const d=Math.hypot(x-px,z-pz)/radius;
+    const strength=.68+worldRandom(X,Z,0xd2f5)*.5;
+    field=Math.max(field,Math.exp(-d*d*(1.7+worldRandom(X,Z,0xe61b)*1.2))*strength);
+  }
+  return clamp(field,0,1);
+}
 function treeDensity(x,z,y,base=floraDensity(x,z,y)){
-  // Independent broad fields create groves, forests and clearings without chunk boundaries.
-  const macro=fbm(x*G.forestScale*.28+283,z*G.forestScale*.28-347);
-  const grove=fbm(x*G.forestScale*1.55-521,z*G.forestScale*1.55+193);
-  const mask=smooth(clamp((macro-.34)/.32,0,1));
-  const patchStrength=.62+G.forestPatchiness*.38;
-  const macroFactor=mix(1,mix(.08,1.85,mask),patchStrength);
-  const groveFactor=.72+grove*.65;
-  return smooth(clamp(base*macroFactor*groveFactor,0,1));
+  // Three scales: kilometer-scale forest mass, local texture, and explicit soft grove clusters.
+  const macro=fbm(x*G.forestScale*.22+283,z*G.forestScale*.22-347);
+  const mid=fbm(x*G.forestScale*1.25-521,z*G.forestScale*1.25+193);
+  const macroGate=smooth(clamp((macro-.40)/.20,0,1));
+  const midGate=smooth(clamp((mid-.36)/.27,0,1));
+  const grove=groveField(x,z);
+  const patchStrength=.7+G.forestPatchiness*.55;
+  const background=base*(.025+.07*midGate);
+  const forest=base*mix(.035,2.05,macroGate)*(.28+midGate*1.18)*patchStrength;
+  const clustered=base*grove*(.65+macroGate*1.7)*patchStrength;
+  return smooth(clamp(background+forest*.62+clustered*.92,0,1));
 }
 function ground(x,z){let X=Math.floor(x/CHUNK_STEP)*CHUNK_STEP,Z=Math.floor(z/CHUNK_STEP)*CHUNK_STEP,u=(x-X)/CHUNK_STEP,v=(z-Z)/CHUNK_STEP,A=height(X,Z),B=height(X+CHUNK_STEP,Z),C=height(X,Z+CHUNK_STEP),D=height(X+CHUNK_STEP,Z+CHUNK_STEP);return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
 function disposeTree(root){let gs=new Set,ms=new Set;root.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose())}
@@ -126,15 +144,16 @@ function makeLSystemPlant(species,random=null,maturity=1){
       else if(ch==="\\")rotate(0,1,0,-species.roll);
     }
   }else{
-    const angleScale=(.72+random()*.64)*mix(.76,1.05,maturity);
-    const rollScale=.62+random()*.76;
-    const shrink=clamp(species.shrink+(random()-.5)*.13,.48,.92);
-    const asymmetry=(random()-.5)*.48;
-    const lengthVariance=.12+random()*.17;
-    const pruneBase=.045+random()*.105+(1-maturity)*.11;
-    const extraChance=(.012+random()*.035)*mix(.4,1.05,maturity);
-    const driftAngle=(random()-.5)*.055,driftAzimuth=random()*6.28;
-    const wander=.012+random()*.045,trunkStretch=.82+random()*.4,branchStretch=.72+random()*.58,depthTaper=.9+random()*.2;
+    const angleScale=(.56+random()*.98)*mix(.7,1.08,maturity);
+    const rollScale=.46+random()*1.08;
+    const shrink=clamp(species.shrink+(random()-.5)*.18,.45,.94);
+    const asymmetry=(random()-.5)*.72;
+    const lengthVariance=.18+random()*.22;
+    const pruneBase=.065+random()*.135+(1-maturity)*.12;
+    const extraChance=(.022+random()*.055)*mix(.38,1.08,maturity);
+    const driftAngle=(random()-.5)*.095,driftAzimuth=random()*6.28;
+    const wander=.02+random()*.075,forkJitter=.07+random()*.22;
+    const trunkStretch=.7+random()*.8,branchStretch=.55+random()*1.08,depthTaper=.82+random()*.36;
     const driftAxis=new T.Vector3(Math.cos(driftAzimuth),0,Math.sin(driftAzimuth));
     function rotate(x,y,z,amount,roll=false){
       axis.set(x,y,z).normalize().applyQuaternion(orientation);
@@ -187,9 +206,15 @@ function makeLSystemPlant(species,random=null,maturity=1){
           tips.push({position:sideEnd,q:sideQ});
         }
       }else if(ch==="["){
-        const pruneChance=pruneBase*(depth===0?.45:1+depth*.42);
+        const pruneChance=pruneBase*(depth===0?.42:1+depth*.48);
         if(random()<pruneChance){i=skipBranch(i);continue;}
         stack.push({position:position.clone(),orientation:orientation.clone(),depth});depth++;
+        wanderAxis.set(random()-.5,0,random()-.5);
+        if(wanderAxis.lengthSq()>1e-6){
+          wanderAxis.normalize().applyQuaternion(orientation);
+          turn.setFromAxisAngle(wanderAxis,(random()-.5)*forkJitter);
+          orientation.premultiply(turn).normalize();
+        }
       }else if(ch==="]"){
         const state=stack.pop();if(state){position.copy(state.position);orientation.copy(state.orientation);depth=state.depth;}
       }else if(ch==="+")rotate(0,0,1,species.angle);
@@ -204,15 +229,15 @@ function makeLSystemPlant(species,random=null,maturity=1){
   return {segments,tips,height:maxY};
 }
 function makeFloraCatalog(){
-  const r=rng(G.hash^0x4f19ab),count=5+Math.floor(r()*4),catalog=[];
+  const r=rng(G.hash^0x4f19ab),count=7+Math.floor(r()*4),catalog=[];
   for(let i=0;i<count;i++){
     const shrub=i===0,tall=i===1;
     const species={
       grammar:(G.form+i*3+Math.floor(r()*3))%8,leafForm:(G.form+i+Math.floor(r()*3))%5,
       iterations:1+(i+Math.floor(r()*3))%3,
-      angle:.18+r()*.58,shrink:.58+r()*.24,roll:.45+r()*1.5,
-      leafScale:.55+r()*1.15,hueShift:(r()-.5)*.07,leafHueVariance:.01+r()*.018,
-      lightShift:(r()-.5)*.12,branchScale:.62+r()*.72,glow:r()<.13?.03+r()*.1:0,
+      angle:.12+r()*.8,shrink:.5+r()*.36,roll:.3+r()*2.2,
+      leafScale:.45+r()*1.5,hueShift:(r()-.5)*.11,leafHueVariance:.012+r()*.026,
+      lightShift:(r()-.5)*.16,branchScale:.5+r()*1.05,glow:r()<.13?.03+r()*.1:0,
       heightMin:shrub?.25+r()*.7:.9+r()*3,
       heightMax:shrub?1.2+r()*2:tall?18+r()*14:5+r()*18,
       heightCurve:.55+r()*1.35
@@ -227,26 +252,30 @@ function leafGeometry(form){
 function growLSystemFlora(parent,cx,cz,land,leaf,rock,catalog=floraCatalog){
   const groups=catalog.map(()=>({branches:[],foliage:[]})),rocks=[],baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE;
   const r=rng(chunkSeed(cx,cz,0x91b44d)),yawQ=new T.Quaternion(),leanQ=new T.Quaternion(),treeQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3(),yAxis=new T.Vector3(0,1,0),leanAxis=new T.Vector3();
-  const plantLimit=90;let plants=0;
-  for(let i=0;i<360;i++){
+  const plantLimit=105;let plants=0;
+  for(let i=0;i<520;i++){
     const x=baseX+r()*CHUNK_SIZE,z=baseZ+r()*CHUNK_SIZE,y=height(x,z);
     const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
     const path=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve);
     const baseDensity=floraDensity(x,z,y),localDensity=treeDensity(x,z,y,baseDensity);
-    if(!houseReserved(x,z)&&plants<plantLimit&&y>G.water+.7&&slope<.82&&path>7&&r()<localDensity*.2){
-      const patch=noise(x*.009+211,z*.009-173),index=Math.min(catalog.length-1,Math.floor((patch*.78+r()*.22)*catalog.length));
+    const treeChance=.006+.43*Math.pow(localDensity,1.35);
+    if(!houseReserved(x,z)&&plants<plantLimit&&y>G.water+.7&&slope<.82&&path>7&&r()<treeChance){
+      const patch=noise(x*.009+211,z*.009-173),mixPatch=noise(x*.0037-337,z*.0037+419);
+      const index=Math.min(catalog.length-1,Math.floor((patch*.56+mixPatch*.24+r()*.2)*catalog.length));
       const species=catalog[index],group=groups[index];
-      const h=mix(species.heightMin,species.heightMax,Math.pow(r(),species.heightCurve))*(.72+localDensity*.52)*( .72+G.slender*.45),yaw=r()*Math.PI*2;
-      const treeHue=(r()-.5)*.014,treeLight=(r()-.5)*.09;
+      const h=mix(species.heightMin,species.heightMax,Math.pow(r(),species.heightCurve))*(.68+localDensity*.62)*( .7+G.slender*.5),yaw=r()*Math.PI*2;
+      const treeHue=(r()-.5)*.03,treeLight=(r()-.5)*.15;
       for(let burn=0;burn<species.prototype.tips.length*3;burn++)r();
-      const treeSeed=(chunkSeed(cx,cz,0x4d3a21)^Math.imul(i+1,0x9e3779b1)^Math.imul(index+1,0x85ebca6b))>>>0;
+      const qx=Math.floor(x*16),qz=Math.floor(z*16);
+      const treeSeed=(chunkSeed(cx,cz,0x4d3a21)^Math.imul(i+1,0x9e3779b1)^Math.imul(index+1,0x85ebca6b)^Math.imul(qx,0xc2b2ae35)^Math.imul(qz,0x27d4eb2f))>>>0;
       const treeR=rng(treeSeed);
       const relativeHeight=clamp((h-species.heightMin)/Math.max(.001,species.heightMax-species.heightMin),0,1);
-      const maturity=clamp(.56+relativeHeight*.4+(treeR()-.5)*.12,.48,1);
+      const maturity=clamp(.42+relativeHeight*.46+(treeR()-.5)*.28,.32,1);
       const prototype=makeLSystemPlant(species,treeR,maturity),scale=h/prototype.height;
-      const leanAzimuth=treeR()*Math.PI*2,leanAngle=(treeR()-.5)*.32;
-      const trunkVariation=.78+treeR()*.5,treeLeafScale=.72+treeR()*.58;
-      const foliageKeep=clamp(mix(.58,.98,maturity)+(treeR()-.5)*.24,.44,1);
+      const leanAzimuth=treeR()*Math.PI*2,leanAngle=(treeR()-.5)*.5;
+      const trunkVariation=.68+treeR()*.72,treeLeafScale=.58+treeR()*.9,treeLeafAspect=.55+treeR()*.9;
+      const foliageKeep=clamp(mix(.48,.98,maturity)+(treeR()-.5)*.38,.28,1);
+      const branchTone=land.clone().multiplyScalar((.44+species.branchScale*.075)*(.76+treeR()*.42)).offsetHSL((treeR()-.5)*.035,-.03,(treeR()-.5)*.055);
       yawQ.setFromAxisAngle(yAxis,yaw);
       leanAxis.set(Math.cos(leanAzimuth),0,Math.sin(leanAzimuth));
       leanQ.setFromAxisAngle(leanAxis,leanAngle);
@@ -255,7 +284,7 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,catalog=floraCatalog){
         p.copy(branch.mid).multiplyScalar(scale).applyQuaternion(treeQ);
         worldQ.copy(treeQ).multiply(branch.q);
         const radius=h*(.014+G.slender*.007)*species.branchScale*Math.pow(.61,branch.depth)*trunkVariation*(.9+treeR()*.2);
-        group.branches.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,radius,branch.length*scale,radius,worldQ.x,worldQ.y,worldQ.z,worldQ.w]);
+        group.branches.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,radius,branch.length*scale,radius,worldQ.x,worldQ.y,worldQ.z,worldQ.w,branchTone.r,branchTone.g,branchTone.b]);
       }
       for(const tip of prototype.tips){
         if(treeR()>foliageKeep)continue;
@@ -263,7 +292,7 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,catalog=floraCatalog){
         worldQ.copy(treeQ).multiply(tip.q);
         const s=h*(.035+G.slender*.035)*species.leafScale*treeLeafScale*(.78+treeR()*.44);
         const tint=leaf.clone().offsetHSL(species.hueShift+treeHue+(treeR()-.5)*species.leafHueVariance,.015,species.lightShift+treeLight+(treeR()-.5)*.07);
-        group.foliage.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,s,s*(species.leafForm===2?.42:.65+G.slender*.35),s,worldQ.x,worldQ.y,worldQ.z,worldQ.w,tint.r,tint.g,tint.b]);
+        group.foliage.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,s,s*(species.leafForm===2?.42:.65+G.slender*.35)*treeLeafAspect,s,worldQ.x,worldQ.y,worldQ.z,worldQ.w,tint.r,tint.g,tint.b]);
       }
       plants++;
     }else if(y>G.water&&r()<.06+(1-baseDensity)*.18){
@@ -271,8 +300,7 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,catalog=floraCatalog){
     }
   }
   catalog.forEach((species,i)=>{
-    const branchColor=land.clone().multiplyScalar(.48+species.branchScale*.1);
-    instancesQ(new T.CylinderGeometry(1,1,1,5),mat(branchColor),groups[i].branches,parent);
+    instancesQ(new T.CylinderGeometry(1,1,1,5),mat(new T.Color(0xffffff)),groups[i].branches,parent);
     instancesQ(leafGeometry(species.leafForm),mat(new T.Color(0xffffff),species.glow),groups[i].foliage,parent);
   });
   instances(new T.IcosahedronGeometry(1,0),mat(rock),rocks,parent);
