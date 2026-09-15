@@ -422,8 +422,8 @@ function faunaSuitability(species,e){
 function makeFaunaBody(species,seed){
   const r=rng(seed),root=new T.Group(),visual=new T.Group();root.add(visual);
   const individuality=.82+r()*.38,scale=species.size*individuality;
-  const bodyColor=species.bodyColor.clone().offsetHSL((r()-.5)*.035,(r()-.5)*.045,(r()-.5)*.07);
-  const accentColor=species.accentColor.clone().offsetHSL((r()-.5)*.025,(r()-.5)*.04,(r()-.5)*.05);
+  const bodyColor=species.bodyColor.clone().offsetHSL((r()-.5)*.035,(r()-.5)*.045,.045+(r()-.5)*.08);
+  const accentColor=species.accentColor.clone().offsetHSL((r()-.5)*.025,(r()-.5)*.04,.07+(r()-.5)*.06);
   const bodyMat=mat(bodyColor),accentMat=mat(accentColor),darkMat=mat(bodyColor.clone().multiplyScalar(.62));
   const sphere=new T.SphereGeometry(1,7,5),cyl=new T.CylinderGeometry(1,1,1,5),cone=new T.ConeGeometry(1,1,5);
   const L=species.bodyLength*scale,H=species.bodyHeight*scale,W=species.bodyWidth*scale,leg=species.legLength*scale,limb=species.limb*scale;
@@ -498,7 +498,7 @@ function populateChunkFauna(chunk){
     }
   }
   const playerCx=Math.floor(cam.position.x/CHUNK_SIZE),playerCz=Math.floor(cam.position.z/CHUNK_SIZE);
-  if(!faunaStarterPlaced&&chunk.cx===playerCx&&chunk.cz===playerCz&&chunk.faunaAgents.length===0){
+  if(!faunaStarterPlaced&&chunk.cx===playerCx&&chunk.cz===playerCz&&chunk.faunaAgents.length<4){
     const fr=rng(chunkSeed(chunk.cx,chunk.cz,0x6f12)),candidates=[];
     for(let t=0;t<28;t++){
       const angle=fr()*6.28,dist=18+fr()*48;
@@ -515,7 +515,7 @@ function populateChunkFauna(chunk){
     if(spot){
       let index=0,best=-1;
       spot.weights.forEach((w,i)=>{if(!faunaCatalog[i].predator&&w>best){best=w;index=i;}});
-      const species=faunaCatalog[index],count=5+Math.floor(fr()*4);
+      const species=faunaCatalog[index],count=Math.max(5,8-chunk.faunaAgents.length)+Math.floor(fr()*3);
       let placed=0;
       for(let n=0;n<count;n++){
         const angle=fr()*6.28,rad=Math.sqrt(fr())*(3+species.roam*.22);
