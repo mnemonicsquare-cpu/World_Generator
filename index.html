@@ -10,7 +10,7 @@ rend.setPixelRatio(Math.min(devicePixelRatio,1.7));rend.setSize(innerWidth,inner
 const cam=new T.PerspectiveCamera(66,innerWidth/innerHeight,.1,1200);cam.rotation.order="YXZ";
 let scene,water,G,rnd,weather,celestial,audio,sound=false,yaw=0,pitch=-.05,jump=0,grounded=true;
 const keys=new Set,clock=new T.Clock,temp=new T.Object3D,CHUNK_SIZE=160,CHUNK_SEG=28,CHUNK_STEP=CHUNK_SIZE/CHUNK_SEG;
-const chunks=new Map;let chunkQueue=[],chunkX=Infinity,chunkZ=Infinity,floraCatalog=[],faunaCatalog=[],faunaAgents=[],worldPalette;
+const chunks=new Map;let chunkQueue=[],chunkX=Infinity,chunkZ=Infinity,floraCatalog=[],faunaCatalog=[],faunaAgents=[],faunaStarterPlaced=false,worldPalette;
 const TERRAIN_RADIUS=matchMedia("(pointer:coarse)").matches?5:6,FLORA_RADIUS=2;
 let mobileForward=0,mobileSide=0,mobileBoost=false;
 const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost;
@@ -85,7 +85,7 @@ function treeDensity(x,z,y,base=floraDensity(x,z,y)){
 }
 function ground(x,z){let X=Math.floor(x/CHUNK_STEP)*CHUNK_STEP,Z=Math.floor(z/CHUNK_STEP)*CHUNK_STEP,u=(x-X)/CHUNK_STEP,v=(z-Z)/CHUNK_STEP,A=height(X,Z),B=height(X+CHUNK_STEP,Z),C=height(X,Z+CHUNK_STEP),D=height(X+CHUNK_STEP,Z+CHUNK_STEP);return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
 function disposeTree(root){let gs=new Set,ms=new Set;root.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose())}
-function clear(){if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity;faunaAgents=[];faunaCatalog=[]}
+function clear(){if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity;faunaAgents=[];faunaCatalog=[];faunaStarterPlaced=false}
 function instances(g,m,a,parent=scene){if(!a.length){g.dispose();m.dispose();return null;}let o=new T.InstancedMesh(g,m,a.length);a.forEach((v,i)=>{temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);temp.rotation.set(v[6]||0,v[7]||0,v[8]||0);temp.updateMatrix();o.setMatrixAt(i,temp.matrix)});o.instanceMatrix.setUsage(T.StaticDrawUsage);parent.add(o);return o}
 function instancesQ(g,m,a,parent=scene){
   if(!a.length){g.dispose();m.dispose();return;}
@@ -380,7 +380,7 @@ function makeFaunaCatalog(){
   const r=rng(G.hash^0x41ac97),count=5+Math.floor(r()*4),catalog=[];
   for(let i=0;i<count;i++){
     const predator=i===count-1||i>2&&r()<.18,plan=Math.floor(r()*4);
-    const size=.55+r()*1.55,bodyLength=.9+r()*1.35,bodyHeight=.55+r()*.9,bodyWidth=.5+r()*.75;
+    const size=.78+r()*2.02,bodyLength=.9+r()*1.45,bodyHeight=.58+r()*1.02,bodyWidth=.52+r()*.82;
     let legLength=.45+r()*1.05,neck=.12+r()*.85,tail=.25+r()*1.5;
     if(plan===1){legLength*=1.45;neck*=1.8;}
     else if(plan===2){legLength*=.52;tail*=1.35;}
@@ -395,8 +395,8 @@ function makeFaunaCatalog(){
       forestAffinity:r(),waterAffinity:r(),altitudeAffinity:r(),
       speed:predator?2.1+r()*2.1:1.15+r()*1.7,
       roam:14+r()*28,turn:.7+r()*1.25,
-      groupMin:predator?1:2+Math.floor(r()*3),
-      groupMax:predator?1+Math.floor(r()*2):5+Math.floor(r()*6),
+      groupMin:predator?1:3+Math.floor(r()*3),
+      groupMax:predator?2+Math.floor(r()*2):8+Math.floor(r()*6),
       bodyColor,accentColor
     });
   }
@@ -417,7 +417,7 @@ function faunaSuitability(species,e){
   const forestFit=1-Math.abs(e.forest-species.forestAffinity);
   const waterFit=1-Math.abs(e.moisture-species.waterAffinity);
   const altitudeFit=1-Math.abs(e.altitude-species.altitudeAffinity);
-  return density*(.3+.7*forestFit)*(.45+.55*waterFit)*(.5+.5*altitudeFit)*clamp(1-e.slope*.85,0,1);
+  return density*(.48+.52*forestFit)*(.62+.38*waterFit)*(.68+.32*altitudeFit)*clamp(1-e.slope*.58,0,1);
 }
 function makeFaunaBody(species,seed){
   const r=rng(seed),root=new T.Group(),visual=new T.Group();root.add(visual);
@@ -463,34 +463,67 @@ function makeFaunaBody(species,seed){
   }
   return {root,visual,legs,scale,height:bodyY+H*.8};
 }
+function addFaunaAgent(chunk,species,index,x,z,homeX,homeZ,seed){
+  const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE,y=height(x,z);
+  const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
+  if(x<baseX+2||x>baseX+CHUNK_SIZE-2||z<baseZ+2||z>baseZ+CHUNK_SIZE-2||y<G.water+.55||slope>.95||houseReserved(x,z))return false;
+  const body=makeFaunaBody(species,seed),ar=rng(seed^0x61c88647),heading=ar()*6.28;
+  body.root.position.set(x-baseX,y,z-baseZ);body.root.rotation.y=heading;chunk.fauna.add(body.root);
+  const agent={chunk,species,group:body.root,visual:body.visual,legs:body.legs,random:ar,heading,targetHeading:heading,
+    homeX,homeZ,roam:species.roam*(.75+ar()*.5),speed:species.speed*(.78+ar()*.38),turnTimer:.5+ar()*2.5,phase:ar()*6.28};
+  chunk.faunaAgents.push(agent);faunaAgents.push(agent);return true;
+}
 function populateChunkFauna(chunk){
   if(chunk.fauna)return {animals:chunk.faunaAgents?.length||0};
   const group=new T.Group();chunk.group.add(group);chunk.fauna=group;chunk.faunaAgents=[];
-  const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE,cell=180;
+  const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE,cell=145;
   const minX=Math.floor(baseX/cell)-1,maxX=Math.floor((baseX+CHUNK_SIZE)/cell)+1,minZ=Math.floor(baseZ/cell)-1,maxZ=Math.floor((baseZ+CHUNK_SIZE)/cell)+1;
   for(let cz=minZ;cz<=maxZ;cz++)for(let cx=minX;cx<=maxX;cx++){
-    if(worldRandom(cx,cz,0x73f1)>.58)continue;
+    if(worldRandom(cx,cz,0x73f1)>.78)continue;
     const ax=(cx+.12+worldRandom(cx,cz,0x892d)*.76)*cell,az=(cz+.12+worldRandom(cx,cz,0xb147)*.76)*cell;
     if(ax<baseX||ax>=baseX+CHUNK_SIZE||az<baseZ||az>=baseZ+CHUNK_SIZE)continue;
     const r=rng((chunkSeed(cx,cz,0xd41b)^0x9e3779b9)>>>0),ay=height(ax,az);
     if(ay<G.water+.8||houseReserved(ax,az))continue;
-    const e=faunaEcology(ax,az,ay);if(e.slope>.72||e.life<.08)continue;
+    const e=faunaEcology(ax,az,ay);if(e.slope>.9||e.life<.025)continue;
     const weights=faunaCatalog.map(sp=>faunaSuitability(sp,e)),total=weights.reduce((a,b)=>a+b,0);
-    if(total<.08||r()>clamp(.12+e.life*.72+total/faunaCatalog.length*.55,0,.86))continue;
+    if(total<.025||r()>clamp(.28+e.life*.9+total/faunaCatalog.length*.75,0,.96))continue;
     let pick=r()*total,index=0;for(;index<weights.length-1;index++){pick-=weights[index];if(pick<=0)break;}
     const species=faunaCatalog[index],density=clamp(weights[index]*1.6,0,1);
     const target=species.groupMin+Math.floor(r()*(species.groupMax-species.groupMin+1));
     const count=Math.max(1,Math.round(target*(.6+density*.65)));
     for(let n=0;n<count;n++){
-      const angle=r()*6.28,rad=Math.sqrt(r())*(4+species.roam*.32),x=ax+Math.cos(angle)*rad,z=az+Math.sin(angle)*rad,y=height(x,z);
-      const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
-      if(x<baseX+2||x>baseX+CHUNK_SIZE-2||z<baseZ+2||z>baseZ+CHUNK_SIZE-2||y<G.water+.65||slope>.82||houseReserved(x,z))continue;
+      const angle=r()*6.28,rad=Math.sqrt(r())*(4+species.roam*.32),x=ax+Math.cos(angle)*rad,z=az+Math.sin(angle)*rad;
       const seed=(chunkSeed(chunk.cx,chunk.cz,0x5ab7)^Math.imul(cx+31,0x85ebca6b)^Math.imul(cz-17,0xc2b2ae35)^Math.imul(n+1,0x27d4eb2f)^Math.imul(index+1,0x165667b1))>>>0;
-      const body=makeFaunaBody(species,seed),ar=rng(seed^0x61c88647),heading=ar()*6.28;
-      body.root.position.set(x-baseX,y,z-baseZ);body.root.rotation.y=heading;group.add(body.root);
-      const agent={chunk,species,group:body.root,visual:body.visual,legs:body.legs,random:ar,heading,targetHeading:heading,
-        homeX:ax,homeZ:az,roam:species.roam*(.75+ar()*.5),speed:species.speed*(.78+ar()*.38),turnTimer:.5+ar()*2.5,phase:ar()*6.28};
-      chunk.faunaAgents.push(agent);faunaAgents.push(agent);
+      addFaunaAgent(chunk,species,index,x,z,ax,az,seed);
+    }
+  }
+  const playerCx=Math.floor(cam.position.x/CHUNK_SIZE),playerCz=Math.floor(cam.position.z/CHUNK_SIZE);
+  if(!faunaStarterPlaced&&chunk.cx===playerCx&&chunk.cz===playerCz&&chunk.faunaAgents.length===0){
+    const fr=rng(chunkSeed(chunk.cx,chunk.cz,0x6f12)),candidates=[];
+    for(let t=0;t<28;t++){
+      const angle=fr()*6.28,dist=18+fr()*48;
+      const x=clamp(cam.position.x+Math.cos(angle)*dist,baseX+7,baseX+CHUNK_SIZE-7);
+      const z=clamp(cam.position.z+Math.sin(angle)*dist,baseZ+7,baseZ+CHUNK_SIZE-7);
+      const y=height(x,z),e=faunaEcology(x,z,y);
+      const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
+      if(y<G.water+.65||slope>.9||houseReserved(x,z))continue;
+      const weights=faunaCatalog.map(sp=>faunaSuitability(sp,e)),total=weights.reduce((a,b)=>a+b,0);
+      candidates.push({x,z,e,weights,total});
+    }
+    candidates.sort((a,b)=>(b.e.life+b.total*.35)-(a.e.life+a.total*.35));
+    const spot=candidates[0];
+    if(spot){
+      let index=0,best=-1;
+      spot.weights.forEach((w,i)=>{if(!faunaCatalog[i].predator&&w>best){best=w;index=i;}});
+      const species=faunaCatalog[index],count=5+Math.floor(fr()*4);
+      let placed=0;
+      for(let n=0;n<count;n++){
+        const angle=fr()*6.28,rad=Math.sqrt(fr())*(3+species.roam*.22);
+        const x=spot.x+Math.cos(angle)*rad,z=spot.z+Math.sin(angle)*rad;
+        const seed=(chunkSeed(chunk.cx,chunk.cz,0x9c31)^Math.imul(n+1,0x27d4eb2f)^Math.imul(index+1,0x165667b1))>>>0;
+        if(addFaunaAgent(chunk,species,index,x,z,spot.x,spot.z,seed))placed++;
+      }
+      if(placed)faunaStarterPlaced=true;
     }
   }
   return {animals:chunk.faunaAgents.length};
