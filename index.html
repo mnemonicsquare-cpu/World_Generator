@@ -318,7 +318,7 @@ function makeNightSky(){
     const azimuth=-Math.PI/2+(i-(count-1)/2)*.65+(r()-.5)*.2;
     const elevation=.36+r()*.55;
     body.position.set(Math.cos(azimuth)*Math.cos(elevation)*770,Math.sin(elevation)*770,Math.sin(azimuth)*Math.cos(elevation)*770);
-    group.add(body);moons.push(body);
+    if(i===0){group.add(body);moons.push(body);}
   }
   const stars=[];
   for(let layer=0;layer<2;layer++){
