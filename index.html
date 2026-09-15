@@ -675,4 +675,4 @@ rend.setAnimationLoop(()=>{
   for(let i=0;i<steps;i++)walkFrame(dt/steps,dx/steps,dz/steps);
   cam.rotation.set(pitch,yaw,0);cam.fov=mix(cam.fov,boosting()&&Math.hypot(f,s)?79:66,1-Math.exp(-dt*8));cam.updateProjectionMatrix();update(dt);updateSoundscape(dt);rend.render(scene,cam);
 });
-</script></body></html>
+</script><!-- atmosphere-sky-fog-experiment --></body></html>
