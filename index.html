@@ -242,6 +242,19 @@ function makeFloraCatalog(){
       heightMax:shrub?1.2+r()*2:tall?18+r()*14:5+r()*18,
       heightCurve:.55+r()*1.35
     };
+    // Separate colour DNA preserves the species' existing structural RNG sequence.
+    const colorR=rng((G.hash^0x2c71d9^Math.imul(i+1,0x9e3779b1))>>>0);
+    species.colorHueBias=(colorR()-.5)*.05;
+    species.gradientHue=(colorR()-.5)*.08;
+    species.gradientLight=.075+colorR()*.12;
+    species.edgeLight=.03+colorR()*.075;
+    species.gradientSat=(colorR()-.5)*.075;
+    species.canopyPatch=.014+colorR()*.032;
+    species.fruitAffinity=.12+colorR()*.34;
+    species.fruitDensity=.025+colorR()*.055;
+    species.fruitSize=.12+colorR()*.15;
+    species.barkHueGradient=(colorR()-.5)*.035;
+    species.barkLightGradient=.025+colorR()*.05;
     species.prototype=makeLSystemPlant(species);catalog.push(species);
   }
   return catalog;
@@ -249,9 +262,9 @@ function makeFloraCatalog(){
 function leafGeometry(form){
   return form===0?new T.IcosahedronGeometry(1,0):form===1?new T.ConeGeometry(1,1.8,6):form===2?new T.SphereGeometry(1,7,5,0,6.28,0,Math.PI/2):form===3?new T.OctahedronGeometry(1):new T.CapsuleGeometry(.45,1.2,3,6);
 }
-function growLSystemFlora(parent,cx,cz,land,leaf,rock,catalog=floraCatalog){
-  const groups=catalog.map(()=>({branches:[],foliage:[]})),rocks=[],baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE;
-  const r=rng(chunkSeed(cx,cz,0x91b44d)),yawQ=new T.Quaternion(),leanQ=new T.Quaternion(),treeQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3(),yAxis=new T.Vector3(0,1,0),leanAxis=new T.Vector3();
+function growLSystemFlora(parent,cx,cz,land,leaf,rock,accent,catalog=floraCatalog){
+  const groups=catalog.map(()=>({branches:[],foliage:[]})),rocks=[],fruits=[],baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE;
+  const r=rng(chunkSeed(cx,cz,0x91b44d)),yawQ=new T.Quaternion(),leanQ=new T.Quaternion(),treeQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3(),yAxis=new T.Vector3(0,1,0),leanAxis=new T.Vector3(),branchTint=new T.Color(),fruitTint=new T.Color();
   const plantLimit=105;let plants=0;
   for(let i=0;i<520;i++){
     const x=baseX+r()*CHUNK_SIZE,z=baseZ+r()*CHUNK_SIZE,y=height(x,z);
@@ -276,6 +289,14 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,catalog=floraCatalog){
       const trunkVariation=.68+treeR()*.72,treeLeafScale=.58+treeR()*.9,treeLeafAspect=.55+treeR()*.9;
       const foliageKeep=clamp(mix(.48,.98,maturity)+(treeR()-.5)*.38,.28,1);
       const branchTone=land.clone().multiplyScalar((.44+species.branchScale*.075)*(.76+treeR()*.42)).offsetHSL((treeR()-.5)*.035,-.03,(treeR()-.5)*.055);
+      // Independent per-tree colour stream: morphology and placement stay unchanged.
+      const colorR=rng((treeSeed^0x63d83595)>>>0);
+      const gradientScale=.65+colorR()*.9,edgeScale=.65+colorR()*.8;
+      const treeColorHue=(colorR()-.5)*.035,treeColorLight=(colorR()-.5)*.06,treeColorSat=(colorR()-.5)*.04;
+      const canopyPhase=colorR()*6.28,canopyPhase2=colorR()*6.28;
+      const fruiting=maturity>.48&&colorR()<species.fruitAffinity;
+      const rareOpposite=colorR()<.16,fruitAzimuth=colorR()*6.28,fruitHeight=.45+colorR()*.4;
+      const fruitBase=(rareOpposite?leaf.clone().offsetHSL(.47+(colorR()-.5)*.055,.03,.13).lerp(accent,.18):accent.clone().lerp(leaf,.14+colorR()*.18));
       yawQ.setFromAxisAngle(yAxis,yaw);
       leanAxis.set(Math.cos(leanAzimuth),0,Math.sin(leanAzimuth));
       leanQ.setFromAxisAngle(leanAxis,leanAngle);
@@ -284,15 +305,36 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,catalog=floraCatalog){
         p.copy(branch.mid).multiplyScalar(scale).applyQuaternion(treeQ);
         worldQ.copy(treeQ).multiply(branch.q);
         const radius=h*(.014+G.slender*.007)*species.branchScale*Math.pow(.61,branch.depth)*trunkVariation*(.9+treeR()*.2);
-        group.branches.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,radius,branch.length*scale,radius,worldQ.x,worldQ.y,worldQ.z,worldQ.w,branchTone.r,branchTone.g,branchTone.b]);
+        const branchT=clamp(branch.mid.y/prototype.height,0,1),depthT=clamp(branch.depth/4,0,1);
+        branchTint.copy(branchTone).offsetHSL(species.barkHueGradient*(branchT-.5),-.015*depthT,species.barkLightGradient*(branchT-.5)-depthT*.012);
+        group.branches.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,radius,branch.length*scale,radius,worldQ.x,worldQ.y,worldQ.z,worldQ.w,branchTint.r,branchTint.g,branchTint.b]);
       }
       for(const tip of prototype.tips){
         if(treeR()>foliageKeep)continue;
         p.copy(tip.position).multiplyScalar(scale).applyQuaternion(treeQ);
         worldQ.copy(treeQ).multiply(tip.q);
         const s=h*(.035+G.slender*.035)*species.leafScale*treeLeafScale*(.78+treeR()*.44);
-        const tint=leaf.clone().offsetHSL(species.hueShift+treeHue+(treeR()-.5)*species.leafHueVariance,.015,species.lightShift+treeLight+(treeR()-.5)*.07);
+        const leafJitterHue=(treeR()-.5)*species.leafHueVariance,leafJitterLight=(treeR()-.5)*.07;
+        const heightT=clamp(tip.position.y/prototype.height,0,1);
+        const outer=clamp(Math.hypot(tip.position.x,tip.position.z)/Math.max(.001,prototype.height*.58),0,1);
+        const patch=(Math.sin(tip.position.x*2.7+tip.position.z*1.9+canopyPhase)+Math.sin(tip.position.y*3.1+canopyPhase2))*.25;
+        const young=Math.pow(heightT,2.5);
+        const tint=leaf.clone().offsetHSL(
+          species.hueShift+species.colorHueBias+treeHue+treeColorHue+(heightT-.5)*species.gradientHue*gradientScale+patch*species.canopyPatch+leafJitterHue,
+          .015+treeColorSat+(heightT-.5)*species.gradientSat*gradientScale+outer*.02,
+          species.lightShift+treeLight+treeColorLight+(heightT-.5)*species.gradientLight*gradientScale+(outer-.5)*species.edgeLight*edgeScale+young*.018+leafJitterLight
+        );
         group.foliage.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,s,s*(species.leafForm===2?.42:.65+G.slender*.35)*treeLeafAspect,s,worldQ.x,worldQ.y,worldQ.z,worldQ.w,tint.r,tint.g,tint.b]);
+        if(fruiting){
+          const angle=Math.atan2(tip.position.z,tip.position.x),sector=.5+.5*Math.cos(angle-fruitAzimuth);
+          const heightAffinity=1-clamp(Math.abs(heightT-fruitHeight)/.38,0,1);
+          const cluster=Math.pow(sector,3)*(.35+.65*heightAffinity);
+          if(colorR()<species.fruitDensity*(.25+cluster*3.2)){
+            const fs=s*species.fruitSize*(.75+colorR()*.7);
+            fruitTint.copy(fruitBase).offsetHSL((colorR()-.5)*.018,.02,(colorR()-.5)*.05);
+            fruits.push([x-baseX+p.x,y+p.y-s*.07,z-baseZ+p.z,fs,fs,fs,0,0,0,1,fruitTint.r,fruitTint.g,fruitTint.b]);
+          }
+        }
       }
       plants++;
     }else if(y>G.water&&r()<.06+(1-baseDensity)*.18){
@@ -304,6 +346,7 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,catalog=floraCatalog){
     instancesQ(leafGeometry(species.leafForm),mat(new T.Color(0xffffff),species.glow),groups[i].foliage,parent);
   });
   instances(new T.IcosahedronGeometry(1,0),mat(rock),rocks,parent);
+  instancesQ(new T.IcosahedronGeometry(1,1),mat(new T.Color(0xffffff),.012),fruits,parent);
   const generations=[...new Set(catalog.map(s=>s.iterations))].sort().join(",");
   return {plants,species:catalog.length,generations};
 }
@@ -336,7 +379,7 @@ function growGroundFlora(parent,cx,cz,land,leaf,accent){
 function populateChunkFlora(chunk){
   if(chunk.flora)return;
   const group=new T.Group();chunk.group.add(group);chunk.flora=group;
-  const trees=growLSystemFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.rock,floraCatalog);
+  const trees=growLSystemFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.rock,worldPalette.accent,floraCatalog);
   const groundCover=growGroundFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.accent);
   chunk.stats={plants:trees.plants,moss:groundCover.moss,mushrooms:groundCover.mushrooms};
 }
