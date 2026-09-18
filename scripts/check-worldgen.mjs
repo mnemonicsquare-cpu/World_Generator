@@ -39,9 +39,21 @@ for(const marker of [
   "function geologicalHeight(x,z,h)",
   "function applyPathHeight(x,z,h)",
   "function applyHomeHeight(x,z,h)",
+  "function naturalTerrainHeight(x,z)",
+  "function terrainPatch(x,z,radius=10)",
+  "function findNaturalSpawn()",
+  "G.legacyPath=G.path;G.path=1e12;",
   "G.geology={"
 ]){
   if(!current.includes(marker))fail("missing terrain architecture marker: "+marker);
+}
+
+for(const legacyPattern of [
+  "for(let z=140;z>-160;z-=4)",
+  "z=80-i*220",
+  "const center=G.path"
+]){
+  if(current.includes(legacyPattern))fail("legacy path-based placement returned: "+legacyPattern);
 }
 
 console.log("worldgen checks passed");

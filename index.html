@@ -113,11 +113,38 @@ function applyHomeHeight(x,z,h){
   }
   return h;
 }
-function height(x,z){
+function naturalTerrainHeight(x,z){
   let h=baseHeight(x,z);
   h=geologicalHeight(x,z,h);
-  h=applyPathHeight(x,z,h);
-  return applyHomeHeight(x,z,h);
+  return applyPathHeight(x,z,h);
+}
+function height(x,z){return applyHomeHeight(x,z,naturalTerrainHeight(x,z))}
+function terrainPatch(x,z,radius=10){
+  const offsets=[[0,0],[radius,0],[-radius,0],[0,radius],[0,-radius],[radius*.7,radius*.7],[-radius*.7,radius*.7],[radius*.7,-radius*.7],[-radius*.7,-radius*.7]];
+  let min=Infinity,max=-Infinity,sum=0,dry=0;
+  for(const [dx,dz] of offsets){
+    const y=naturalTerrainHeight(x+dx,z+dz);min=Math.min(min,y);max=Math.max(max,y);sum+=y;if(y>G.water+.55)dry++;
+  }
+  return {y:sum/offsets.length,min,max,spread:max-min,dry:dry/offsets.length};
+}
+function findNaturalSpawn(){
+  const r=rng(G.hash^0x53a17b);let fallback=null;
+  for(const radius of [280,520,900]){
+    let best=null;
+    for(let i=0;i<180;i++){
+      const angle=r()*Math.PI*2,dist=Math.sqrt(r())*radius;
+      const x=Math.cos(angle)*dist,z=Math.sin(angle)*dist,p=terrainPatch(x,z,11);
+      if(p.max<=G.water+.75)continue;
+      const coastPenalty=Math.max(0,.78-p.dry)*24;
+      const lowPenalty=Math.max(0,G.water+1.4-p.y)*7;
+      const score=p.spread*1.55+coastPenalty+lowPenalty+dist*.0015;
+      if(!best||score<best.score)best={x,z,p,score};
+      if(!fallback||score<fallback.score)fallback={x,z,p,score};
+    }
+    if(best&&best.p.dry>=.78&&best.p.spread<5.2&&best.p.y>G.water+.9)return [best.x,ground(best.x,best.z)+1.75,best.z];
+  }
+  if(fallback)return [fallback.x,Math.max(ground(fallback.x,fallback.z),G.water+.2)+1.75,fallback.z];
+  return [0,Math.max(ground(0,0),G.water+.2)+1.75,0];
 }
 function floraDensity(x,z,y){
   const broad=fbm(x*G.forestScale+G.phase*37,z*G.forestScale-G.phase*23);
@@ -991,13 +1018,12 @@ function updateNightSky(e,day,front,top,horizon,warmth){
 
 
 let homes=[],buildingSolids=[];
-function planHomes(){
-  const r=rng(G.hash^0x814af);homes=[];
-  const count=r()<.3?0:r()<.85?1:2;
+function planHomes(spawnX=0,spawnZ=0){
+  const structureR=rng(G.hash^0x814af),placeR=rng(G.hash^0x314159),planned=[];homes=[];
+  const count=structureR()<.3?0:structureR()<.85?1:2;
   for(let i=0;i<count;i++){
-    const type=Math.floor(r()*5),z=80-i*220,x=G.path+(i?-85:75);
-    const basement=type===2||r()<.3;
-    const floors=type===4?3+Math.floor(r()*3):type===2?1:1+Math.floor(r()*3);
+    const type=Math.floor(structureR()*5),basement=type===2||structureR()<.3;
+    const floors=type===4?3+Math.floor(structureR()*3):type===2?1:1+Math.floor(structureR()*3);
     const cells=[];
     for(let iz=-1;iz<=1;iz++)for(let ix=-1;ix<=1;ix++){
       if(type===4&&ix!==0)continue;
@@ -1006,8 +1032,21 @@ function planHomes(){
       cells.push([ix,iz]);
     }
     if(type===3)for(let iz=-1;iz<=1;iz++)cells.push([2,iz]);
-    homes.push({x,z,base:Math.max(height(x,z),G.water+(basement?7:2))+.25,
-      seed:Math.floor(r()*4294967295),type,basement,floors,cells,roof:Math.floor(r()*3)});
+    planned.push({seed:Math.floor(structureR()*4294967295),type,basement,floors,cells,roof:Math.floor(structureR()*3)});
+  }
+  for(const plan of planned){
+    let best=null;
+    for(let tries=0;tries<150;tries++){
+      const angle=placeR()*Math.PI*2,dist=105+Math.sqrt(placeR())*520;
+      const x=spawnX+Math.cos(angle)*dist,z=spawnZ+Math.sin(angle)*dist;
+      if(homes.some(h=>Math.hypot(x-h.x,z-h.z)<120))continue;
+      const p=terrainPatch(x,z,18),minClearance=plan.basement?5.2:1.1;
+      if(p.min<=G.water+minClearance||p.dry<1)continue;
+      const score=p.spread+Math.abs(dist-260)*.003+(noise(x*.0021+73,z*.0021-47)-.5)*.35;
+      if(!best||score<best.score)best={x,z,p,score};
+    }
+    if(!best)continue;
+    homes.push({...plan,x:best.x,z:best.z,base:naturalTerrainHeight(best.x,best.z)+.25});
   }
 }
 function houseReserved(x,z){
@@ -1237,27 +1276,22 @@ function planeTerrainPenetration(pos,q){
 }
 function createPlane(sites=[]){
   const r=rng(G.hash^0x2a9f31);let best=null;
-  for(let i=0;i<90;i++){
-    const sign=i%2?-1:1,dist=24+(i%22)*2+r()*3,z=cam.position.z+sign*dist;
-    const center=G.path+Math.sin(z*.011+G.phase)*G.curve,x=center+(r()-.5)*4,y=height(x,z);
+  for(let i=0;i<150;i++){
+    const angle=r()*Math.PI*2,dist=24+Math.sqrt(r())*78;
+    const x=cam.position.x+Math.cos(angle)*dist,z=cam.position.z+Math.sin(angle)*dist,y=height(x,z);
     if(y<G.water+.9||houseReserved(x,z)||sites.some(p=>Math.hypot(x-p[0],z-p[1])<22))continue;
-    const hs=[height(x-3.7,z),height(x+3.7,z),height(x,z-2.6),height(x,z+2.6),y],spread=Math.max(...hs)-Math.min(...hs);
-    const score=spread+Math.abs(dist-38)*.012;if(!best||score<best.score)best={x,z,y,score};
-  }
-  if(!best){
-    for(let i=0;i<80&&!best;i++){
-      const a=r()*Math.PI*2,d=24+r()*54,x=cam.position.x+Math.cos(a)*d,z=cam.position.z+Math.sin(a)*d,y=height(x,z);
-      if(y>G.water+.9&&!houseReserved(x,z))best={x,z,y,score:9};
-    }
+    const heading=r()*Math.PI*2,c=Math.cos(heading),s=Math.sin(heading);
+    const probes=[[-3.7,0],[3.7,0],[0,-2.6],[0,2.6],[0,0]].map(([lx,lz])=>height(x+lx*c+lz*s,z-lx*s+lz*c));
+    const spread=Math.max(...probes)-Math.min(...probes),score=spread+Math.abs(dist-46)*.01;
+    if(!best||score<best.score)best={x,z,y,heading,score};
   }
   if(!best)return;
-  const pathDx=Math.cos(best.z*.011+G.phase)*G.curve*.011,heading=Math.atan2(pathDx,1);
   const model=makePlaneModel(r),group=model.group;scene.add(group);
   plane={
-    group,propeller:model.propeller,yaw:heading,pitch:0,roll:0,speed:0,verticalSpeed:0,throttle:0,
+    group,propeller:model.propeller,yaw:best.heading,pitch:0,roll:0,speed:0,verticalSpeed:0,throttle:0,
     onGround:true,occupied:false,engineOn:false
   };
-  group.position.set(best.x,planeGroundY(best.x,best.z,heading),best.z);group.rotation.set(0,heading,0);
+  group.position.set(best.x,planeGroundY(best.x,best.z,best.heading),best.z);group.rotation.set(0,best.heading,0);
 }
 function planeInteractionDistance(){
   if(!plane)return Infinity;
@@ -1365,6 +1399,7 @@ regionStrength:Math.pow(rnd(),.72),regionScale:.0015+rnd()*.006,regionWidth:.12+
 terrainVariation:Math.pow(rnd(),1.15),roughness:.08+Math.pow(rnd(),1.3)*3.1,pathRelief:.12+rnd()*.88,
 forestCover:Math.pow(coverSeed,.72),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
 forestContrast:.25+rnd()*1.75};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;
+G.legacyPath=G.path;G.path=1e12;
 const geoR=rng(G.hash^0x5f3759df),geoDominant=Math.floor(geoR()*4),geoStrengths=[Math.pow(geoR(),2.6),Math.pow(geoR(),2.6),Math.pow(geoR(),2.6),Math.pow(geoR(),2.6)];
 geoStrengths[geoDominant]=Math.max(geoStrengths[geoDominant],.62+geoR()*.34);
 if(geoR()<.14){for(let i=0;i<geoStrengths.length;i++)geoStrengths[i]*=.5;geoStrengths[geoDominant]=Math.max(geoStrengths[geoDominant],.36);}
@@ -1401,9 +1436,9 @@ const rockMid=rock.clone().offsetHSL(terrainStops[1]*.72,terrainMidSat*.45,terra
 const rockHigh=rock.clone().offsetHSL(terrainStops[2]*.72,terrainHighSat*.45,terrainHighLight*.65);
 const altitudeBase=G.water+.8,altitudeSpan=clamp(12+G.relief*(.28+terrainR()*.2),16,58),altitudeWarp=2.5+terrainR()*(4+G.relief*.045),altitudeMid=.36+terrainR()*.28;
 scene=new T.Scene;scene.background=sky;scene.fog=new T.FogExp2(horizon,G.fogDensity);let hemi=new T.HemisphereLight(horizon,land,.9),light=new T.DirectionalLight(col(G.hue+.42,.3,.9),2);scene.add(hemi,light);
-worldPalette={land,rock,leaf,accent,landLow,landMid,landHigh,rockLow,rockMid,rockHigh,altitudeBase,altitudeSpan,altitudeWarp,altitudeMid};floraCatalog=makeFloraCatalog();faunaCatalog=makeFaunaCatalog();birdCatalog=makeBirdCatalog();planHomes();
-let spawn;for(let z=140;z>-160;z-=4){let x=G.path+Math.sin(z*.011+G.phase)*G.curve,y=ground(x,z);if(y>G.water+.8){spawn=[x,y+1.75,z];break}}if(!spawn)spawn=[G.path,Math.max(ground(G.path,120),G.water)+1.75,120];cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();
-let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=(rnd()-.5)*620,z=(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
+worldPalette={land,rock,leaf,accent,landLow,landMid,landHigh,rockLow,rockMid,rockHigh,altitudeBase,altitudeSpan,altitudeWarp,altitudeMid};floraCatalog=makeFloraCatalog();faunaCatalog=makeFaunaCatalog();birdCatalog=makeBirdCatalog();
+const spawn=findNaturalSpawn();cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();planHomes(spawn[0],spawn[2]);
+let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=cam.position.x+(rnd()-.5)*620,z=cam.position.z+(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
 buildHomes();createPlane(sites);
 let wg=new T.PlaneGeometry((TERRAIN_RADIUS*2+2)*CHUNK_SIZE,(TERRAIN_RADIUS*2+2)*CHUNK_SIZE);wg.rotateX(-Math.PI/2);water=new T.Mesh(wg,new T.MeshStandardMaterial({color:col(G.hue+.08,.5,.3),metalness:.35,roughness:.2,transparent:true,opacity:.86}));water.position.set(cam.position.x,G.water,cam.position.z);scene.add(water);
 let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({color:col(G.hue+.42,.25,.9),fog:false}),-260,160,-600);for(let i=0;i<Math.floor(rnd()*4);i++){rnd();rnd();}
