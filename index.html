@@ -13,7 +13,7 @@ const keys=new Set,clock=new T.Clock,temp=new T.Object3D,CHUNK_SIZE=160,CHUNK_SE
 const chunks=new Map;let chunkQueue=[],chunkX=Infinity,chunkZ=Infinity,floraCatalog=[],faunaCatalog=[],faunaAgents=[],birdCatalog=[],birdAgents=[],faunaStarterPlaced=false,birdStarterPlaced=false,worldPalette;
 const LOW_POWER=matchMedia("(pointer:coarse)").matches,TERRAIN_RADIUS=LOW_POWER?5:6,FLORA_RADIUS=2;
 let mobileForward=0,mobileSide=0,mobileBoost=false,mobileThrottleDown=false;
-let universeSeed="",universeHash=0,originProfile=null,regionalEnabled=false,universeSeaLevel=0;
+let universeSeed="",universeHash=0,originProfile=null,regionalEnabled=false,universeSeaLevel=0,originFastRadius=0;
 const WORLD_CELL=CHUNK_SIZE*22,WORLD_BLEND=CHUNK_SIZE*3.5,WORLD_PROFILE_CACHE_MAX=36,regionProfiles=new Map;
 const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost;
 function hash(s){let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(),16777619);return h>>>0}
@@ -1911,6 +1911,7 @@ function getRegionProfile(gx,gz){
   return profile;
 }
 function worldBlendAt(x,z){
+  if(regionalEnabled&&originProfile&&Math.hypot(x,z)<originFastRadius)return [{gx:0,gz:0,key:"0,0",x:0,z:0,distance:Math.hypot(x,z),weight:1,profile:originProfile}];
   return regionBlendGeometry(x,z).map(item=>({...item,profile:getRegionProfile(item.gx,item.gz)}));
 }
 function blendColor(context,key,source="palette"){
@@ -1979,6 +1980,8 @@ function regionalEnvironmentAt(x,z){
 function initRegionalWorlds(seed,sky,horizon){
   universeSeed=seed;universeHash=G.hash;universeSeaLevel=G.water;originProfile=G;originProfile.key="0,0";originProfile.gx=0;originProfile.gz=0;originProfile.heightOffset=0;
   originProfile.palette=worldPalette;originProfile.sky=sky.clone();originProfile.horizon=horizon.clone();originProfile.wind=makeWindClimate(originProfile.hash,originProfile.dna);
+  let nearest=Infinity;for(let gz=-1;gz<=1;gz++)for(let gx=-1;gx<=1;gx++)if(gx||gz){const center=regionCenter(gx,gz);nearest=Math.min(nearest,Math.hypot(center.x,center.z));}
+  const maxWarp=WORLD_CELL*.08;originFastRadius=Math.max(CHUNK_SIZE*3,(nearest-WORLD_BLEND)/2-maxWarp);
   originProfile.catalogs={flora:floraCatalog,fauna:faunaCatalog,birds:birdCatalog};regionProfiles.clear();regionProfiles.set("0,0",originProfile);regionalEnabled=true;
 }
 function update(dt){
