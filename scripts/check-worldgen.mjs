@@ -223,8 +223,9 @@ for(const [x,z] of [[0,0],[3519,0],[-3519,1221],[7040,-5280],[12345,6789]]){
   if(!a.length||a.length>4)fail("unexpected active region count at "+x+","+z+": "+a.length);
   for(const item of a)if(!Number.isFinite(item.weight)||item.weight<=0||item.weight>1||!Number.isFinite(item.distance))fail("invalid region blend item");
 }
+const TEST_WORLD_CELL=160*22;
 let mixedSamples=0,dominantSamples=0,changes=0,lastKey=null;
-for(let x=-WORLD_CELL*3;x<=WORLD_CELL*3;x+=80){
+for(let x=-TEST_WORLD_CELL*3;x<=TEST_WORLD_CELL*3;x+=80){
   const a=blendTools.regionBlendGeometry(x,137);
   if(a.length>1)mixedSamples++;else dominantSamples++;
   if(lastKey!==null&&a[0].key!==lastKey)changes++;
