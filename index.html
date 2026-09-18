@@ -971,21 +971,16 @@ function grassDensity(x,z,y,slope){
   return smooth(clamp(density*dryEdge*highland*slopeFit,0,1));
 }
 function makeGrassGeometry(width=G.grass.width){
-  const positions=[];
-  const blades=3,levels=[0,.54,1];
+  const positions=[],blades=9,golden=2.399963229728653;
   for(let b=0;b<blades;b++){
-    const angle=b*Math.PI/blades+(b===1?.12:-.05),ca=Math.cos(angle),sa=Math.sin(angle);
-    const ox=Math.cos(angle*2.7+b)*.16,oz=Math.sin(angle*2.7+b)*.16;
-    const widths=[width*1.9,width*1.08,Math.max(.008,width*.11)];
-    const left=[],right=[];
-    for(let l=0;l<levels.length;l++){
-      const w=widths[l],y=levels[l];
-      left.push([ox-ca*w,y,oz-sa*w]);right.push([ox+ca*w,y,oz+sa*w]);
-    }
-    for(let l=0;l<2;l++){
-      const a=left[l],d=left[l+1],bb=right[l],cc=right[l+1];
-      positions.push(...a,...bb,...cc,...a,...cc,...d);
-    }
+    const a=b*golden,rad=b===0?0:.18+((b*37)%11)/10*.72,ox=Math.cos(a)*rad,oz=Math.sin(a)*rad;
+    const facing=a*1.73+.31,px=Math.cos(facing),pz=Math.sin(facing);
+    const w=width*(.72+((b*19)%7)/12),h=.72+((b*23)%9)/32,lean=(b%3-1)*width*.85;
+    positions.push(
+      ox-px*w,0,oz-pz*w,
+      ox+px*w,0,oz+pz*w,
+      ox+Math.cos(a)*lean,h,oz+Math.sin(a)*lean
+    );
   }
   const geo=new T.BufferGeometry();geo.setAttribute("position",new T.Float32BufferAttribute(positions,3));geo.computeVertexNormals();
   return geo;
@@ -1046,7 +1041,7 @@ diffuseColor.rgb*=grassGradient*(.88+vGrassTint*.22);`);
 }
 function growGrass(parent,chunk){
   const g=G.grass;if(!g||g.cover<.012)return {count:0};
-  const maxInstances=LOW_POWER?620:1320,candidateLimit=Math.max(90,Math.floor(maxInstances*(.18+g.cover*.82)));
+  const maxInstances=LOW_POWER?900:2200,candidateLimit=Math.max(70,Math.floor(maxInstances*(.12+g.cover*.88)));
   const side=Math.ceil(Math.sqrt(candidateLimit)),cell=CHUNK_SIZE/side,r=rng(chunkSeed(chunk.cx,chunk.cz,0x2c936f));
   const terrainPos=chunk.terrain.geometry.attributes.position,terrainNormal=chunk.terrain.geometry.attributes.normal,row=CHUNK_SEG+1;
   const colors=grassColors(),geo=makeGrassGeometry(g.width),material=makeGrassMaterial(colors.base,colors.tip),mesh=new T.InstancedMesh(geo,material,candidateLimit);
