@@ -141,10 +141,10 @@ function findNaturalSpawn(){
       if(!best||score<best.score)best={x,z,p,score};
       if(!fallback||score<fallback.score)fallback={x,z,p,score};
     }
-    if(best&&best.p.dry>=.78&&best.p.spread<5.2&&best.p.y>G.water+.9)return [best.x,naturalTerrainHeight(best.x,best.z)+1.75,best.z];
+    if(best&&best.p.dry>=.78&&best.p.spread<5.2&&best.p.y>G.water+.9)return [best.x,ground(best.x,best.z)+1.75,best.z];
   }
-  if(fallback)return [fallback.x,Math.max(naturalTerrainHeight(fallback.x,fallback.z),G.water+.2)+1.75,fallback.z];
-  return [0,Math.max(naturalTerrainHeight(0,0),G.water+.2)+1.75,0];
+  if(fallback)return [fallback.x,Math.max(ground(fallback.x,fallback.z),G.water+.2)+1.75,fallback.z];
+  return [0,Math.max(ground(0,0),G.water+.2)+1.75,0];
 }
 function floraDensity(x,z,y){
   const broad=fbm(x*G.forestScale+G.phase*37,z*G.forestScale-G.phase*23);
