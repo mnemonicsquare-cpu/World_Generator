@@ -132,7 +132,7 @@ function calibrateWaterLevel(){
   const span=960,grid=15,step=span*2/(grid-1);
   for(let iz=0;iz<grid;iz++)for(let ix=0;ix<grid;ix++){
     const x=-span+ix*step+(r()-.5)*step*.48,z=-span+iz*step+(r()-.5)*step*.48;
-    const y=naturalTerrainHeight(x,z);samples.push(y);
+    const y=ground(x,z);samples.push(y);
     if(y>anchor.y)anchor={x,z,y};
   }
   samples.sort((a,b)=>a-b);
@@ -152,7 +152,7 @@ function findNaturalSpawn(){
     let best=null;
     for(let i=0;i<180;i++){
       const angle=r()*Math.PI*2,dist=Math.sqrt(r())*radius;
-      const x=Math.cos(angle)*dist,z=Math.sin(angle)*dist,centerY=naturalTerrainHeight(x,z),p=terrainPatch(x,z,11);
+      const x=Math.cos(angle)*dist,z=Math.sin(angle)*dist,centerY=ground(x,z),p=terrainPatch(x,z,11);
       if(centerY<=G.water+.85)continue;
       const coastPenalty=Math.max(0,.78-p.dry)*24;
       const lowPenalty=Math.max(0,G.water+1.4-p.y)*7;
