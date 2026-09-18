@@ -125,15 +125,20 @@ jobs:
             car_head_groups="$(grep -o 'data-car-native-headlight-groups="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
             car_tail_groups="$(grep -o 'data-car-native-tail-groups="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
             car_cabin_groups="$(grep -o 'data-car-native-cabin-glass-groups="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
+            car_head_off_gray="$(grep -o 'data-car-headlight-off-gray="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
             car_head_yellow="$(grep -o 'data-car-headlight-yellow="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
             car_head_night="$(grep -o 'data-car-headlight-night="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_head_beams="$(grep -o 'data-car-headlight-beams="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
+            car_head_beam_sep="$(grep -o 'data-car-headlight-beam-separation="[-0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             car_reverse_light="$(grep -o 'data-car-reverse-light="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_reverse_red="$(grep -o 'data-car-reverse-red="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
             car_extra_light_geometry="$(grep -o 'data-car-light-geometry-added="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
-            if [[ -z "$car_head_groups" || "$car_head_groups" -lt 1 || -z "$car_tail_groups" || "$car_tail_groups" -lt 1 || -z "$car_cabin_groups" || "$car_cabin_groups" -lt 1 || "$car_head_yellow" != "1" || "$car_head_night" != "1" || "$car_reverse_light" != "1" || "$car_extra_light_geometry" != "0" ]]; then
-              echo "Native car lamp diagnostics failed for ${seed}: headGroups=${car_head_groups:-missing}, tailGroups=${car_tail_groups:-missing}, cabinGroups=${car_cabin_groups:-missing}, yellow=${car_head_yellow:-missing}, night=${car_head_night:-missing}, reverse=${car_reverse_light:-missing}, extraGeometry=${car_extra_light_geometry:-missing}"
-              grep -o 'data-car-[a-z-]*="[^"]*"' "$out" | head -40 || true
+            if [[ -z "$car_head_groups" || "$car_head_groups" -lt 1 || -z "$car_tail_groups" || "$car_tail_groups" -lt 1 || -z "$car_cabin_groups" || "$car_cabin_groups" -lt 1 || "$car_head_off_gray" != "1" || "$car_head_yellow" != "1" || "$car_head_night" != "1" || "$car_head_beams" != "2" || -z "$car_head_beam_sep" || "$car_reverse_light" != "1" || "$car_reverse_red" != "1" || "$car_extra_light_geometry" != "0" ]]; then
+              echo "Native car lamp diagnostics failed for ${seed}: headGroups=${car_head_groups:-missing}, tailGroups=${car_tail_groups:-missing}, cabinGroups=${car_cabin_groups:-missing}, gray=${car_head_off_gray:-missing}, yellow=${car_head_yellow:-missing}, night=${car_head_night:-missing}, beams=${car_head_beams:-missing}, beamSep=${car_head_beam_sep:-missing}, reverse=${car_reverse_light:-missing}, reverseRed=${car_reverse_red:-missing}, extraGeometry=${car_extra_light_geometry:-missing}"
+              grep -o 'data-car-[a-z-]*="[^"]*"' "$out" | head -50 || true
               exit 1
             fi
+            awk -v s="$car_head_beam_sep" 'BEGIN{if(s<0.6||s>4.0)exit 1}' || { echo "Headlight beams are not separated at the native lamp positions for ${seed}: separation=$car_head_beam_sep"; exit 1; }
             fog_near="$(grep -o 'data-fog-near="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_far="$(grep -o 'data-fog-far="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_moisture="$(grep -o 'data-fog-moisture="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
