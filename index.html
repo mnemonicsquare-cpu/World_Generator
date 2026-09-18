@@ -222,10 +222,10 @@ function makeRoadChunk(cx,cz,parent){
   }
   return {mesh,marking,segments};
 }
-function roadDiagnostic(){
+function roadDiagnostic(span=1200){
   if(!roadReady)return {grade:0,range:0,minRadius:Infinity};
   let maxGrade=0,minX=Infinity,maxX=-Infinity,prev=null,maxCurvature=0;
-  for(let z=roadOriginZ-1200;z<=roadOriginZ+1200;z+=30){
+  for(let z=roadOriginZ-span;z<=roadOriginZ+span;z+=30){
     const x=roadCenterX(z),y=roadElevation(z),frame=roadFrame2D(z),heading=Math.atan2(frame.dx,1);
     minX=Math.min(minX,x);maxX=Math.max(maxX,x);
     if(prev){
@@ -1917,7 +1917,20 @@ else if(G.wet>.55&&weatherRoll<.38+G.wet*.45+dna.volatility*.12)wt="rain";
 else wt="spores";
 weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);document.body.dataset.generationStage="weather";celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fogNear:scene.fog.near,fogFar:scene.fog.far};celestial.nightSky=makeNightSky();
 let flora=[...chunks.values()].reduce((a,c)=>(a.plants+=c.stats?.plants||0,a.mushrooms+=c.stats?.mushrooms||0,a.grass+=c.stats?.grass||0,a.animals+=c.stats?.animals||0,a.birds+=c.stats?.birds||0,a),{plants:0,mushrooms:0,grass:0,animals:0,birds:0});
-const roadStats=roadDiagnostic(),roadSegments=[...chunks.values()].reduce((n,ch)=>n+(ch.road?.segments||0),0);document.body.dataset.roadSegments=String(roadSegments);document.body.dataset.roadMaxGrade=roadStats.grade.toFixed(4);document.body.dataset.roadLateralRange=roadStats.range.toFixed(1);document.body.dataset.roadMinRadius=Number.isFinite(roadStats.minRadius)?roadStats.minRadius.toFixed(1):"9999";
+const roadStats=SMOKE_TEST?roadDiagnostic():{grade:0,range:0,minRadius:9999},roadSegments=[...chunks.values()].reduce((n,ch)=>n+(ch.road?.segments||0),0);
+let roadFarGrade=0,roadFarOk=true;
+if(SMOKE_TEST){
+  for(const dir of[-1,1]){
+    const centerZ=roadOriginZ+dir*WORLD_CELL*1.45;let prev=null;
+    for(let z=centerZ-90;z<=centerZ+90;z+=30){
+      const x=roadCenterX(z),y=roadElevation(z);
+      if(!Number.isFinite(x)||!Number.isFinite(y)){roadFarOk=false;continue;}
+      if(prev)roadFarGrade=Math.max(roadFarGrade,Math.abs(y-prev.y)/Math.max(.001,Math.hypot(x-prev.x,z-prev.z)));
+      prev={x,y,z};
+    }
+  }
+}
+document.body.dataset.roadSegments=String(roadSegments);document.body.dataset.roadMaxGrade=roadStats.grade.toFixed(4);document.body.dataset.roadLateralRange=roadStats.range.toFixed(1);document.body.dataset.roadMinRadius=Number.isFinite(roadStats.minRadius)?roadStats.minRadius.toFixed(1):"9999";document.body.dataset.roadFarGrade=roadFarGrade.toFixed(4);document.body.dataset.roadFarOk=roadFarOk?"1":"0";
 document.body.dataset.grassInstances=String(flora.grass);document.body.dataset.grassCover=G.grass.cover.toFixed(3);document.body.dataset.fogNear=G.fogNear.toFixed(1);document.body.dataset.fogFar=G.fogFar.toFixed(1);document.body.dataset.fogMoisture=G.fogMoisture.toFixed(3);let generations=[...new Set(floraCatalog.map(s=>s.iterations))].sort().join(","),names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};document.body.dataset.generationStage="complete";$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · бескрайний · "+wx[wt]+": "+weather.count+" частиц · рядом: "+flora.plants+" растений, "+floraCatalog.length+" форм, поколения "+generations+" · грибы: "+flora.mushrooms+" · фауна: "+flora.animals+" / "+faunaCatalog.length+" видов · птицы: "+flora.birds+" / "+birdCatalog.length+" видов · руины: "+sites.length+" · строения: "+homes.length+" · дорога: бесконечная";if(audio)audio.filter.frequency.value=250+G.slender*900}
 
 function waterLevelAt(x=0,z=0){return regionalEnabled?universeSeaLevel:G.water}
