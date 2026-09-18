@@ -359,7 +359,7 @@ for(const required of [
   "applyInfiniteRoadHeight","makeRoadChunk","roadDiagnostic","ROAD_HALF","ROAD_BLEND"
 ])if(!current.includes(required))fail("missing infinite-road primitive: "+required);
 if(!current.includes("const base=worldTerrainWithoutRoad(x,z);return applyHomeHeight(x,z,applyInfiniteRoadHeight"))fail("road shaping is not composed after seamless-world terrain");
-if(!current.includes("if(homes.some(h=>Math.hypot(x-h.x,z-h.z)<120)||roadReserved(x,z,24))continue;"))fail("buildings can still occupy the road corridor");
+if(!current.includes("if(homes.some(h=>Math.hypot(x-h.x,z-h.z)<120)||roadReserved(x,z,34))continue;"))fail("buildings can still occupy the road corridor");
 if(!current.includes("return roadReserved(x,z)||homes.some"))fail("vegetation/fauna reservation does not include the road");
 if(!current.includes("const road=makeRoadChunk(cx,cz,group);"))fail("road surface is not chunk streamed");
 if(!current.includes('document.body.dataset.roadSegments'))fail("road runtime diagnostics are missing");
