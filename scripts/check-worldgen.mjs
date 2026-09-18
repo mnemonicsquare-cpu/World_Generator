@@ -61,6 +61,44 @@ for(let seedHash=0;seedHash<512;seedHash++){
   }
 }
 
+
+// Sanity-check the intended causal direction of the DNA layer, not only its numeric bounds.
+const baseG={
+  wet:.5,relief:56,roughness:1.2,terrainVariation:.5,regionStrength:.5,regionScale:.004,
+  freq:.007,warp:55,forestCover:.5,forestPatchiness:.5,forestScale:.0045,forestContrast:1,slender:.5
+};
+const baseDNA={
+  age:.5,internalHeat:.5,oceanicity:.5,temperature:.5,humidity:.5,tectonics:.5,erosion:.5,
+  fertility:.5,biosphere:.5,volatility:.5,geologicalContrast:.5,anomaly:0
+};
+function dnaCase(changes){
+  const g={...baseG},dna={...baseDNA,...changes};dnaTools.applyWorldDNA(g,dna);return g;
+}
+const lowGeo=dnaCase({geologicalContrast:0}),highGeo=dnaCase({geologicalContrast:1});
+if(!(highGeo.relief>lowGeo.relief&&highGeo.terrainVariation>lowGeo.terrainVariation&&highGeo.regionStrength>lowGeo.regionStrength))fail("geological contrast has lost its causal effect");
+const lowTect=dnaCase({tectonics:0}),highTect=dnaCase({tectonics:1});
+if(!(highTect.roughness>lowTect.roughness&&highTect.regionScale>lowTect.regionScale&&highTect.warp>lowTect.warp))fail("tectonics has lost its causal effect");
+const lowErosion=dnaCase({erosion:0}),highErosion=dnaCase({erosion:1});
+if(!(highErosion.roughness<lowErosion.roughness&&highErosion.freq<lowErosion.freq))fail("erosion has lost its smoothing effect");
+const dryDNA=dnaCase({humidity:0}),wetDNA=dnaCase({humidity:1});
+if(!(wetDNA.wet>dryDNA.wet&&wetDNA.forestScale<dryDNA.forestScale))fail("humidity has lost its climate effect");
+const weakBio=dnaCase({biosphere:0}),richBio=dnaCase({biosphere:1});
+if(!(richBio.forestCover>weakBio.forestCover&&richBio.slender>weakBio.slender))fail("biosphere has lost its vegetation effect");
+
+// Thousands of seeds should produce a broad continuum rather than a handful of hidden presets.
+const traitStats=Object.fromEntries(dnaTraits.map(k=>[k,{min:Infinity,max:-Infinity,sum:0,sum2:0}]));
+const fingerprints=new Set();
+for(let seedHash=10000;seedHash<14096;seedHash++){
+  const d=dnaTools.makeWorldDNA(seedHash);
+  fingerprints.add(dnaTraits.map(k=>d[k].toFixed(5)).join("|"));
+  for(const k of dnaTraits){const s=traitStats[k],v=d[k];s.min=Math.min(s.min,v);s.max=Math.max(s.max,v);s.sum+=v;s.sum2+=v*v;}
+}
+if(fingerprints.size<4080)fail("World DNA unexpectedly collapsed into repeated presets");
+for(const [k,s] of Object.entries(traitStats)){
+  const n=4096,mean=s.sum/n,variance=s.sum2/n-mean*mean;
+  if(s.max-s.min<.12||variance<.001)fail(`World DNA trait lacks useful variation: ${k}`);
+}
+
 const epsilonShapeEnd=epsilonAlpha.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
 const currentShapeEnd=current.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
 const epsilonShape=section(epsilonAlpha,"function shape(",epsilonShapeEnd);
