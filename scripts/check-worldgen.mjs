@@ -61,8 +61,9 @@ for(let seedHash=0;seedHash<512;seedHash++){
   }
 }
 
-const epsilonShape=section(epsilonAlpha,"function shape(","function height(x,z){");
-const currentShapeEnd=current.includes("function naturalMountainShape")?"function naturalMountainShape":"function baseHeight(x,z){";
+const epsilonShapeEnd=epsilonAlpha.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
+const currentShapeEnd=current.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
+const epsilonShape=section(epsilonAlpha,"function shape(",epsilonShapeEnd);
 const currentShape=section(current,"function shape(",currentShapeEnd);
 if(epsilonShape!==currentShape)fail("legacy shape() changed relative to Epsilon Alpha");
 
