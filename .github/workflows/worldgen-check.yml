@@ -122,6 +122,16 @@ jobs:
             fi
             awk -v b="$car_wheel_bottom" 'BEGIN{if(b<0.005||b>0.06)exit 1}' || { echo "Detailed wheel local contact height is invalid for ${seed}: $car_wheel_bottom"; exit 1; }
             awk -v c="$car_wheel_clearance" 'BEGIN{if(c<0.005||c>0.09)exit 1}' || { echo "Detailed wheels do not sit correctly above asphalt for ${seed}: clearance=$car_wheel_clearance"; exit 1; }
+            car_headlight_yellow="$(grep -o 'data-car-headlight-yellow="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_headlight_night="$(grep -o 'data-car-headlight-night="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_reverse_light="$(grep -o 'data-car-reverse-light="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_light_rig="$(grep -o 'data-car-light-rig="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_lights_detailed="$(grep -o 'data-car-lights-detailed="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            if [[ "$car_headlight_yellow" != "1" || "$car_headlight_night" != "1" || "$car_reverse_light" != "1" || "$car_light_rig" != "1" || "$car_lights_detailed" != "1" ]]; then
+              echo "Car lighting smoke diagnostics failed for ${seed}: yellow=${car_headlight_yellow:-missing}, night=${car_headlight_night:-missing}, reverse=${car_reverse_light:-missing}, rig=${car_light_rig:-missing}, detailed=${car_lights_detailed:-missing}"
+              grep -o 'data-car-[a-z-]*="[^"]*"' "$out" | head -30 || true
+              exit 1
+            fi
             fog_near="$(grep -o 'data-fog-near="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_far="$(grep -o 'data-fog-far="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_moisture="$(grep -o 'data-fog-moisture="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
