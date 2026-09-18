@@ -14,7 +14,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Fetch Epsilon reference
-        run: git fetch origin epsilon:refs/remotes/origin/epsilon
+      - name: Fetch Epsilon Alpha reference
+        run: git fetch origin epsilon-alpha:refs/remotes/origin/epsilon-alpha
       - name: Check generator invariants
         run: node scripts/check-worldgen.mjs
+      - name: Browser smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8000 >/tmp/worldgen-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          sleep 1
+          chrome="$(command -v google-chrome || command -v google-chrome-stable)"
+          for seed in release-smoke-0 release-smoke-2 release-smoke-4 release-smoke-9; do
+            out="/tmp/worldgen-${seed}.html"
+            log="/tmp/worldgen-${seed}.log"
+            "$chrome" --headless=new --no-sandbox --disable-dev-shm-usage --use-gl=swiftshader --enable-unsafe-swiftshader --virtual-time-budget=12000 --dump-dom "http://127.0.0.1:8000/?seed=${seed}" >"$out" 2>"$log"
+            if ! grep -Fq "Мир ${seed} · бескрайний" "$out"; then
+              echo "Browser smoke test did not finish generation for ${seed}"
+              cat "$log"
+              exit 1
+            fi
+            if grep -Fq 'id="name">Создание мира</h1>' "$out"; then
+              echo "World title remained in loading state for ${seed}"
+              cat "$log"
+              exit 1
+            fi
+          done
