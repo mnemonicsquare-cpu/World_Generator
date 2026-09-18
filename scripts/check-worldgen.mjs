@@ -260,9 +260,19 @@ if(!grassRenderSection.includes("),.12,2.1)"))fail("grass per-instance height cl
 if(!grassRenderSection.includes("positions=[],blades=9,golden=2.399963229728653"))fail("grass blade geometry complexity changed unexpectedly");
 if(!grassRenderSection.includes("castShadow=false")||!grassRenderSection.includes("receiveShadow=false"))fail("grass shadow cost guard is missing");
 
-const epsilonFlora=section(epsilonBeta,"function floraDensity","function makeFaunaCatalog");
-const currentFlora=section(current,"function floraDensity","function makeFaunaCatalog");
-if(epsilonFlora!==currentFlora)fail("protected flora generation changed relative to Epsilon Beta");
+const currentFlora=section(current,"function floraDensitySingle","function makeFaunaCatalog");
+for(const marker of [
+  "const broad=fbm(x*G.forestScale+G.phase*37,z*G.forestScale-G.phase*23);",
+  "const fine=fbm(x*G.forestScale*3.7-71,z*G.forestScale*3.7+119);",
+  "const field=broad*.76+fine*.24;",
+  "const deviation=(field-.5)*G.forestContrast*mix(.18,1.55,G.forestPatchiness);",
+  "const macro=fbm(x*G.forestScale*.22+283,z*G.forestScale*.22-347);",
+  "const mid=fbm(x*G.forestScale*1.25-521,z*G.forestScale*1.25+193);",
+  "const patchStrength=.7+G.forestPatchiness*.55;",
+  "return smooth(clamp(background+forest*.62+clustered*.92,0,1));"
+])if(!currentFlora.includes(marker))fail("legacy flora equation changed unexpectedly: "+marker);
+if(!currentFlora.includes("function floraDensity(x,z,y)")||!currentFlora.includes("worldBlendAt(x,z)"))fail("flora no longer blends neighboring world profiles");
+if(!currentFlora.includes("withWorldProfile(item.profile"))fail("flora blending no longer evaluates each world's own noise field");
 
 for(const marker of [
   "function naturalMountainShape(x,z)",
