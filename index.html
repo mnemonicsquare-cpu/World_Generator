@@ -1990,7 +1990,7 @@ function regionalEnvironmentAt(x,z){
 function initRegionalWorlds(seed,sky,horizon){
   universeSeed=seed;universeHash=G.hash;universeSeaLevel=G.water;universeOriginX=cam.position.x;universeOriginZ=cam.position.z;originProfile=G;originProfile.key="0,0";originProfile.gx=0;originProfile.gz=0;originProfile.heightOffset=0;
   originProfile.palette=worldPalette;originProfile.sky=sky.clone();originProfile.horizon=horizon.clone();originProfile.wind=makeWindClimate(originProfile.hash,originProfile.dna);
-  let nearest=Infinity;for(let gz=-1;gz<=1;gz++)for(let gx=-1;gx<=1;gx++)if(gx||gz){const center=regionCenter(gx,gz);nearest=Math.min(nearest,Math.hypot(center.x,center.z));}
+  let nearest=Infinity;for(let gz=-1;gz<=1;gz++)for(let gx=-1;gx<=1;gx++)if(gx||gz){const center=regionCenter(gx,gz);nearest=Math.min(nearest,Math.hypot(center.x-universeOriginX,center.z-universeOriginZ));}
   const maxWarp=WORLD_CELL*.08;originFastRadius=Math.max(CHUNK_SIZE*3,(nearest-WORLD_BLEND)/2-maxWarp);
   originProfile.catalogs={flora:floraCatalog,fauna:faunaCatalog,birds:birdCatalog};regionProfiles.clear();regionProfiles.set("0,0",originProfile);regionalEnabled=true;
 }
