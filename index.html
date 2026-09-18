@@ -6,6 +6,8 @@
 <script type="module">
 import*as T from"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js";
 const $=s=>document.querySelector(s),clamp=T.MathUtils.clamp,mix=T.MathUtils.lerp,rend=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+const runtimeError=e=>{const value=e?.error?.stack||e?.reason?.stack||e?.message||String(e?.reason||"runtime error");document.body.dataset.runtimeError=String(value).slice(0,700)};
+addEventListener("error",runtimeError);addEventListener("unhandledrejection",runtimeError);
 rend.setPixelRatio(Math.min(devicePixelRatio,1.7));rend.setSize(innerWidth,innerHeight);rend.toneMapping=T.ACESFilmicToneMapping;rend.toneMappingExposure=1.08;document.body.prepend(rend.domElement);
 const cam=new T.PerspectiveCamera(66,innerWidth/innerHeight,.1,1200);cam.rotation.order="YXZ";
 let scene,water,G,rnd,weather,celestial,audio,sound=false,yaw=0,pitch=-.05,jump=0,grounded=true,plane=null,planeEngineAudio=null,planeLookYaw=0,planeLookPitch=0;
