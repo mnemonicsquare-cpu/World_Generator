@@ -152,6 +152,7 @@ for(let seedHash=0;seedHash<4096;seedHash++){
   }
   if(a.shadeTolerance<.28||a.shadeTolerance>.86||a.height<.24||a.height>1.6||a.heightVariation<.18||a.heightVariation>.66)fail("Grass morphology exceeded safety bounds");
   if(a.width<.055||a.width>.14||a.flexibility<.72||a.flexibility>1.28||a.hueSpan<.012||a.hueSpan>.064)fail("Grass render trait exceeded safety bounds");
+  if(Math.abs(a.hueShift)>.0525||Math.abs(a.tipShift)>.0325||Math.abs(a.saturationShift)>.04)fail("Grass colour DNA exceeded safety bounds");
   if(a.macroScale<=0||a.midScale<=a.macroScale)fail("Grass spatial scales are invalid");
   if(a.sparseWorld)sparseGrassWorlds++;
   if(a.cover>.7)denseGrassWorlds++;
@@ -181,6 +182,7 @@ if(grassRenderSection.includes("pow(vGrassHeight"))fail("grass vertex shader reg
 if(!grassRenderSection.includes("float oscillation=sin("))fail("grass wind shader lost its single-wave optimized path");
 if(!grassRenderSection.includes("LOW_POWER?900:2200"))fail("grass instance safety caps are missing");
 if(!grassRenderSection.includes("makeGrassGeometry(g.width)"))fail("Grass DNA width is not applied to geometry");
+if(!grassRenderSection.includes("),.12,2.1)"))fail("grass per-instance height clamp is missing");
 if(!grassRenderSection.includes("positions=[],blades=9,golden=2.399963229728653"))fail("grass blade geometry complexity changed unexpectedly");
 if(!grassRenderSection.includes("castShadow=false")||!grassRenderSection.includes("receiveShadow=false"))fail("grass shadow cost guard is missing");
 
