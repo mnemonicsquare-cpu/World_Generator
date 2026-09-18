@@ -818,11 +818,15 @@ function createChunk(cx,cz,detailed){
   const pos=geo.attributes.position,colors=new Float32Array(pos.count*3),normals=new Float32Array(pos.count*3),normal=new T.Vector3();
   // Height is expensive once geology is layered in. Build one seam-safe lattice, including a one-vertex margin for normals.
   const side=CHUNK_SEG+3,heightGrid=new Float64Array(side*side),grid=(ix,iz)=>heightGrid[(iz+1)*side+(ix+1)];
-  for(let iz=-1;iz<=CHUNK_SEG+1;iz++)for(let ix=-1;ix<=CHUNK_SEG+1;ix++)heightGrid[(iz+1)*side+(ix+1)]=height(baseX+ix*CHUNK_STEP,baseZ+iz*CHUNK_STEP);
+  // PlaneGeometry rows run from +Z to -Z after rotateX(-PI/2); preserve that winding exactly.
+  for(let iz=-1;iz<=CHUNK_SEG+1;iz++)for(let ix=-1;ix<=CHUNK_SEG+1;ix++){
+    const x=baseX+ix*CHUNK_STEP,z=baseZ+CHUNK_SIZE-iz*CHUNK_STEP;
+    heightGrid[(iz+1)*side+(ix+1)]=height(x,z);
+  }
   for(let iz=0;iz<=CHUNK_SEG;iz++)for(let ix=0;ix<=CHUNK_SEG;ix++){
-    const i=iz*(CHUNK_SEG+1)+ix,x=baseX+ix*CHUNK_STEP,z=baseZ+iz*CHUNK_STEP,y=grid(ix,iz);
-    pos.setXYZ(i,ix*CHUNK_STEP,y,iz*CHUNK_STEP);
-    const hx=grid(ix-1,iz)-grid(ix+1,iz),hz=grid(ix,iz-1)-grid(ix,iz+1);
+    const i=iz*(CHUNK_SEG+1)+ix,x=baseX+ix*CHUNK_STEP,z=baseZ+CHUNK_SIZE-iz*CHUNK_STEP,y=grid(ix,iz);
+    pos.setXYZ(i,ix*CHUNK_STEP,y,CHUNK_SIZE-iz*CHUNK_STEP);
+    const hx=grid(ix-1,iz)-grid(ix+1,iz),hz=grid(ix,iz+1)-grid(ix,iz-1);
     normal.set(hx,CHUNK_STEP*2,hz).normalize();normals[i*3]=normal.x;normals[i*3+1]=normal.y;normals[i*3+2]=normal.z;
     const slope=Math.hypot(hx,hz)/(CHUNK_STEP*2);
     const warpedY=y+(noise(x*.0031+211,z*.0031-97)-.5)*worldPalette.altitudeWarp;
