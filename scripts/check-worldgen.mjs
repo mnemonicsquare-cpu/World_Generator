@@ -203,7 +203,9 @@ for(const required of [
 const startupSchedulePos=current.indexOf("scheduleChunks(true);"),regionalInitPos=current.indexOf("initRegionalWorlds(seed,sky,horizon);");
 if(startupSchedulePos<0||regionalInitPos<0||regionalInitPos<startupSchedulePos)fail("regional layer must activate only after legacy spawn chunks are generated");
 const clearSection=section(current,"function clear(){","function instances(");
-for(const marker of ["regionalEnabled=false","originProfile=null","originFastRadius=0","regionProfiles.clear()","universeHash=0","universeSeaLevel=0"])if(!clearSection.includes(marker))fail("new-seed reset lost regional state guard: "+marker);
+for(const marker of ["regionalEnabled=false","originProfile=null","originFastRadius=0","universeOriginX=universeOriginZ=0","regionProfiles.clear()","universeHash=0","universeSeaLevel=0"])if(!clearSection.includes(marker))fail("new-seed reset lost regional state guard: "+marker);
+if(!current.includes("universeOriginX=cam.position.x;universeOriginZ=cam.position.z"))fail("regional origin is not anchored to the actual spawn point");
+if(!current.includes("Math.round((wx-universeOriginX)/WORLD_CELL)"))fail("region indexing is not relative to the spawn-anchored origin");
 if(!current.includes("rawTerrainHeightFor(item.profile,x,z)+item.profile.heightOffset"))fail("regional terrain is not height-aligned to the common sea level");
 if(!current.includes("waterLevelAt(x,z)"))fail("regional ecology is not using the common water level");
 
@@ -212,7 +214,7 @@ let blendTools;
 try{
   blendTools=new Function(`
     const CHUNK_SIZE=160,WORLD_CELL=CHUNK_SIZE*22,WORLD_BLEND=CHUNK_SIZE*3.5;
-    let universeHash=0x12345678,regionalEnabled=true;
+    let universeHash=0x12345678,regionalEnabled=true,universeOriginX=413.25,universeOriginZ=-287.5;
     const clamp=(x,a,b)=>Math.min(b,Math.max(a,x)),mix=(a,b,t)=>a+(b-a)*t,smooth=x=>x*x*(3-2*x);
     ${blendGeometrySource}
     return {regionBlendGeometry,regionCenter,warpedUniversePoint};
