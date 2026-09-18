@@ -1932,6 +1932,8 @@ function buildDetailedCarModel(bytes){
   const group=new T.Group(),bodyRecord=records.get(0),wheelRecord=records.get(1),bodyPos=bodyRecord.geometry.getAttribute("position"),bodyIndex=bodyRecord.geometry.index;
   const bodyBox=bodyRecord.geometry.boundingBox,width=Math.max(.001,bodyBox.max.x-bodyBox.min.x),height=Math.max(.001,bodyBox.max.y-bodyBox.min.y),depth=Math.max(.001,bodyBox.max.z-bodyBox.min.z),bodyCX=(bodyBox.min.x+bodyBox.max.x)*.5;
   const cabinMaterials=[],headlightMaterials=[],tailLightMaterials=[],headlightCenters=[],tailLightCenters=[];
+  const materialUsage=Array(materialCount).fill(0);let bodyIndexTotal=0;
+  for(const g of bodyRecord.groups){materialUsage[g.materialIndex]+=g.count;bodyIndexTotal+=g.count;}
   let cabinGlassGroups=0,headlightGroups=0,tailLightGroups=0;
   function groupBounds(g){
     let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity,sx=0,sy=0,sz=0,n=0;
@@ -1950,13 +1952,13 @@ function buildDetailedCarModel(bytes){
   }
   bodyRecord.groups.forEach((g,gi)=>{
     const b=groupBounds(g),meta=materialMeta[g.materialIndex],zn=(b.cz-bodyBox.min.z)/depth,yn=(b.cy-bodyBox.min.y)/height;
-    const spanX=b.maxX-b.minX,spanY=b.maxY-b.minY,spanZ=b.maxZ-b.minZ,lateral=Math.abs(b.cx-bodyCX)/(width*.5);
-    const red=meta.r>meta.g*1.35&&meta.r>meta.b*1.25&&meta.r>.18;
-    const redSmall=red&&spanY<height*.34&&spanZ<depth*.18&&spanX<width*.62;
-    const lampWidth=lateral>.16||spanX>width*.24;
+    const spanX=b.maxX-b.minX,spanY=b.maxY-b.minY,spanZ=b.maxZ-b.minZ,lateral=Math.abs(b.cx-bodyCX)/(width*.5),usage=materialUsage[g.materialIndex]/Math.max(1,bodyIndexTotal);
+    const red=meta.r>meta.g*1.12&&meta.r>meta.b*1.1&&meta.r>.07;
+    const redSmall=red&&usage<.12&&meta.metalness<.62&&spanY<height*.42&&spanZ<depth*.22&&spanX<width*.7;
+    const lampWidth=lateral>.12||spanX>width*.18;
     let role="";
     if(meta.glass&&zn<.22&&yn>.14&&yn<.62&&lampWidth)role="head";
-    else if((meta.glass||redSmall)&&zn>.77&&yn>.13&&yn<.64&&lampWidth)role="tail";
+    else if((meta.glass||redSmall)&&zn>.70&&yn>.10&&yn<.70&&lampWidth)role="tail";
     else if(meta.glass&&yn>.43&&zn>.12&&zn<.88&&(spanX>width*.18||spanY>height*.12||spanZ>depth*.08))role="cabin";
     if(!role)return;
     const m=roleMaterial(materials[g.materialIndex],role),mi=materials.push(m)-1;bodyRecord.geometry.groups[gi].materialIndex=mi;
