@@ -153,14 +153,14 @@ function roadDistance(x,z){
 function roadReserved(x,z,margin=0){return roadReady&&roadDistance(x,z)<=ROAD_CLEAR+margin}
 function worldTerrainWithoutRoad(x,z){return regionalEnabled?regionalNaturalTerrainHeight(x,z):naturalTerrainHeight(x,z)}
 function roadElevation(z){
-  const offsets=[-720,-360,0,360,720],weights=[1,2,3,2,1];let sum=0,total=0;
+  const offsets=[-1440,-1080,-720,-360,0,360,720,1080,1440],weights=[1,2,3,4,5,4,3,2,1];let sum=0,total=0;
   for(let i=0;i<offsets.length;i++){
     const zz=z+offsets[i],xx=roadCenterX(zz),w=weights[i];
     sum+=worldTerrainWithoutRoad(xx,zz)*w;total+=w;
   }
-  let y=sum/total,water=waterLevelAt(roadCenterX(z),z)+1.35;
-  if(y<water+2)y=mix(water,y,smooth(clamp((y-water)/2,0,1)));
-  return y;
+  const water=waterLevelAt(roadCenterX(z),z),datum=water+5.5;
+  const terrainMean=sum/total;
+  return Math.max(water+2.25,datum+(terrainMean-datum)*.56);
 }
 function roadSurfaceY(z,lateral=0){
   const crown=.075*(1-clamp(Math.abs(lateral)/ROAD_HALF,0,1));
