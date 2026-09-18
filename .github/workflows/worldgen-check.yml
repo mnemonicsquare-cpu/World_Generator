@@ -27,10 +27,18 @@ jobs:
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
           sleep 1
           chrome="$(command -v google-chrome || command -v google-chrome-stable)"
-          for seed in release-smoke-0 release-smoke-2 release-smoke-4 release-smoke-9; do
+          for seed in release-smoke-0 release-smoke-2 release-smoke-4 release-smoke-9 1ni2yqm; do
             out="/tmp/worldgen-${seed}.html"
             log="/tmp/worldgen-${seed}.log"
             "$chrome" --headless=new --no-sandbox --disable-dev-shm-usage --use-gl=swiftshader --enable-unsafe-swiftshader --virtual-time-budget=12000 --dump-dom "http://127.0.0.1:8000/?seed=${seed}" >"$out" 2>"$log"
+            rendered_frames="$(grep -o 'data-rendered-frames="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
+            if [[ -z "$rendered_frames" || "$rendered_frames" -lt 1 ]]; then
+              echo "Browser rendered no completed frame for ${seed}"
+              grep -o 'data-frame-stage="[^"]*"' "$out" | head -1 || true
+              grep -o 'data-runtime-error="[^"]*"' "$out" | head -1 || true
+              cat "$log"
+              exit 1
+            fi
             if ! grep -Fq "Мир ${seed} · бескрайний" "$out"; then
               echo "Browser smoke test did not finish generation for ${seed}"
               grep -o 'data-runtime-error="[^"]*"' "$out" | head -1 || true
