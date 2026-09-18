@@ -68,6 +68,15 @@ jobs:
               echo "Dense grass smoke seed generated no visible grass"
               exit 1
             fi
+            road_segments="$(grep -o 'data-road-segments="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
+            road_grade="$(grep -o 'data-road-max-grade="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            road_range="$(grep -o 'data-road-lateral-range="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            if [[ -z "$road_segments" || "$road_segments" -le 0 || -z "$road_grade" || -z "$road_range" ]]; then
+              echo "Infinite-road diagnostics were not emitted or no startup road was generated for ${seed}"
+              exit 1
+            fi
+            awk -v g="$road_grade" 'BEGIN{if(g>0.12)exit 1}' || { echo "Road grade too steep for ${seed}: $road_grade"; exit 1; }
+            awk -v r="$road_range" 'BEGIN{if(r<120)exit 1}' || { echo "Road is too straight for ${seed}: lateral range=$road_range"; exit 1; }
             fog_near="$(grep -o 'data-fog-near="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_far="$(grep -o 'data-fog-far="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_moisture="$(grep -o 'data-fog-moisture="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
