@@ -110,6 +110,18 @@ jobs:
               grep -o 'data-car-model-error="[^"]*"' "$out" | head -1 || true
               exit 1
             fi
+            car_tire_black="$(grep -o 'data-car-tire-black="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_glass_opaque="$(grep -o 'data-car-glass-opaque="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_glass_count="$(grep -o 'data-car-glass-count="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
+            car_wheel_bottom="$(grep -o 'data-car-wheel-local-bottom="[-0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_wheel_clearance="$(grep -o 'data-car-wheel-road-clearance="[-0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            if [[ "$car_tire_black" != "1" || "$car_glass_opaque" != "1" || -z "$car_glass_count" || "$car_glass_count" -lt 1 || -z "$car_wheel_bottom" || -z "$car_wheel_clearance" ]]; then
+              echo "Detailed car visual corrections are invalid for ${seed}: tire=${car_tire_black:-missing}, glass=${car_glass_opaque:-missing}, glassCount=${car_glass_count:-missing}, wheelBottom=${car_wheel_bottom:-missing}, clearance=${car_wheel_clearance:-missing}"
+              grep -o 'data-car-[a-z-]*="[^"]*"' "$out" | head -20 || true
+              exit 1
+            fi
+            awk -v b="$car_wheel_bottom" 'BEGIN{if(b<0.005||b>0.06)exit 1}' || { echo "Detailed wheel local contact height is invalid for ${seed}: $car_wheel_bottom"; exit 1; }
+            awk -v c="$car_wheel_clearance" 'BEGIN{if(c<0.005||c>0.09)exit 1}' || { echo "Detailed wheels do not sit correctly above asphalt for ${seed}: clearance=$car_wheel_clearance"; exit 1; }
             fog_near="$(grep -o 'data-fog-near="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_far="$(grep -o 'data-fog-far="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_moisture="$(grep -o 'data-fog-moisture="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
