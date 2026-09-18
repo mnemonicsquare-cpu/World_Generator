@@ -1861,48 +1861,6 @@ function updateCarEngineAudio(){
   carEngineAudio.gain.gain.setTargetAtTime(sound&&car.engineOn?.028+rpm*.043:0,ctx.currentTime,.08);
 }
 
-function makeCarLightRig(parent,bounds){
-  const minX=bounds.minX,maxX=bounds.maxX,minY=bounds.minY,maxY=bounds.maxY,minZ=bounds.minZ,maxZ=bounds.maxZ;
-  const width=Math.max(.8,maxX-minX),height=Math.max(.7,maxY-minY),depth=Math.max(1.8,maxZ-minZ),cx=(minX+maxX)*.5;
-  const headY=minY+height*.36,rearY=minY+height*.36,headX=width*.285,rearX=width*.32;
-  const frontZ=minZ-.025,rearZ=maxZ+.025,rig=new T.Group();rig.name="car-light-rig";parent.add(rig);
-  const lensGeo=new T.SphereGeometry(1,18,12);
-  const headMaterial=new T.MeshStandardMaterial({color:0xffc84a,roughness:.24,metalness:.04,emissive:0xffb52e,emissiveIntensity:.18});
-  const tailMaterial=new T.MeshStandardMaterial({color:0x7f100b,roughness:.3,metalness:.02,emissive:0xff2a18,emissiveIntensity:0});
-  const headLenses=[],tailLenses=[];
-  for(const side of[-1,1]){
-    const head=new T.Mesh(lensGeo,headMaterial);head.position.set(cx+side*headX,headY,frontZ);head.scale.set(width*.09,height*.043,depth*.011);rig.add(head);headLenses.push(head);
-    const tail=new T.Mesh(lensGeo,tailMaterial);tail.position.set(cx+side*rearX,rearY,rearZ);tail.scale.set(width*.065,height*.05,depth*.01);rig.add(tail);tailLenses.push(tail);
-  }
-  const headSpot=new T.SpotLight(0xffd36a,0,48,.36,.58,1.55);headSpot.position.set(cx,headY+.03,frontZ-.05);headSpot.castShadow=false;rig.add(headSpot);
-  const headTarget=new T.Object3D();headTarget.position.set(cx,headY-1.15,frontZ-24);rig.add(headTarget);headSpot.target=headTarget;
-  const reverseLight=new T.PointLight(0xff351f,0,7.5,2);reverseLight.position.set(cx,rearY,rearZ+.08);reverseLight.castShadow=false;rig.add(reverseLight);
-  return {group:rig,headMaterial,tailMaterial,headLenses,tailLenses,headSpot,headTarget,reverseLight};
-}
-function installCarLightRig(targetCar,bounds){
-  targetCar.lightRig=makeCarLightRig(targetCar.group,bounds);
-  updateCarLights(1);
-}
-function updateCarLights(day=1){
-  if(!car?.lightRig)return;
-  const night=smooth(clamp((.42-day)/.42,0,1)),rig=car.lightRig,reverse=!!(car.engineOn&&car.reverseActive);
-  rig.headMaterial.emissiveIntensity=.18+night*3.7;
-  rig.headSpot.intensity=night*165;rig.headSpot.visible=night>.01;
-  rig.tailMaterial.emissiveIntensity=reverse?3.2:0;
-  rig.reverseLight.intensity=reverse?(18+night*24):0;rig.reverseLight.visible=reverse;
-}
-function carLightSmokeDiagnostic(){
-  if(!SMOKE_TEST||!car?.lightRig)return;
-  const engineOn=car.engineOn,reverseActive=car.reverseActive;
-  car.engineOn=true;car.reverseActive=true;updateCarLights(0);
-  const rig=car.lightRig;
-  document.body.dataset.carHeadlightYellow=rig.headMaterial.color.getHex()===0xffc84a?"1":"0";
-  document.body.dataset.carHeadlightNight=rig.headSpot.intensity>120&&rig.headMaterial.emissiveIntensity>3?"1":"0";
-  document.body.dataset.carReverseLight=rig.reverseLight.intensity>15&&rig.tailMaterial.emissiveIntensity>2?"1":"0";
-  document.body.dataset.carLightRig="1";
-  car.engineOn=engineOn;car.reverseActive=reverseActive;updateCarLights(1);
-}
-
 const DETAILED_CAR_PARTS=6;
 let detailedCarBytesPromise=null;
 async function loadDetailedCarBytes(){
@@ -1941,13 +1899,12 @@ function buildDetailedCarModel(bytes){
     const r=u8()/255,g=u8()/255,b=u8()/255,alpha=u8()/255,metalness=u8()/255,roughness=u8()/255;
     const er=u8()/255,eg=u8()/255,eb=u8()/255,flags=u8(),glass=(flags&1)!==0||alpha<.99;
     const material=new T.MeshStandardMaterial({
-      color:glass?new T.Color(0x050607):new T.Color(r,g,b),
-      metalness:glass?.04:metalness,roughness:glass?.32:clamp(roughness,.08,1),
-      emissive:glass?new T.Color(0x000000):new T.Color(er,eg,eb),emissiveIntensity:glass?0:(er+eg+eb)>.02?1.05:0,
-      transparent:false,opacity:1,depthWrite:true,
+      color:new T.Color(r,g,b),metalness,roughness:clamp(roughness,.08,1),
+      emissive:new T.Color(er,eg,eb),emissiveIntensity:(er+eg+eb)>.02?1.05:0,
+      transparent:glass,opacity:glass?clamp(alpha,.22,.9):1,depthWrite:!glass,
       side:glass?T.DoubleSide:T.FrontSide
     });
-    materials.push(material);materialMeta.push({glass,metalness,roughness,r,g,b});
+    materials.push(material);materialMeta.push({glass,metalness,roughness,r,g,b,alpha});
   }
   const records=new Map;
   for(let m=0;m<meshCount;m++){
@@ -1972,8 +1929,51 @@ function buildDetailedCarModel(bytes){
     records.set(id,{geometry,translation,vertexCount,groups});
   }
   if(offset!==view.byteLength||!records.has(0)||!records.has(1))throw new Error("CAR2 asset layout mismatch");
-  const group=new T.Group(),bodyRecord=records.get(0),wheelRecord=records.get(1);
-  const wheelMaterials=materials.map(m=>m.clone()),wheelPos=wheelRecord.geometry.getAttribute("position"),wheelIndex=wheelRecord.geometry.index;
+  const group=new T.Group(),bodyRecord=records.get(0),wheelRecord=records.get(1),bodyPos=bodyRecord.geometry.getAttribute("position"),bodyIndex=bodyRecord.geometry.index;
+  const bodyBox=bodyRecord.geometry.boundingBox,width=Math.max(.001,bodyBox.max.x-bodyBox.min.x),height=Math.max(.001,bodyBox.max.y-bodyBox.min.y),depth=Math.max(.001,bodyBox.max.z-bodyBox.min.z),bodyCX=(bodyBox.min.x+bodyBox.max.x)*.5;
+  const cabinMaterials=[],headlightMaterials=[],tailLightMaterials=[],headlightCenters=[],tailLightCenters=[];
+  const materialUsage=Array(materialCount).fill(0);let bodyIndexTotal=0;
+  for(const g of bodyRecord.groups){materialUsage[g.materialIndex]+=g.count;bodyIndexTotal+=g.count;}
+  let cabinGlassGroups=0,headlightGroups=0,tailLightGroups=0;
+  function groupBounds(g){
+    let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity,sx=0,sy=0,sz=0,n=0;
+    for(let i=g.start;i<g.start+g.count;i++){
+      const vi=bodyIndex.getX(i),x=bodyPos.getX(vi),y=bodyPos.getY(vi),z=bodyPos.getZ(vi);
+      minX=Math.min(minX,x);minY=Math.min(minY,y);minZ=Math.min(minZ,z);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);maxZ=Math.max(maxZ,z);sx+=x;sy+=y;sz+=z;n++;
+    }
+    return {minX,minY,minZ,maxX,maxY,maxZ,cx:sx/n,cy:sy/n,cz:sz/n};
+  }
+  function roleMaterial(base,role){
+    const m=base.clone();m.transparent=false;m.opacity=1;m.depthWrite=true;m.side=T.DoubleSide;
+    if(role==="cabin"){m.color.setHex(0x050607);m.metalness=.035;m.roughness=.34;m.emissive.setHex(0x000000);m.emissiveIntensity=0;}
+    if(role==="head"){m.color.setHex(0xffc84a);m.metalness=.02;m.roughness=.24;m.emissive.setHex(0xffb52e);m.emissiveIntensity=.18;}
+    if(role==="tail"){m.color.setHex(0xb91912);m.metalness=.01;m.roughness=.3;m.emissive.setHex(0xff2a18);m.emissiveIntensity=0;}
+    return m;
+  }
+  bodyRecord.groups.forEach((g,gi)=>{
+    const b=groupBounds(g),meta=materialMeta[g.materialIndex],zn=(b.cz-bodyBox.min.z)/depth,yn=(b.cy-bodyBox.min.y)/height;
+    const spanX=b.maxX-b.minX,spanY=b.maxY-b.minY,spanZ=b.maxZ-b.minZ,lateral=Math.abs(b.cx-bodyCX)/(width*.5),usage=materialUsage[g.materialIndex]/Math.max(1,bodyIndexTotal);
+    const red=meta.r>meta.g*1.12&&meta.r>meta.b*1.1&&meta.r>.07;
+    const redSmall=red&&usage<.12&&meta.metalness<.62&&spanY<height*.42&&spanZ<depth*.22;
+    const lampWidth=lateral>.12||spanX>width*.18;
+    let role="";
+    if(meta.glass&&zn<.22&&yn>.14&&yn<.62&&lampWidth)role="head";
+    else if((meta.glass||redSmall)&&zn>.70&&yn>.10&&yn<.70&&lampWidth)role="tail";
+    else if(meta.glass&&yn>.43&&zn>.12&&zn<.88&&(spanX>width*.18||spanY>height*.12||spanZ>depth*.08))role="cabin";
+    if(!role)return;
+    const m=roleMaterial(materials[g.materialIndex],role),mi=materials.push(m)-1;bodyRecord.geometry.groups[gi].materialIndex=mi;
+    const center=new T.Vector3(b.cx+bodyRecord.translation.x,b.cy+bodyRecord.translation.y,b.cz+bodyRecord.translation.z);
+    if(role==="cabin"){cabinGlassGroups++;cabinMaterials.push(m);}
+    else if(role==="head"){headlightGroups++;headlightMaterials.push(m);headlightCenters.push(center);}
+    else {tailLightGroups++;tailLightMaterials.push(m);tailLightCenters.push(center);}
+  });
+  if(!cabinGlassGroups||!headlightGroups||!tailLightGroups)throw new Error(`CAR2 native groups missing head=${headlightGroups} tail=${tailLightGroups} cabin=${cabinGlassGroups}`);
+  const averageCenter=(list,fallback)=>{
+    if(!list.length)return fallback.clone();const out=new T.Vector3();for(const p of list)out.add(p);return out.multiplyScalar(1/list.length);
+  };
+  const frontCenter=averageCenter(headlightCenters,new T.Vector3(bodyCX,bodyBox.min.y+height*.35,bodyBox.min.z));
+  const rearCenter=averageCenter(tailLightCenters,new T.Vector3(bodyCX,bodyBox.min.y+height*.35,bodyBox.max.z));
+  const wheelMaterials=materials.slice(0,materialCount).map(m=>m.clone()),wheelPos=wheelRecord.geometry.getAttribute("position"),wheelIndex=wheelRecord.geometry.index;
   let tireMaterialIndex=-1,tireScore=-Infinity;
   for(const g of wheelRecord.groups){
     const meta=materialMeta[g.materialIndex];if(!meta||meta.glass)continue;
@@ -1993,11 +1993,9 @@ function buildDetailedCarModel(bytes){
   for(const w of wheelTransforms)sourceWheelBottom=Math.min(sourceWheelBottom,w.y+wheelRecord.geometry.boundingBox.min.y*Math.abs(w.scale));
   const visualLift=clamp(.02-sourceWheelBottom,-.35,.9);
   const body=new T.Mesh(bodyRecord.geometry,materials);body.position.copy(bodyRecord.translation);body.position.y+=visualLift;group.add(body);
-  const bodyBox=bodyRecord.geometry.boundingBox,lightBounds={
-    minX:bodyBox.min.x+bodyRecord.translation.x,maxX:bodyBox.max.x+bodyRecord.translation.x,
-    minY:bodyBox.min.y+bodyRecord.translation.y+visualLift,maxY:bodyBox.max.y+bodyRecord.translation.y+visualLift,
-    minZ:bodyBox.min.z+bodyRecord.translation.z,maxZ:bodyBox.max.z+bodyRecord.translation.z
-  };
+  frontCenter.y+=visualLift;rearCenter.y+=visualLift;
+  const headlightSpot=new T.SpotLight(0xffd36a,0,48,.34,.62,1.5);headlightSpot.position.copy(frontCenter);headlightSpot.castShadow=false;group.add(headlightSpot);
+  const headlightTarget=new T.Object3D();headlightTarget.position.set(frontCenter.x,frontCenter.y-1.1,frontCenter.z-25);group.add(headlightTarget);headlightSpot.target=headlightTarget;
   const wheels=[],frontPivots=[];
   for(let i=0;i<wheelTransforms.length;i++){
     const w=wheelTransforms[i],pivot=new T.Group();pivot.position.set(w.x,w.y+visualLift,w.z);group.add(pivot);
@@ -2005,11 +2003,12 @@ function buildDetailedCarModel(bytes){
     wheel.scale.set(Math.sign(w.scale||1)*scale,scale,scale);pivot.add(wheel);wheels.push(wheel);if(i<2)frontPivots.push(pivot);
   }
   group.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});
-  const glassCount=materialMeta.filter(m=>m.glass).length,glassOpaque=glassCount>0&&materialMeta.every((m,i)=>!m.glass||(materials[i].transparent===false&&materials[i].opacity===1&&materials[i].color.getHex()===0x050607));
+  const glassOpaque=cabinMaterials.length>0&&cabinMaterials.every(m=>m.transparent===false&&m.opacity===1&&m.color.getHex()===0x050607);
   const tireBlack=tireMaterial.color.getHex()===0x08090a&&tireMaterial.transparent===false&&tireMaterial.opacity===1;
   return {
     group,wheels,frontPivots,detailed:true,vertexTotal:bodyRecord.vertexCount+wheelRecord.vertexCount*4,
-    tireMaterialIndex,tireBlack,glassOpaque,glassCount,visualLift,wheelLocalBottom:sourceWheelBottom+visualLift,lightBounds
+    tireMaterialIndex,tireBlack,glassOpaque,glassCount:cabinGlassGroups,visualLift,wheelLocalBottom:sourceWheelBottom+visualLift,
+    headlightMaterials,tailLightMaterials,headlightSpot,headlightGroups,tailLightGroups,cabinGlassGroups,frontLightZ:frontCenter.z,rearLightZ:rearCenter.z
   };
 }
 async function upgradeCarModel(targetCar){
@@ -2019,15 +2018,15 @@ async function upgradeCarModel(targetCar){
     if(!car||car!==targetCar){disposeTree(detailed.group);return}
     for(const child of [...targetCar.group.children]){targetCar.group.remove(child);disposeTree(child)}
     while(detailed.group.children.length)targetCar.group.add(detailed.group.children[0]);
-    targetCar.wheels=detailed.wheels;targetCar.frontPivots=detailed.frontPivots;targetCar.modelDetailed=true;
-    installCarLightRig(targetCar,detailed.lightBounds);
+    targetCar.wheels=detailed.wheels;targetCar.frontPivots=detailed.frontPivots;targetCar.headlightMaterials=detailed.headlightMaterials;targetCar.tailLightMaterials=detailed.tailLightMaterials;targetCar.headlightSpot=detailed.headlightSpot;targetCar.modelDetailed=true;
     document.body.dataset.carModel="detailed";document.body.dataset.carDetailedVerts=String(detailed.vertexTotal);
     document.body.dataset.carTireBlack=detailed.tireBlack?"1":"0";document.body.dataset.carGlassOpaque=detailed.glassOpaque?"1":"0";
     document.body.dataset.carGlassCount=String(detailed.glassCount);document.body.dataset.carWheelLocalBottom=detailed.wheelLocalBottom.toFixed(4);
     document.body.dataset.carVisualLift=detailed.visualLift.toFixed(4);
-    document.body.dataset.carLightsDetailed="1";carLightSmokeDiagnostic();
+    document.body.dataset.carNativeHeadlightGroups=String(detailed.headlightGroups);document.body.dataset.carNativeTailGroups=String(detailed.tailLightGroups);document.body.dataset.carNativeCabinGlassGroups=String(detailed.cabinGlassGroups);
+    document.body.dataset.carNativeFrontZ=detailed.frontLightZ.toFixed(4);document.body.dataset.carNativeRearZ=detailed.rearLightZ.toFixed(4);
     const roadTop=roadSurfaceY(targetCar.group.position.z,0)+ROAD_VISUAL_LIFT;
-    document.body.dataset.carWheelRoadClearance=(targetCar.group.position.y+detailed.wheelLocalBottom-roadTop).toFixed(4);
+    document.body.dataset.carWheelRoadClearance=(targetCar.group.position.y+detailed.wheelLocalBottom-roadTop).toFixed(4);carLightSmokeDiagnostic();
   }catch(error){
     if(car===targetCar){
       targetCar.modelDetailed=false;document.body.dataset.carModel="fallback";
@@ -2044,9 +2043,9 @@ function makeFallbackCarModel(){
   const bodyLightMat=new T.MeshStandardMaterial({color:paintLight,roughness:.4,metalness:.06});
   const chromeMat=new T.MeshStandardMaterial({color:chrome,roughness:.18,metalness:.78});
   const rubberMat=new T.MeshStandardMaterial({color:rubber,roughness:.9,metalness:.02});
-  const glassMat=new T.MeshStandardMaterial({color:glass,roughness:.12,metalness:.12,transparent:true,opacity:.74});
-  const lampMat=new T.MeshStandardMaterial({color:0xffc84a,emissive:0xffb52e,emissiveIntensity:.22,roughness:.25});
-  const tailMat=new T.MeshStandardMaterial({color:0xa9251f,emissive:0x6d0d0a,emissiveIntensity:.18,roughness:.3});
+  const glassMat=new T.MeshStandardMaterial({color:0x050607,roughness:.34,metalness:.035,transparent:false,opacity:1});
+  const lampMat=new T.MeshStandardMaterial({color:0xffc84a,emissive:0xffb52e,emissiveIntensity:.18,roughness:.24});
+  const tailMat=new T.MeshStandardMaterial({color:0xb91912,emissive:0xff2a18,emissiveIntensity:0,roughness:.3});
   const amberMat=new T.MeshStandardMaterial({color:0xe28b22,emissive:0x8f4508,emissiveIntensity:.15,roughness:.34});
   function part(g,m,x,y,z,sx=1,sy=1,sz=1,rx=0,ry=0,rz=0,parent=group){
     const o=new T.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);o.rotation.set(rx,ry,rz);parent.add(o);return o;
@@ -2086,7 +2085,25 @@ function makeFallbackCarModel(){
     part(hubGeo,chromeMat,0,0,0,1,1,1,0,0,0,pivot);
     wheels.push(wheel);if(z<0)frontPivots.push(pivot);
   }
-  return {group,wheels,frontPivots,lightBounds:{minX:-1.06,maxX:1.06,minY:.02,maxY:1.86,minZ:-2.08,maxZ:2.08}};
+  const headlightSpot=new T.SpotLight(0xffd36a,0,48,.34,.62,1.5);headlightSpot.position.set(0,.76,-1.98);headlightSpot.castShadow=false;group.add(headlightSpot);
+  const headlightTarget=new T.Object3D();headlightTarget.position.set(0,-.3,-25);group.add(headlightTarget);headlightSpot.target=headlightTarget;
+  return {group,wheels,frontPivots,headlightMaterials:[lampMat],tailLightMaterials:[tailMat],headlightSpot};
+}
+function updateCarLights(day=1){
+  if(!car)return;
+  const night=smooth(clamp((.42-day)/.42,0,1)),reverse=!!(car.engineOn&&car.reverseActive);
+  for(const m of car.headlightMaterials||[])m.emissiveIntensity=.18+night*3.8;
+  if(car.headlightSpot){car.headlightSpot.intensity=night*155;car.headlightSpot.visible=night>.01;}
+  for(const m of car.tailLightMaterials||[])m.emissiveIntensity=reverse?3.3:0;
+}
+function carLightSmokeDiagnostic(){
+  if(!SMOKE_TEST||!car?.headlightMaterials?.length||!car?.tailLightMaterials?.length)return;
+  const engineOn=car.engineOn,reverseActive=car.reverseActive;car.engineOn=true;car.reverseActive=true;updateCarLights(0);
+  document.body.dataset.carHeadlightYellow=car.headlightMaterials.every(m=>m.color.getHex()===0xffc84a)?"1":"0";
+  document.body.dataset.carHeadlightNight=(car.headlightSpot?.intensity||0)>120&&car.headlightMaterials.every(m=>m.emissiveIntensity>3)?"1":"0";
+  document.body.dataset.carReverseLight=car.tailLightMaterials.every(m=>m.emissiveIntensity>3)?"1":"0";
+  document.body.dataset.carLightGeometryAdded="0";
+  car.engineOn=engineOn;car.reverseActive=reverseActive;updateCarLights(1);
 }
 function carLocalToWorld(x,z,lx,lz,yaw){
   const c=Math.cos(yaw),s=Math.sin(yaw);return {x:x+lx*c+lz*s,z:z-lx*s+lz*c};
@@ -2121,9 +2138,9 @@ function createCar(){
   const z=roadOriginZ-13,f=roadFrame2D(z),lateral=2.15,x=f.x+f.sideX*lateral,yaw=Math.atan(f.dx),model=makeFallbackCarModel();
   scene.add(model.group);
   const pose=carGroundPose(x,z,yaw);
-  car={group:model.group,wheels:model.wheels,frontPivots:model.frontPivots,yaw,pitch:pose.pitch,roll:pose.roll,speed:0,steer:0,occupied:false,engineOn:false,reverseActive:false,modelDetailed:false,lightRig:null};
+  car={group:model.group,wheels:model.wheels,frontPivots:model.frontPivots,headlightMaterials:model.headlightMaterials,tailLightMaterials:model.tailLightMaterials,headlightSpot:model.headlightSpot,yaw,pitch:pose.pitch,roll:pose.roll,speed:0,steer:0,occupied:false,engineOn:false,reverseActive:false,modelDetailed:false};
   car.group.position.set(x,pose.y,z);car.group.rotation.set(pose.pitch,yaw,pose.roll);
-  installCarLightRig(car,model.lightBounds);upgradeCarModel(car);
+  upgradeCarModel(car);
 }
 function carInteractionDistance(){
   if(!car)return Infinity;
