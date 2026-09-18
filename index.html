@@ -993,7 +993,7 @@ function grassColors(){
   return {base,tip};
 }
 function makeGrassMaterial(base,tip){
-  const material=new T.MeshStandardMaterial({color:0xffffff,roughness:1,metalness:0,side:T.DoubleSide});
+  const material=new T.MeshLambertMaterial({color:0xffffff,side:T.DoubleSide});
   material.onBeforeCompile=shader=>{
     shader.uniforms.uWindTime=windTimeUniform;
     shader.uniforms.uWindDirection=windDirectionUniform;
