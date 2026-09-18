@@ -31,21 +31,81 @@ if(k===2)return(n-.46)*G.relief*.45+Math.pow(1-Math.abs(Math.sin(u*G.freq*8+n*8)
 if(k===3){let h=(n-.46)*G.relief*.26,cell=180,cx=Math.floor(x/cell),cz=Math.floor(z/cell);for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){let X=cx+dx,Z=cz+dz;if(worldRandom(X,Z,0x391a)<.44)continue;let px=(X+worldRandom(X,Z,0x711))*cell,pz=(Z+worldRandom(X,Z,0x9b3))*cell,r=25+worldRandom(X,Z,0x4d1)*65,deep=(2+worldRandom(X,Z,0x8c7)*28)*(.12+G.relief/110),d=Math.hypot(x-px,z-pz)/r;h+=Math.exp(-(((d-1)/.18)**2))*deep*.55-Math.exp(-((d/.7)**4))*deep}return h}
 if(k===4){let w=.5+.5*Math.sin(u*G.freq*7+fbm(u*G.freq,v*G.freq*.5)*9);return w**2.5*G.relief*.3+(n-.42)*G.relief*.18}
 let ch=Math.abs(Math.sin(u*G.freq*3+fbm(u*G.freq,v*G.freq)*5));return(n-.41)*G.relief-Math.exp(-ch*ch*28)*(2+G.relief*.2)}
-function height(x,z){
+function baseHeight(x,z){
   const rawRegion=fbm(x*G.regionScale+130,z*G.regionScale-80);
   const region=smooth(clamp((rawRegion-(.5-G.regionWidth))/(G.regionWidth*2),0,1))*G.regionStrength;
   let h=mix(shape(G.kind,x,z),shape(G.second,x,z),region);
   const reliefField=fbm(x*.0027-91,z*.0027+147);
-  h*=mix(1,.34+reliefField*1.32,G.terrainVariation);
+  return h*mix(1,.34+reliefField*1.32,G.terrainVariation);
+}
+function basinField(x,z){
+  const g=G.geology,cell=g.basinCell,cx=Math.floor(x/cell),cz=Math.floor(z/cell);let field=0;
+  for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){
+    const X=cx+dx,Z=cz+dz;
+    if(worldRandom(X,Z,0x5b41)>.14+g.basinStrength*.26)continue;
+    const px=(X+.12+worldRandom(X,Z,0xa72d)*.76)*cell,pz=(Z+.12+worldRandom(X,Z,0xc319)*.76)*cell;
+    const radius=cell*g.basinRadius*(.72+worldRandom(X,Z,0xd11f)*.65),d=Math.hypot(x-px,z-pz)/radius;
+    const bowl=Math.pow(1-smooth(clamp((d-.12)/.88,0,1)),1.45);
+    field=Math.max(field,bowl);
+  }
+  return field;
+}
+function geologicalHeight(x,z,h){
+  const g=G.geology,base=h;
+  const macro=fbm(x*g.macroScale+g.phaseX,z*g.macroScale-g.phaseZ,3);
+  let u=x,v=z;
+  if(g.ridgeStrength>.04||g.canyonStrength>.05){
+    const c=Math.cos(g.angle),s=Math.sin(g.angle);
+    const warp=(fbm(x*g.warpScale-g.phaseZ,z*g.warpScale+g.phaseX,2)-.5)*g.warp;
+    u=x*c-z*s+warp;v=x*s+z*c-warp*.63;
+  }
+  if(g.ridgeStrength>.04){
+    const mountain=smooth(clamp((macro-.47)/.30,0,1));
+    const n=fbm(u*g.ridgeScale+19,v*g.ridgeScale-37,3);
+    const ridge=Math.pow(1-Math.abs(n*2-1),g.ridgeSharpness);
+    h+=ridge*mountain*(7+G.relief*.22)*g.ridgeStrength;
+  }
+  if(g.basinStrength>.04){
+    const basin=basinField(x,z),lowland=mix(.45,1,smooth(clamp((.68-macro)/.38,0,1)));
+    h-=basin*lowland*(6+G.relief*.12)*g.basinStrength;
+  }
+  if(g.plateauStrength>.05){
+    const mask=smooth(clamp((macro-.42)/.34,0,1))*g.plateauStrength;
+    if(mask>.01){
+      const step=g.terraceStep,q=h/step,level=Math.floor(q),fraction=q-level;
+      const edge=(1-g.terraceSoftness)*.5;
+      const terraced=(level+smooth(clamp((fraction-edge)/g.terraceSoftness,0,1)))*step;
+      h=mix(h,terraced,mask*.68);
+    }
+  }
+  if(g.canyonStrength>.05){
+    const region=smooth(clamp((.58-macro)/.32,0,1));
+    const n=fbm(u*g.canyonScale-211,v*g.canyonScale+173,3);
+    const distance=Math.abs(n-.5),line=1-smooth(clamp(distance/g.canyonWidth,0,1));
+    const depth=(8+G.relief*.16)*g.canyonStrength*region;
+    h-=depth*(Math.pow(line,1.35)*.38+Math.pow(line,3.2)*.82);
+  }
+  const limit=10+G.relief*.23;
+  return base+clamp(h-base,-limit*.88,limit);
+}
+function applyPathHeight(x,z,h){
   const p=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve),pathBlend=Math.exp(-p*p/190);
   h=mix(h,(fbm(x*.004,z*.004)-.42)*10*G.pathRelief+G.water+3,pathBlend*.88);
-  h+=(noise(x*.065,z*.065)-.5)*G.roughness*(1-pathBlend);
+  return h+(noise(x*.065,z*.065)-.5)*G.roughness*(1-pathBlend);
+}
+function applyHomeHeight(x,z,h){
   for(const home of homes){
     const d=Math.max(Math.abs(x-home.x-4)/27,Math.abs(z-home.z)/23),blend=1-smooth(clamp((d-1)/.4,0,1));
     h=mix(h,home.base-.05,blend);
     if(home.basement&&home.cells.some(([ix,iz])=>Math.abs(x-home.x-ix*8)<4.4&&Math.abs(z-home.z-iz*8)<4.4))h=home.base-4.25;
   }
   return h;
+}
+function height(x,z){
+  let h=baseHeight(x,z);
+  h=geologicalHeight(x,z,h);
+  h=applyPathHeight(x,z,h);
+  return applyHomeHeight(x,z,h);
 }
 function floraDensity(x,z,y){
   const broad=fbm(x*G.forestScale+G.phase*37,z*G.forestScale-G.phase*23);
@@ -758,10 +818,17 @@ function createChunk(cx,cz,detailed){
   const baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE,group=new T.Group();group.position.set(baseX,0,baseZ);scene.add(group);
   const geo=new T.PlaneGeometry(CHUNK_SIZE,CHUNK_SIZE,CHUNK_SEG,CHUNK_SEG);geo.rotateX(-Math.PI/2);
   const pos=geo.attributes.position,colors=new Float32Array(pos.count*3),normals=new Float32Array(pos.count*3),normal=new T.Vector3();
-  for(let i=0;i<pos.count;i++){
-    const x=baseX+pos.getX(i)+CHUNK_SIZE/2,z=baseZ+pos.getZ(i)+CHUNK_SIZE/2,y=height(x,z);
-    pos.setXYZ(i,pos.getX(i)+CHUNK_SIZE/2,y,pos.getZ(i)+CHUNK_SIZE/2);
-    const hx=height(x-CHUNK_STEP,z)-height(x+CHUNK_STEP,z),hz=height(x,z-CHUNK_STEP)-height(x,z+CHUNK_STEP);
+  // Height is expensive once geology is layered in. Build one seam-safe lattice, including a one-vertex margin for normals.
+  const side=CHUNK_SEG+3,heightGrid=new Float64Array(side*side),grid=(ix,iz)=>heightGrid[(iz+1)*side+(ix+1)];
+  // PlaneGeometry stores local Y inverted; after rotateX(-PI/2) its row order maps directly to increasing world Z.
+  for(let iz=-1;iz<=CHUNK_SEG+1;iz++)for(let ix=-1;ix<=CHUNK_SEG+1;ix++){
+    const x=baseX+ix*CHUNK_STEP,z=baseZ+iz*CHUNK_STEP;
+    heightGrid[(iz+1)*side+(ix+1)]=height(x,z);
+  }
+  for(let iz=0;iz<=CHUNK_SEG;iz++)for(let ix=0;ix<=CHUNK_SEG;ix++){
+    const i=iz*(CHUNK_SEG+1)+ix,x=baseX+ix*CHUNK_STEP,z=baseZ+iz*CHUNK_STEP,y=grid(ix,iz);
+    pos.setXYZ(i,ix*CHUNK_STEP,y,iz*CHUNK_STEP);
+    const hx=grid(ix-1,iz)-grid(ix+1,iz),hz=grid(ix,iz-1)-grid(ix,iz+1);
     normal.set(hx,CHUNK_STEP*2,hz).normalize();normals[i*3]=normal.x;normals[i*3+1]=normal.y;normals[i*3+2]=normal.z;
     const slope=Math.hypot(hx,hz)/(CHUNK_STEP*2);
     const warpedY=y+(noise(x*.0031+211,z*.0031-97)-.5)*worldPalette.altitudeWarp;
@@ -1286,6 +1353,15 @@ regionStrength:Math.pow(rnd(),.72),regionScale:.0015+rnd()*.006,regionWidth:.12+
 terrainVariation:Math.pow(rnd(),1.15),roughness:.08+Math.pow(rnd(),1.3)*3.1,pathRelief:.12+rnd()*.88,
 forestCover:Math.pow(coverSeed,.72),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
 forestContrast:.25+rnd()*1.75};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;
+const geoR=rng(G.hash^0x5f3759df),geoDominant=Math.floor(geoR()*4),geoStrengths=[Math.pow(geoR(),2.6),Math.pow(geoR(),2.6),Math.pow(geoR(),2.6),Math.pow(geoR(),2.6)];
+geoStrengths[geoDominant]=Math.max(geoStrengths[geoDominant],.62+geoR()*.34);
+if(geoR()<.14){for(let i=0;i<geoStrengths.length;i++)geoStrengths[i]*=.5;geoStrengths[geoDominant]=Math.max(geoStrengths[geoDominant],.36);}
+G.geology={
+  dominant:geoDominant,ridgeStrength:geoStrengths[0],basinStrength:geoStrengths[1],plateauStrength:geoStrengths[2],canyonStrength:geoStrengths[3],
+  macroScale:.00055+geoR()*.00045,angle:geoR()*Math.PI*2,warpScale:.0007+geoR()*.00045,warp:28+geoR()*92,
+  ridgeScale:.0027+geoR()*.0023,ridgeSharpness:2.6+geoR()*2.4,canyonScale:.0018+geoR()*.0018,canyonWidth:.045+geoR()*.045,
+  basinCell:380+geoR()*300,basinRadius:.18+geoR()*.14,terraceStep:4.5+geoR()*5.5,terraceSoftness:.34+geoR()*.24,phaseX:geoR()*900,phaseZ:geoR()*900
+};
 const fogR=rng(G.hash^0x18f2a7),foggy=fogR()<.22+G.wet*.52;G.foggy=foggy;G.fogDensity=foggy?.00115+G.wet*.0018:.00011;
 const paletteR=rng(G.hash^0x6ca91),baseHue=G.hue,botanicalShift=(paletteR()-.5)*.11;
 let sky=col(baseHue,.2+paletteR()*.12,.46+paletteR()*.1),

@@ -1,0 +1,20 @@
+name: Worldgen safety checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  worldgen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch Epsilon reference
+        run: git fetch origin epsilon:refs/remotes/origin/epsilon
+      - name: Check generator invariants
+        run: node scripts/check-worldgen.mjs
