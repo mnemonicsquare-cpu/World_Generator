@@ -190,17 +190,14 @@ function applyInfiniteRoadHeight(x,z,h){
   return mix(h,target,blend);
 }
 function makeRoadAsphaltMaterial(){
-  const asphalt=new T.MeshStandardMaterial({color:0x303236,roughness:.965,metalness:.01});
-  asphalt.onBeforeCompile=shader=>{
-    shader.vertexShader=shader.vertexShader
-      .replace("#include <common>","#include <common>\nvarying vec3 vRoadWorld;")
-      .replace("#include <begin_vertex>","#include <begin_vertex>\nvRoadWorld=(modelMatrix*vec4(transformed,1.0)).xyz;");
-    shader.fragmentShader=shader.fragmentShader
-      .replace("#include <common>","#include <common>\nvarying vec3 vRoadWorld;\nfloat roadAsphaltHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}")
-      .replace("#include <map_fragment>","#include <map_fragment>\nfloat roadCoarse=roadAsphaltHash(floor(vRoadWorld.xz*2.8));\nfloat roadFine=roadAsphaltHash(floor(vRoadWorld.xz*10.5)+19.0);\nfloat roadGrain=(roadCoarse-.5)*.105+(roadFine-.5)*.035;\nfloat roadAggregate=step(.965,roadFine)*.045;\ndiffuseColor.rgb*=1.0+roadGrain+roadAggregate;");
-  };
-  asphalt.customProgramCacheKey=()=>"road-asphalt-dark-gray-v1";
-  return asphalt;
+  return new T.MeshStandardMaterial({
+    color:0x242629,
+    roughness:.985,
+    metalness:0,
+    polygonOffset:true,
+    polygonOffsetFactor:-2,
+    polygonOffsetUnits:-2
+  });
 }
 function makeRoadChunk(cx,cz,parent){
   if(!roadReady)return null;
@@ -209,18 +206,19 @@ function makeRoadChunk(cx,cz,parent){
     const n=arr.length/3;for(const p of [a,b,c,d])arr.push(p[0]-baseX,p[1],p[2]-baseZ);inds.push(n,n+1,n+2,n,n+2,n+3);
   };
   const start=Math.floor(baseZ/ROAD_MESH_STEP)*ROAD_MESH_STEP-ROAD_MESH_STEP,end=baseZ+CHUNK_SIZE+ROAD_MESH_STEP;
+  const roadLift=.12,markLift=.17;
   let segments=0;
   for(let z=start;z<end;z+=ROAD_MESH_STEP){
     const z0=z,z1=z+ROAD_MESH_STEP,zm=(z0+z1)*.5,xm=roadCenterX(zm);
     if(Math.floor(xm/CHUNK_SIZE)!==cx||Math.floor(zm/CHUNK_SIZE)!==cz)continue;
     const a=roadFrame2D(z0),b=roadFrame2D(z1),y0=roadSurfaceY(z0),y1=roadSurfaceY(z1);
-    const l0=[a.x-a.sideX*ROAD_HALF,y0+.035,z0-a.sideZ*ROAD_HALF],r0=[a.x+a.sideX*ROAD_HALF,y0+.035,z0+a.sideZ*ROAD_HALF];
-    const l1=[b.x-b.sideX*ROAD_HALF,y1+.035,z1-b.sideZ*ROAD_HALF],r1=[b.x+b.sideX*ROAD_HALF,y1+.035,z1+b.sideZ*ROAD_HALF];
+    const l0=[a.x-a.sideX*ROAD_HALF,y0+roadLift,z0-a.sideZ*ROAD_HALF],r0=[a.x+a.sideX*ROAD_HALF,y0+roadLift,z0+a.sideZ*ROAD_HALF];
+    const l1=[b.x-b.sideX*ROAD_HALF,y1+roadLift,z1-b.sideZ*ROAD_HALF],r1=[b.x+b.sideX*ROAD_HALF,y1+roadLift,z1+b.sideZ*ROAD_HALF];
     pushQuad(verts,indices,l0,r0,r1,l1);segments++;
     const dash=Math.floor((zm-roadOriginZ)/ROAD_MESH_STEP);
     if((dash&1)===0){
       const mw=.10;
-      pushQuad(marks,markIndices,[a.x-a.sideX*mw,y0+.065,z0-a.sideZ*mw],[a.x+a.sideX*mw,y0+.065,z0+a.sideZ*mw],[b.x+b.sideX*mw,y1+.065,z1+b.sideZ*mw],[b.x-b.sideX*mw,y1+.065,z1-b.sideZ*mw]);
+      pushQuad(marks,markIndices,[a.x-a.sideX*mw,y0+markLift,z0-a.sideZ*mw],[a.x+a.sideX*mw,y0+markLift,z0+a.sideZ*mw],[b.x+b.sideX*mw,y1+markLift,z1+b.sideZ*mw],[b.x-b.sideX*mw,y1+markLift,z1-b.sideZ*mw]);
     }
   }
   if(!segments)return null;
@@ -230,7 +228,7 @@ function makeRoadChunk(cx,cz,parent){
   let marking=null;
   if(marks.length){
     const mg=new T.BufferGeometry();mg.setAttribute("position",new T.Float32BufferAttribute(marks,3));mg.setIndex(markIndices);mg.computeVertexNormals();
-    marking=new T.Mesh(mg,new T.MeshStandardMaterial({color:0xe7dec1,roughness:.82,metalness:0}));marking.renderOrder=3;parent.add(marking);
+    marking=new T.Mesh(mg,new T.MeshStandardMaterial({color:0xf1ead2,roughness:.84,metalness:0,polygonOffset:true,polygonOffsetFactor:-3,polygonOffsetUnits:-3}));marking.renderOrder=4;parent.add(marking);
   }
   return {mesh,marking,segments};
 }
@@ -2167,7 +2165,7 @@ if(SMOKE_TEST){
     }
   }
 }
-document.body.dataset.roadSegments=String(roadSegments);document.body.dataset.roadMaxGrade=roadStats.grade.toFixed(4);document.body.dataset.roadLateralRange=roadStats.range.toFixed(1);document.body.dataset.roadMinRadius=Number.isFinite(roadStats.minRadius)?roadStats.minRadius.toFixed(1):"9999";document.body.dataset.roadFarGrade=roadFarGrade.toFixed(4);document.body.dataset.roadFarOk=roadFarOk?"1":"0";
+document.body.dataset.roadSegments=String(roadSegments);document.body.dataset.roadAsphaltColor="242629";document.body.dataset.roadLift=".12";document.body.dataset.roadMaxGrade=roadStats.grade.toFixed(4);document.body.dataset.roadLateralRange=roadStats.range.toFixed(1);document.body.dataset.roadMinRadius=Number.isFinite(roadStats.minRadius)?roadStats.minRadius.toFixed(1):"9999";document.body.dataset.roadFarGrade=roadFarGrade.toFixed(4);document.body.dataset.roadFarOk=roadFarOk?"1":"0";
 if(car){document.body.dataset.carReady="1";document.body.dataset.carRoadDistance=roadDistance(car.group.position.x,car.group.position.z).toFixed(3)}else{document.body.dataset.carReady="0";document.body.dataset.carRoadDistance="999"}carSmokeDiagnostic();
 document.body.dataset.grassInstances=String(flora.grass);document.body.dataset.grassCover=G.grass.cover.toFixed(3);document.body.dataset.fogNear=G.fogNear.toFixed(1);document.body.dataset.fogFar=G.fogFar.toFixed(1);document.body.dataset.fogMoisture=G.fogMoisture.toFixed(3);let generations=[...new Set(floraCatalog.map(s=>s.iterations))].sort().join(","),names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};document.body.dataset.generationStage="complete";$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · бескрайний · "+wx[wt]+": "+weather.count+" частиц · рядом: "+flora.plants+" растений, "+floraCatalog.length+" форм, поколения "+generations+" · грибы: "+flora.mushrooms+" · фауна: "+flora.animals+" / "+faunaCatalog.length+" видов · птицы: "+flora.birds+" / "+birdCatalog.length+" видов · руины: "+sites.length+" · строения: "+homes.length+" · дорога: бесконечная";if(audio)audio.filter.frequency.value=250+G.slender*900}
 
