@@ -200,7 +200,10 @@ for(const required of [
   "WORLD_PROFILE_CACHE_MAX","regionBlendGeometry","worldBlendAt","makeRegionalProfile","regionalPaletteAt",
   "regionalGrassAt","regionalEnvironmentAt","initRegionalWorlds","heightOffset"
 ])if(!current.includes(required))fail("missing seamless-world primitive: "+required);
-if(!current.includes("buildHomes();createPlane(sites);initRegionalWorlds"))fail("regional layer must activate only after legacy spawn structures are established");
+const startupSchedulePos=current.indexOf("scheduleChunks(true);"),regionalInitPos=current.indexOf("initRegionalWorlds(seed,sky,horizon);");
+if(startupSchedulePos<0||regionalInitPos<0||regionalInitPos<startupSchedulePos)fail("regional layer must activate only after legacy spawn chunks are generated");
+const clearSection=section(current,"function clear(){","function instances(");
+for(const marker of ["regionalEnabled=false","originProfile=null","originFastRadius=0","regionProfiles.clear()","universeHash=0","universeSeaLevel=0"])if(!clearSection.includes(marker))fail("new-seed reset lost regional state guard: "+marker);
 if(!current.includes("rawTerrainHeightFor(item.profile,x,z)+item.profile.heightOffset"))fail("regional terrain is not height-aligned to the common sea level");
 if(!current.includes("waterLevelAt(x,z)"))fail("regional ecology is not using the common water level");
 
