@@ -1952,10 +1952,11 @@ function buildDetailedCarModel(bytes){
     const b=groupBounds(g),meta=materialMeta[g.materialIndex],zn=(b.cz-bodyBox.min.z)/depth,yn=(b.cy-bodyBox.min.y)/height;
     const spanX=b.maxX-b.minX,spanY=b.maxY-b.minY,spanZ=b.maxZ-b.minZ,lateral=Math.abs(b.cx-bodyCX)/(width*.5);
     const red=meta.r>meta.g*1.35&&meta.r>meta.b*1.25&&meta.r>.18;
+    const redSmall=red&&spanY<height*.34&&spanZ<depth*.18&&spanX<width*.62;
     const lampWidth=lateral>.16||spanX>width*.24;
     let role="";
     if(meta.glass&&zn<.22&&yn>.14&&yn<.62&&lampWidth)role="head";
-    else if((meta.glass||red)&&zn>.77&&yn>.13&&yn<.64&&lampWidth)role="tail";
+    else if((meta.glass||redSmall)&&zn>.77&&yn>.13&&yn<.64&&lampWidth)role="tail";
     else if(meta.glass&&yn>.43&&zn>.12&&zn<.88&&(spanX>width*.18||spanY>height*.12||spanZ>depth*.08))role="cabin";
     if(!role)return;
     const m=roleMaterial(materials[g.materialIndex],role),mi=materials.push(m)-1;bodyRecord.geometry.groups[gi].materialIndex=mi;
