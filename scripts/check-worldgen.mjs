@@ -41,8 +41,10 @@ for(const marker of [
   "function applyHomeHeight(x,z,h)",
   "function naturalTerrainHeight(x,z)",
   "function terrainPatch(x,z,radius=10)",
+  "function calibrateWaterLevel()",
   "function findNaturalSpawn()",
   "G.legacyPath=G.path;G.path=1e12;",
+  "calibrateWaterLevel();",
   "G.geology={"
 ]){
   if(!current.includes(marker))fail("missing terrain architecture marker: "+marker);
@@ -51,10 +53,14 @@ for(const marker of [
 for(const legacyPattern of [
   "for(let z=140;z>-160;z-=4)",
   "z=80-i*220",
-  "const center=G.path"
+  "const center=G.path",
+  "if(p.max<=G.water+.75)continue"
 ]){
   if(current.includes(legacyPattern))fail("legacy path-based placement returned: "+legacyPattern);
 }
+
+if(!current.includes("centerY<=G.water+.85"))fail("spawn center is not required to be dry");
+if(!current.includes("G.water=Math.min(G.water,anchor.y-1.15)"))fail("absolute land guard is missing");
 
 console.log("worldgen checks passed");
 console.log("- JavaScript syntax: OK");
