@@ -924,7 +924,7 @@ function attachWindToFlora(group,chunk){
     for(let i=0;i<o.count;i++){
       o.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);
       const wx=chunk.cx*CHUNK_SIZE+position.x,wz=chunk.cz*CHUNK_SIZE+position.z,baseY=terrainY(position.x,position.z);
-      const phase=wx*.019+wz*.023,response=.84+worldRandom(Math.floor(wx*2),Math.floor(wz*2),0x6a51)*.32;
+      const rawPhase=wx*.019+wz*.023,phase=((rawPhase%6.28318530718)+6.28318530718)%6.28318530718,response=.84+worldRandom(Math.floor(wx*2),Math.floor(wz*2),0x6a51)*.32;
       const k=i*4;data[k]=baseY;data[k+1]=phase;data[k+2]=response;data[k+3]=0;
     }
     o.geometry.setAttribute("windData",new T.InstancedBufferAttribute(data,4));
