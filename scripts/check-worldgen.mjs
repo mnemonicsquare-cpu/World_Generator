@@ -442,9 +442,13 @@ for(const marker of [
   "document.body.dataset.carNativeHeadlightGroups",
   "document.body.dataset.carNativeTailGroups",
   "document.body.dataset.carNativeCabinGlassGroups",
+  "document.body.dataset.carHeadlightOffGray",
   "document.body.dataset.carHeadlightYellow",
   "document.body.dataset.carHeadlightNight",
+  "document.body.dataset.carHeadlightBeams",
+  "document.body.dataset.carHeadlightBeamSeparation",
   "document.body.dataset.carReverseLight",
+  "document.body.dataset.carReverseRed",
   "document.body.dataset.carLightGeometryAdded",
   'document.body.dataset.carModel="detailed"',
   "document.body.dataset.carDetailedVerts",
@@ -463,7 +467,11 @@ for(const marker of [
   "cam.position.lerp(desired",
   "cam.lookAt(target)",
   "function updateCarLights(day=1)",
-  "new T.SpotLight(0xffd36a,0,48",
+  "const headlightSpots=[]",
+  "new T.SpotLight(0xffd36a,0,44,.235,.42,1.55)",
+  "carHeadlightOffColor=new T.Color(0x7a8083)",
+  "m.color.copy(carHeadlightOffColor).lerp(carHeadlightOnColor,night)",
+  "m.color.setHex(reverse?0xa20a07:0x560807)",
   "function carLightSmokeDiagnostic()",
   "function updateCar(dt)",
   "car.reverseActive=!!",
@@ -477,6 +485,11 @@ if(!current.includes('if(!plane?.occupied&&!car?.occupied&&e.code==="Space"&&gro
 if(!clearSection.includes("stopCarEngineAudio()")||!clearSection.includes("car=null"))fail("new-world reset does not fully dispose car state");
 if(!current.includes('document.body.dataset.carReady')||!current.includes('document.body.dataset.carSmokeMoved')||!current.includes('document.body.dataset.carCameraGap'))fail("car browser smoke diagnostics are missing");
 if(!current.includes('updateNightSky(e,day,front,top,h,tw);updateCarLights(day)'))fail("native headlights are not coupled to the day/night cycle");
+if(!carSection.includes("const headlightSideSum=")||!carSection.includes("const headlightBeamCenters="))fail("native left/right headlight centers are not derived from the model geometry");
+if(!carSection.includes("headlightSpots?.length===2"))fail("headlight smoke diagnostic does not require two beams");
+if(carSection.includes("const headlightSpot=new T.SpotLight"))fail("single central headlight beam was reintroduced");
+if(!carSection.includes("m.color.setHex(reverse?0xa20a07:0x560807)")||!carSection.includes("m.emissive.setHex(0xff0000)"))fail("reverse signal lamps are not explicitly red");
+if(!carSection.includes("carHeadlightOffColor=new T.Color(0x7a8083)"))fail("unlit headlamps are not gray");
 if(carSection.includes("headLenses")||carSection.includes("tailLenses")||carSection.includes('name="car-light-rig"'))fail("auxiliary floating lamp geometry was reintroduced");
 if(!carSection.includes('document.body.dataset.carLightGeometryAdded="0"'))fail("native-light no-extra-geometry diagnostic is missing");
 
