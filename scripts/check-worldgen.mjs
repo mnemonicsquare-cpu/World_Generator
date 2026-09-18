@@ -193,6 +193,51 @@ if(denseGrassWorlds<300)fail("Grass DNA no longer produces enough genuinely gras
 if(almostBareWorlds<180)fail("Grass DNA no longer produces enough nearly bare worlds");
 if(maxGrassCover-minGrassCover<.75)fail("Grass cover lacks meaningful world-to-world variation");
 
+
+// Seamless-world layer: region geometry must be deterministic, normalized, broad, and continuous.
+const seamlessSource=section(current,"function waterLevelAt(x=0,z=0){","function update(dt){");
+for(const required of [
+  "WORLD_PROFILE_CACHE_MAX","regionBlendGeometry","worldBlendAt","makeRegionalProfile","regionalPaletteAt",
+  "regionalGrassAt","regionalEnvironmentAt","initRegionalWorlds","heightOffset"
+])if(!current.includes(required))fail("missing seamless-world primitive: "+required);
+if(!current.includes("buildHomes();createPlane(sites);initRegionalWorlds"))fail("regional layer must activate only after legacy spawn structures are established");
+if(!current.includes("rawTerrainHeightFor(item.profile,x,z)+item.profile.heightOffset"))fail("regional terrain is not height-aligned to the common sea level");
+if(!current.includes("waterLevelAt(x,z)"))fail("regional ecology is not using the common water level");
+
+const blendGeometrySource=section(current,"function universeRandom(x,z,salt=0){","function rawTerrainHeightFor(profile,x,z){");
+let blendTools;
+try{
+  blendTools=new Function(`
+    const CHUNK_SIZE=160,WORLD_CELL=CHUNK_SIZE*22,WORLD_BLEND=CHUNK_SIZE*3.5;
+    let universeHash=0x12345678,regionalEnabled=true;
+    const clamp=(x,a,b)=>Math.min(b,Math.max(a,x)),mix=(a,b,t)=>a+(b-a)*t,smooth=x=>x*x*(3-2*x);
+    ${blendGeometrySource}
+    return {regionBlendGeometry,regionCenter,warpedUniversePoint};
+  `)();
+}catch(error){fail("Seamless region geometry harness could not be built: "+error.message);}
+for(const [x,z] of [[0,0],[3519,0],[-3519,1221],[7040,-5280],[12345,6789]]){
+  const a=blendTools.regionBlendGeometry(x,z),b=blendTools.regionBlendGeometry(x,z);
+  if(JSON.stringify(a)!==JSON.stringify(b))fail("region blend is not deterministic at "+x+","+z);
+  const total=a.reduce((s,v)=>s+v.weight,0);
+  if(Math.abs(total-1)>1e-9)fail("region weights do not normalize at "+x+","+z+": "+total);
+  if(!a.length||a.length>4)fail("unexpected active region count at "+x+","+z+": "+a.length);
+  for(const item of a)if(!Number.isFinite(item.weight)||item.weight<=0||item.weight>1||!Number.isFinite(item.distance))fail("invalid region blend item");
+}
+let mixedSamples=0,dominantSamples=0,changes=0,lastKey=null;
+for(let x=-WORLD_CELL*3;x<=WORLD_CELL*3;x+=80){
+  const a=blendTools.regionBlendGeometry(x,137);
+  if(a.length>1)mixedSamples++;else dominantSamples++;
+  if(lastKey!==null&&a[0].key!==lastKey)changes++;
+  lastKey=a[0].key;
+  const b=blendTools.regionBlendGeometry(x+.5,137);
+  const wa=new Map(a.map(v=>[v.key,v.weight])),wb=new Map(b.map(v=>[v.key,v.weight]));
+  let delta=0;for(const key of new Set([...wa.keys(),...wb.keys()]))delta+=Math.abs((wa.get(key)||0)-(wb.get(key)||0));
+  if(delta>.035)fail("region weights change too sharply across half a world unit: "+delta);
+}
+if(mixedSamples<12)fail("transition bands are too narrow or absent");
+if(dominantSamples<20)fail("world interiors disappeared into permanent blending");
+if(changes<4)fail("long travel does not cross enough distinct worlds");
+
 const epsilonShapeEnd=epsilonBeta.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
 const currentShapeEnd=current.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
 const epsilonShape=section(epsilonBeta,"function shape(",epsilonShapeEnd);
