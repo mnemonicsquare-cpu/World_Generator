@@ -18,8 +18,8 @@ const SMOKE_TEST=new URLSearchParams(location.search).has("smoke");
 let mobileForward=0,mobileSide=0,mobileBoost=false,mobileThrottleDown=false;
 let universeSeed="",universeHash=0,originProfile=null,regionalEnabled=false,universeSeaLevel=0,originFastRadius=0,universeOriginX=0,universeOriginZ=0;
 const WORLD_CELL=CHUNK_SIZE*22,WORLD_BLEND=CHUNK_SIZE*3.5,WORLD_PROFILE_CACHE_MAX=36,regionProfiles=new Map;
-let roadReady=false,roadHash=0,roadOriginX=0,roadOriginZ=0,roadDNA=null;
-const ROAD_HALF=4.8,ROAD_SHOULDER=7.2,ROAD_BLEND=26,ROAD_CLEAR=10.5,ROAD_MESH_STEP=8;
+let roadReady=false,roadHash=0,roadOriginX=0,roadOriginZ=0,roadBaseY=0,roadDNA=null;
+const ROAD_HALF=4.8,ROAD_SHOULDER=7.2,ROAD_BLEND=34,ROAD_CLEAR=10.5,ROAD_MESH_STEP=8,ROAD_PROFILE_STEP=480,ROAD_PROFILE_CACHE_MAX=192,roadProfileCache=new Map;
 const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost;
 function hash(s){let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(),16777619);return h>>>0}
 function rng(s){return()=>{s|=0;s=s+0x6d2b79f5|0;let t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296}}
@@ -126,13 +126,15 @@ function roadRandom(i,salt=0){
   let q=Math.imul(i|0,374761393)^roadHash^salt;q=Math.imul(q^q>>>13,1274126177);return((q^q>>>16)>>>0)/4294967296;
 }
 function initInfiniteRoad(seedHash,x,z){
-  const r=rng((seedHash^0x6a09e667)>>>0);roadHash=seedHash;roadOriginX=x;roadOriginZ=z;
+  const r=rng((seedHash^0x6a09e667)>>>0);roadHash=seedHash;roadOriginX=x;roadOriginZ=z;roadProfileCache.clear();
   roadDNA={
     macroAmp:160+r()*150,macroWave:2900+r()*2300,macroPhase:r()*Math.PI*2,
     midAmp:65+r()*85,midWave:900+r()*950,midPhase:r()*Math.PI*2,
-    fineAmp:18+r()*38,fineWave:360+r()*420,finePhase:r()*Math.PI*2
+    fineAmp:18+r()*38,fineWave:360+r()*420,finePhase:r()*Math.PI*2,
+    vertAmpA:4+r()*4,vertWaveA:3200+r()*1800,vertPhaseA:r()*Math.PI*2,
+    vertAmpB:2+r()*2,vertWaveB:1700+r()*900,vertPhaseB:r()*Math.PI*2
   };
-  roadReady=true;
+  roadBaseY=Math.max(naturalTerrainHeight(x,z),G.water+2.75);roadReady=true;
 }
 function roadCenterX(z){
   if(!roadReady)return Infinity;
@@ -152,15 +154,27 @@ function roadDistance(x,z){
 }
 function roadReserved(x,z,margin=0){return roadReady&&roadDistance(x,z)<=ROAD_CLEAR+margin}
 function worldTerrainWithoutRoad(x,z){return regionalEnabled?regionalNaturalTerrainHeight(x,z):naturalTerrainHeight(x,z)}
-function roadElevation(z){
-  const offsets=[-1440,-1080,-720,-360,0,360,720,1080,1440],weights=[1,2,3,4,5,4,3,2,1];let sum=0,total=0;
+function roadProfileDatum(z){
+  const d=roadDNA,t=z-roadOriginZ,twopi=Math.PI*2;
+  return roadBaseY+
+    d.vertAmpA*(Math.sin(t*twopi/d.vertWaveA+d.vertPhaseA)-Math.sin(d.vertPhaseA))+
+    d.vertAmpB*(Math.sin(t*twopi/d.vertWaveB+d.vertPhaseB)-Math.sin(d.vertPhaseB));
+}
+function roadProfileNode(index){
+  if(roadProfileCache.has(index))return roadProfileCache.get(index);
+  const z=roadOriginZ+index*ROAD_PROFILE_STEP,offsets=[-300,0,300],weights=[1,2,1];let sum=0,total=0;
   for(let i=0;i<offsets.length;i++){
-    const zz=z+offsets[i],xx=roadCenterX(zz),w=weights[i];
-    sum+=worldTerrainWithoutRoad(xx,zz)*w;total+=w;
+    const zz=z+offsets[i],xx=roadCenterX(zz),w=weights[i];sum+=worldTerrainWithoutRoad(xx,zz)*w;total+=w;
   }
-  const water=waterLevelAt(roadCenterX(z),z),datum=water+5.5;
-  const terrainMean=sum/total;
-  return Math.max(water+2.25,datum+(terrainMean-datum)*.56);
+  const datum=roadProfileDatum(z),terrainMean=sum/total,water=waterLevelAt(roadCenterX(z),z);
+  const y=Math.max(water+2.25,datum+clamp(terrainMean-datum,-9,9));
+  roadProfileCache.set(index,y);
+  while(roadProfileCache.size>ROAD_PROFILE_CACHE_MAX)roadProfileCache.delete(roadProfileCache.keys().next().value);
+  return y;
+}
+function roadElevation(z){
+  const q=(z-roadOriginZ)/ROAD_PROFILE_STEP,i=Math.floor(q),t=smooth(q-i);
+  return mix(roadProfileNode(i),roadProfileNode(i+1),t);
 }
 function roadSurfaceY(z,lateral=0){
   const crown=.075*(1-clamp(Math.abs(lateral)/ROAD_HALF,0,1));
@@ -338,7 +352,7 @@ function treeDensity(x,z,y,base=floraDensity(x,z,y)){
 }
 function ground(x,z){let X=Math.floor(x/CHUNK_STEP)*CHUNK_STEP,Z=Math.floor(z/CHUNK_STEP)*CHUNK_STEP,u=(x-X)/CHUNK_STEP,v=(z-Z)/CHUNK_STEP,A=height(X,Z),B=height(X+CHUNK_STEP,Z),C=height(X,Z+CHUNK_STEP),D=height(X+CHUNK_STEP,Z+CHUNK_STEP);return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
 function disposeTree(root){let gs=new Set,ms=new Set;root.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose())}
-function clear(){roadReady=false;roadHash=0;roadOriginX=roadOriginZ=0;roadDNA=null;regionalEnabled=false;originProfile=null;originFastRadius=0;universeOriginX=universeOriginZ=0;regionProfiles.clear();universeSeed="";universeHash=0;universeSeaLevel=0;stopPlaneEngineAudio();plane=null;planeLookYaw=planeLookPitch=0;mobileThrottleDown=false;mobileBoost=false;setPlaneMobileLabels(false);if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity;faunaAgents=[];faunaCatalog=[];birdAgents=[];birdCatalog=[];faunaStarterPlaced=false;birdStarterPlaced=false}
+function clear(){roadReady=false;roadHash=0;roadOriginX=roadOriginZ=roadBaseY=0;roadDNA=null;roadProfileCache.clear();regionalEnabled=false;originProfile=null;originFastRadius=0;universeOriginX=universeOriginZ=0;regionProfiles.clear();universeSeed="";universeHash=0;universeSeaLevel=0;stopPlaneEngineAudio();plane=null;planeLookYaw=planeLookPitch=0;mobileThrottleDown=false;mobileBoost=false;setPlaneMobileLabels(false);if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity;faunaAgents=[];faunaCatalog=[];birdAgents=[];birdCatalog=[];faunaStarterPlaced=false;birdStarterPlaced=false}
 function instances(g,m,a,parent=scene){if(!a.length){g.dispose();m.dispose();return null;}let o=new T.InstancedMesh(g,m,a.length);a.forEach((v,i)=>{temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);temp.rotation.set(v[6]||0,v[7]||0,v[8]||0);temp.updateMatrix();o.setMatrixAt(i,temp.matrix)});o.instanceMatrix.setUsage(T.StaticDrawUsage);parent.add(o);return o}
 function instancesQ(g,m,a,parent=scene){
   if(!a.length){g.dispose();m.dispose();return;}
