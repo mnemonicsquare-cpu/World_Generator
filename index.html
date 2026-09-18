@@ -892,21 +892,24 @@ vec4 mvPosition = vec4( transformed, 1.0 );
 float windHeight = max(mvPosition.y - windData.x, 0.0);
 float windPulse = 0.84 + 0.16 * sin(uWindTime * 0.77 + windData.y);
 float windResponse = windData.z * windPulse;
-float windFlex = ${mode==="branch"?"smoothstep(0.58, 1.04, uWindForce)":"smoothstep(0.035, 0.92, uWindForce)"};
-float windSway = windFlex * windResponse * ${mode==="branch"?"min(windHeight * 0.035, 0.86)":"min(windHeight * 0.045, 1.22)"};
+float windFlex = ${mode==="branch"?"smoothstep(0.42, 1.04, uWindForce)":"smoothstep(0.02, 0.84, uWindForce)"};
+float windSway = windFlex * windResponse * ${mode==="branch"?"min(pow(windHeight, 1.06) * 0.052, 1.45)":"min(pow(windHeight, 1.04) * 0.074, 2.15)"};
 mvPosition.x += uWindDirection.x * windSway;
 mvPosition.z += uWindDirection.y * windSway;
 ${mode==="branch"?"":`
-float flutter = sin(uWindTime * (4.2 + uWindForce * 4.8) + windData.y * 1.7 + position.x * 2.6 + position.y * 3.1 + position.z * 2.1);
-float flutterAmp = (0.008 + 0.052 * windFlex) * windResponse * (0.35 + min(windHeight / 12.0, 1.0) * 0.65);
+float flutter = sin(uWindTime * (4.4 + uWindForce * 5.4) + windData.y * 1.7 + position.x * 2.6 + position.y * 3.1 + position.z * 2.1);
+float flutterAmp = (0.01 + 0.068 * windFlex) * windResponse * (0.35 + min(windHeight / 12.0, 1.0) * 0.65);
+float leafStream = position.y * (0.018 + 0.052 * uWindForce) * windFlex * windResponse;
+mvPosition.x += uWindDirection.x * leafStream;
+mvPosition.z += uWindDirection.y * leafStream;
 mvPosition.y += flutter * flutterAmp;
-mvPosition.x += uWindDirection.y * flutter * flutterAmp * 0.42;
-mvPosition.z -= uWindDirection.x * flutter * flutterAmp * 0.42;
+mvPosition.x += uWindDirection.y * flutter * flutterAmp * 0.34;
+mvPosition.z -= uWindDirection.x * flutter * flutterAmp * 0.34;
 `}
 mvPosition = modelViewMatrix * mvPosition;
 gl_Position = projectionMatrix * mvPosition;`);
   };
-  material.customProgramCacheKey=()=>`living-wind-v1-${mode}`;
+  material.customProgramCacheKey=()=>`living-wind-v2-${mode}`;
   material.needsUpdate=true;
   return material;
 }
@@ -937,8 +940,9 @@ function populateChunkFlora(chunk){
   if(chunk.flora)return;
   const group=new T.Group();chunk.group.add(group);chunk.flora=group;
   const trees=growLSystemFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.rock,worldPalette.accent,floraCatalog);
-  const groundCover=growGroundFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.accent);
   attachWindToFlora(group,chunk);
+  // Ground flora is intentionally added after wind binding: mushrooms must remain completely still.
+  const groundCover=growGroundFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.accent);
   const fauna=populateChunkFauna(chunk),birds=populateChunkBirds(chunk);
   chunk.stats={plants:trees.plants,mushrooms:groundCover.mushrooms,animals:fauna.animals,birds:birds.birds};
 }
@@ -1010,9 +1014,10 @@ else if(type===2){for(let n=0;n<32;n++){let s=n%4,j=Math.floor(n/4)-4,A=s*Math.P
 else{for(let j=1;j<10;j++)if(rnd()>.2){let A=j/10*6.28;p(Math.cos(A)*10,Math.sin(A)*10,2,5+rnd()*6,.8)}mesh(new T.OctahedronGeometry(1),accent,x,ground(x,z)+2,z,1,3,1)}
 for(let j=0;j<18;j++){let A=rnd()*6.28,r=5+rnd()*18,s=.4+rnd(),X=x+Math.cos(A)*r,Z=z+Math.sin(A)*r;mesh(new T.IcosahedronGeometry(1,0),stone,X,ground(X,Z)+s*.3,Z,s,s*.6,s)}}
 function makeWeather(type,c){
-  const r=rng(G.hash^hash(type)^0x72d01);
+  const r=rng(G.hash^hash(type)^0x72d01),wr=rng(G.hash^hash("wind-climate")^0x51f2b7);
   const ranges={rain:[1500,3300],snow:[500,1900],dust:[350,1100],spores:[140,720]},range=ranges[type];
-  const windSpeed=.2+r()*1.8,n=Math.floor((range[0]+r()*(range[1]-range[0]+1))*mix(.72,1.32,windSpeed/2)),rain=type==="rain",stride=rain?6:3;
+  const galeRoll=wr(),windClimate=clamp(.14+G.dna.volatility*.48+(1-G.dna.oceanicity)*.12+wr()*.34+(galeRoll<.16?.62:0),0,1.42);
+  const windSpeed=.28+windClimate*2.25,n=Math.floor((range[0]+r()*(range[1]-range[0]+1))*mix(.72,1.4,clamp(windSpeed/3.5,0,1))),rain=type==="rain",stride=rain?6:3;
   const a=new Float32Array(n*stride),speed=new Float32Array(n),streak=.65+r()*1.5;
   for(let i=0;i<n;i++){
     const k=i*stride,x=(r()-.5)*110,y=r()*70-22,z=(r()-.5)*110;
@@ -1028,14 +1033,26 @@ function makeWeather(type,c){
     material=new T.PointsMaterial({color:c,size:type==="spores"?.15+r()*.16:type==="snow"?.13+r()*.2:.16,transparent:true,opacity:0,depthWrite:false,blending:type==="spores"?T.AdditiveBlending:T.NormalBlending});
     points=new T.Points(g,material);
   }
-  const windAngle=r()*Math.PI*2,blizzard=type==="snow"?r():0;
+  const windAngle=wr()*Math.PI*2,blizzard=type==="snow"?r():0,gale=galeRoll<.16;
   points.frustumCulled=false;scene.add(points);
+  const debrisCount=G.forestCover>.16?Math.floor(150*G.forestCover*clamp((windClimate-.24)/1.08,0,1)):0;
+  let debris=null,debrisA=null,debrisSpeed=null;
+  if(debrisCount){
+    debrisA=new Float32Array(debrisCount*3);debrisSpeed=new Float32Array(debrisCount);
+    for(let i=0;i<debrisCount;i++){
+      const k=i*3;debrisA[k]=cam.position.x+(wr()-.5)*105;debrisA[k+1]=cam.position.y-12+wr()*36;debrisA[k+2]=cam.position.z+(wr()-.5)*105;debrisSpeed[i]=.62+wr()*.86;
+    }
+    const dg=new T.BufferGeometry();dg.setAttribute("position",new T.BufferAttribute(debrisA,3));
+    const dm=new T.PointsMaterial({color:worldPalette.leaf.clone().lerp(worldPalette.accent,.12),size:.11+Math.min(windClimate,1.2)*.07,transparent:true,opacity:0,depthWrite:false});
+    debris=new T.Points(dg,dm);debris.frustumCulled=false;scene.add(debris);
+  }
   return {
-    type,points,a,speed,stride,streak,count:n,phase:r()*6.28,strength:.32+r()*.68,windSpeed,random:r,
+    type,points,a,speed,stride,streak,count:n,phase:r()*6.28,strength:.32+r()*.68,windSpeed,windClimate,gale,
+    gustiness:.62+G.dna.volatility*.72+(gale?.52:0),random:r,windAngle,
     windX:Math.cos(windAngle),windZ:Math.sin(windAngle),
-    drift:type==="snow"?2+blizzard*24:type==="dust"?5+r()*10:type==="rain"?.15+r()*.75:.08+r()*.3,
+    drift:type==="snow"?3+blizzard*22+windClimate*4:type==="dust"?5+r()*8+windClimate*5:type==="rain"?.55+r()*1.1+windClimate*.95:.65+r()*1.1+windClimate*1.4,
     fall:type==="rain"?30+r()*22:type==="snow"?.55+(1-blizzard)*4:type==="dust"?.08+r()*.35:0,
-    blizzard
+    debris,debrisA,debrisSpeed,debrisCount,blizzard
   };
 }
 
@@ -1598,8 +1615,11 @@ function update(dt){
   const e=celestial;e.age+=dt;
   const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
   const front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength;
-  const gust=.68+front*.7+.16*Math.sin(e.age*.41+weather.phase),windForce=clamp(weather.windSpeed*gust/1.55,0,1.18);
-  windTimeUniform.value=e.age;windDirectionUniform.value.set(weather.windX,weather.windZ);windForceUniform.value=windForce;weather.currentWind=windForce;
+  const directionWobble=.035*Math.sin(e.age*.073+weather.phase)+.018*Math.sin(e.age*.29+weather.phase*.7);
+  const windAngle=weather.windAngle+directionWobble,windX=Math.cos(windAngle),windZ=Math.sin(windAngle);
+  const gustWave=.82+.14*Math.sin(e.age*.41+weather.phase)+.07*Math.sin(e.age*1.17+weather.phase*1.9);
+  const gust=clamp((.76+front*.5)*gustWave*(.82+weather.gustiness*.22),.48,1.75),windForce=clamp(weather.windSpeed*gust/2.18,0,1.38);
+  weather.windX=windX;weather.windZ=windZ;windTimeUniform.value=e.age;windDirectionUniform.value.set(windX,windZ);windForceUniform.value=windForce;weather.currentWind=windForce;
   const nightTop=new T.Color(0x061426),nightHorizon=new T.Color(0x1b2b3e),dayTop=new T.Color(0x438fd0),dayHorizon=new T.Color(0xc6dce9),sunsetSky=new T.Color(0xee9466);
   const top=nightTop.lerp(dayTop,day),h=nightHorizon.lerp(dayHorizon,day).lerp(sunsetSky,tw*.64),fogColor=h.clone().lerp(e.horizon,.08+G.wet*.12);
   scene.background.copy(top);scene.fog.color.copy(fogColor);scene.fog.density=e.fog*(1+front*(G.foggy?.9:.18));
@@ -1629,7 +1649,22 @@ function update(dt){
     }
   }
   weather.points.geometry.attributes.position.needsUpdate=true;
-  water.material.roughness=.2+Math.sin(e.age*.4)*.035;
+  if(weather.debris){
+    const dp=weather.debrisA,halfD=58,lowD=cam.position.y-13,highD=cam.position.y+25;
+    weather.debris.material.opacity=clamp((windForce-.18)/.78,0,1)*(.12+G.forestCover*.32);
+    for(let i=0;i<weather.debrisSpeed.length;i++){
+      const k=i*3,s=weather.debrisSpeed[i],side=Math.sin(e.age*(1.2+s*.35)+i*.71)*(.08+.18*windForce);
+      const travel=(2.2+weather.windSpeed*3.8)*gust*dt*s;
+      dp[k]+=windX*travel+windZ*side*dt;dp[k+2]+=windZ*travel-windX*side*dt;
+      dp[k+1]+=Math.sin(e.age*.9+i*.47)*(.12+.42*windForce)*dt;
+      let rx=dp[k]-cam.position.x,rz=dp[k+2]-cam.position.z;
+      if(rx>halfD)dp[k]-=halfD*2;else if(rx<-halfD)dp[k]+=halfD*2;
+      if(rz>halfD)dp[k+2]-=halfD*2;else if(rz<-halfD)dp[k+2]+=halfD*2;
+      if(dp[k+1]<lowD||dp[k+1]>highD)dp[k+1]=lowD+weather.random()*(highD-lowD);
+    }
+    weather.debris.geometry.attributes.position.needsUpdate=true;
+  }
+  water.material.roughness=clamp(.17+windForce*.13+Math.sin(e.age*.4)*.018,.16,.38);
 }
 async function toggleAudio(){if(!audio){let ctx=new AudioContext,master=ctx.createGain(),filter=ctx.createBiquadFilter(),buf=ctx.createBuffer(1,ctx.sampleRate*4,ctx.sampleRate),d=buf.getChannelData(0),r=rng(G.hash^999),last=0;for(let i=0;i<d.length;i++){last=(last+(r()*2-1)*.03)/1.03;d[i]=last*4}let src=ctx.createBufferSource();src.buffer=buf;src.loop=true;filter.type="lowpass";filter.frequency.value=250+G.slender*900;src.connect(filter).connect(master).connect(ctx.destination);master.gain.value=0;src.start();audio={ctx,master,filter}}await audio.ctx.resume();sound=!sound;audio.master.gain.setTargetAtTime(sound?.25:0,audio.ctx.currentTime,.4);$("#sound").textContent="Звук: "+(sound?"вкл.":"выкл.")}
 
@@ -1720,7 +1755,7 @@ function updateSoundscape(dt){
   const walking=grounded&&document.pointerLockElement===rend.domElement&&moved>.001&&moved<2;
   for(const [type,track] of soundTracks){
     let volume=0;
-    if(type==="wind")volume=(.055+(weather.currentWind||0)*.14+front*.055)*(indoors?.18:1);
+    if(type==="wind")volume=(.04+(weather.currentWind||0)*.22+front*.045)*(indoors?.18:1);
     if(type==="rain"&&weather.type==="rain")volume=(.06+front*.28)*(indoors?.25:1);
     if(type==="music")volume=indoors?.095:.075;
     if(type==="snow"&&walking&&!indoors)volume=boosting()?.36:.27;
