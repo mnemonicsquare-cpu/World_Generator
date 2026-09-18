@@ -14,8 +14,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Fetch Epsilon Alpha reference
-        run: git fetch origin epsilon-alpha:refs/remotes/origin/epsilon-alpha
+      - name: Fetch Epsilon Beta reference
+        run: git fetch origin epsilon-beta:refs/remotes/origin/epsilon-beta
       - name: Check generator invariants
         run: node scripts/check-worldgen.mjs
       - name: Browser smoke test
@@ -38,6 +38,11 @@ jobs:
             fi
             if grep -Fq 'id="name">Создание мира</h1>' "$out"; then
               echo "World title remained in loading state for ${seed}"
+              cat "$log"
+              exit 1
+            fi
+            if grep -Eiq 'THREE\.WebGLProgram: Shader Error|VALIDATE_STATUS false|ERROR: [0-9]+:' "$log"; then
+              echo "WebGL shader failure detected for ${seed}"
               cat "$log"
               exit 1
             fi

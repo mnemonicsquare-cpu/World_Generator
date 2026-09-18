@@ -869,11 +869,76 @@ function updateFauna(dt){
     for(let i=0;i<a.legs.length;i++)a.legs[i].pivot.rotation.x=Math.sin(a.phase+a.legs[i].phase)*amp;
   }
 }
+const windTimeUniform={value:0},windDirectionUniform={value:new T.Vector2(1,0)},windForceUniform={value:0};
+function makeWindReactiveMaterial(material,mode){
+  material.onBeforeCompile=shader=>{
+    shader.uniforms.uWindTime=windTimeUniform;
+    shader.uniforms.uWindDirection=windDirectionUniform;
+    shader.uniforms.uWindForce=windForceUniform;
+    shader.vertexShader=shader.vertexShader
+      .replace("#include <common>",`#include <common>
+uniform float uWindTime;
+uniform vec2 uWindDirection;
+uniform float uWindForce;
+attribute vec4 windData;`)
+      .replace("#include <project_vertex>",`
+vec4 mvPosition = vec4( transformed, 1.0 );
+#ifdef USE_BATCHING
+  mvPosition = batchingMatrix * mvPosition;
+#endif
+#ifdef USE_INSTANCING
+  mvPosition = instanceMatrix * mvPosition;
+#endif
+float windHeight = max(mvPosition.y - windData.x, 0.0);
+float windPulse = 0.84 + 0.16 * sin(uWindTime * 0.77 + windData.y);
+float windResponse = windData.z * windPulse;
+float windFlex = ${mode==="branch"?"smoothstep(0.58, 1.04, uWindForce)":"smoothstep(0.035, 0.92, uWindForce)"};
+float windSway = windFlex * windResponse * ${mode==="branch"?"min(windHeight * 0.035, 0.86)":"min(windHeight * 0.045, 1.22)"};
+mvPosition.x += uWindDirection.x * windSway;
+mvPosition.z += uWindDirection.y * windSway;
+${mode==="branch"?"":`
+float flutter = sin(uWindTime * (4.2 + uWindForce * 4.8) + windData.y * 1.7 + position.x * 2.6 + position.y * 3.1 + position.z * 2.1);
+float flutterAmp = (0.008 + 0.052 * windFlex) * windResponse * (0.35 + min(windHeight / 12.0, 1.0) * 0.65);
+mvPosition.y += flutter * flutterAmp;
+mvPosition.x += uWindDirection.y * flutter * flutterAmp * 0.42;
+mvPosition.z -= uWindDirection.x * flutter * flutterAmp * 0.42;
+`}
+mvPosition = modelViewMatrix * mvPosition;
+gl_Position = projectionMatrix * mvPosition;`);
+  };
+  material.customProgramCacheKey=()=>`living-wind-v1-${mode}`;
+  material.needsUpdate=true;
+  return material;
+}
+function attachWindToFlora(group,chunk){
+  const terrainPosition=chunk.terrain.geometry.attributes.position,row=CHUNK_SEG+1,matrix=new T.Matrix4(),position=new T.Vector3();
+  function terrainY(lx,lz){
+    const fx=clamp(lx/CHUNK_STEP,0,CHUNK_SEG-.0001),fz=clamp(lz/CHUNK_STEP,0,CHUNK_SEG-.0001);
+    const ix=Math.floor(fx),iz=Math.floor(fz),u=fx-ix,v=fz-iz;
+    const A=terrainPosition.getY(iz*row+ix),B=terrainPosition.getY(iz*row+ix+1),C=terrainPosition.getY((iz+1)*row+ix),D=terrainPosition.getY((iz+1)*row+ix+1);
+    return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D);
+  }
+  group.traverse(o=>{
+    if(!o.isInstancedMesh||!o.instanceColor||!o.count)return;
+    const branch=o.geometry.type==="CylinderGeometry",data=new Float32Array(o.count*4);
+    for(let i=0;i<o.count;i++){
+      o.getMatrixAt(i,matrix);position.setFromMatrixPosition(matrix);
+      const wx=chunk.cx*CHUNK_SIZE+position.x,wz=chunk.cz*CHUNK_SIZE+position.z,baseY=terrainY(position.x,position.z);
+      const rawPhase=wx*.019+wz*.023,phase=((rawPhase%6.28318530718)+6.28318530718)%6.28318530718,response=.84+worldRandom(Math.floor(wx*2),Math.floor(wz*2),0x6a51)*.32;
+      const k=i*4;data[k]=baseY;data[k+1]=phase;data[k+2]=response;data[k+3]=0;
+    }
+    o.geometry.setAttribute("windData",new T.InstancedBufferAttribute(data,4));
+    makeWindReactiveMaterial(o.material,branch?"branch":"foliage");
+    o.userData.windReactive=true;o.userData.windMode=branch?"branch":"foliage";
+  });
+}
+
 function populateChunkFlora(chunk){
   if(chunk.flora)return;
   const group=new T.Group();chunk.group.add(group);chunk.flora=group;
   const trees=growLSystemFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.rock,worldPalette.accent,floraCatalog);
   const groundCover=growGroundFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.accent);
+  attachWindToFlora(group,chunk);
   const fauna=populateChunkFauna(chunk),birds=populateChunkBirds(chunk);
   chunk.stats={plants:trees.plants,mushrooms:groundCover.mushrooms,animals:fauna.animals,birds:birds.birds};
 }
@@ -1533,6 +1598,8 @@ function update(dt){
   const e=celestial;e.age+=dt;
   const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
   const front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength;
+  const gust=.68+front*.7+.16*Math.sin(e.age*.41+weather.phase),windForce=clamp(weather.windSpeed*gust/1.55,0,1.18);
+  windTimeUniform.value=e.age;windDirectionUniform.value.set(weather.windX,weather.windZ);windForceUniform.value=windForce;weather.currentWind=windForce;
   const nightTop=new T.Color(0x061426),nightHorizon=new T.Color(0x1b2b3e),dayTop=new T.Color(0x438fd0),dayHorizon=new T.Color(0xc6dce9),sunsetSky=new T.Color(0xee9466);
   const top=nightTop.lerp(dayTop,day),h=nightHorizon.lerp(dayHorizon,day).lerp(sunsetSky,tw*.64),fogColor=h.clone().lerp(e.horizon,.08+G.wet*.12);
   scene.background.copy(top);scene.fog.color.copy(fogColor);scene.fog.density=e.fog*(1+front*(G.foggy?.9:.18));
@@ -1545,7 +1612,6 @@ function update(dt){
   weather.points.material.opacity=front*(type==="rain"?.58:type==="spores"?.72:.66);
   for(let i=0;i<weather.speed.length;i++){
     const k=i*stride,s=weather.speed[i];
-    const gust=.68+front*.7+.16*Math.sin(e.age*.41+weather.phase);
     let dx=weather.windX*weather.drift*weather.windSpeed*gust*dt*s,dz=weather.windZ*weather.drift*weather.windSpeed*gust*dt*s,dy=-weather.fall*dt*s;
     if(type==="spores"){
       dx+=Math.sin(e.age*.17+i*.73)*.16*dt;dz+=Math.cos(e.age*.13+i*.51)*.16*dt;
@@ -1558,8 +1624,8 @@ function update(dt){
     if(p[k+1]<low){p[k+1]=high+weather.random()*8;if(type!=="spores"){p[k]-=weather.windX*half*.35;p[k+2]-=weather.windZ*half*.35}}
     else if(p[k+1]>high+10)p[k+1]=low+weather.random()*(high-low);
     if(stride===6){
-      const ratio=weather.fall?weather.streak/weather.fall:0;
-      p[k+3]=p[k]-weather.windX*weather.drift*ratio;p[k+4]=p[k+1]+weather.streak;p[k+5]=p[k+2]-weather.windZ*weather.drift*ratio;
+      const ratio=weather.fall?weather.streak/weather.fall:0,slant=weather.drift*weather.windSpeed*gust*ratio;
+      p[k+3]=p[k]-weather.windX*slant;p[k+4]=p[k+1]+weather.streak;p[k+5]=p[k+2]-weather.windZ*slant;
     }
   }
   weather.points.geometry.attributes.position.needsUpdate=true;
@@ -1654,7 +1720,7 @@ function updateSoundscape(dt){
   const walking=grounded&&document.pointerLockElement===rend.domElement&&moved>.001&&moved<2;
   for(const [type,track] of soundTracks){
     let volume=0;
-    if(type==="wind")volume=(.1+front*.13)*(indoors?.18:1);
+    if(type==="wind")volume=(.055+(weather.currentWind||0)*.14+front*.055)*(indoors?.18:1);
     if(type==="rain"&&weather.type==="rain")volume=(.06+front*.28)*(indoors?.25:1);
     if(type==="music")volume=indoors?.095:.075;
     if(type==="snow"&&walking&&!indoors)volume=boosting()?.36:.27;

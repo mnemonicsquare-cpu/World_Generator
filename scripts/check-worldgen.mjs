@@ -2,7 +2,7 @@ import fs from "node:fs";
 import {execFileSync} from "node:child_process";
 
 const current=fs.readFileSync("index.html","utf8");
-const epsilonAlpha=execFileSync("git",["show","origin/epsilon-alpha:index.html"],{encoding:"utf8"});
+const epsilonBeta=execFileSync("git",["show","origin/epsilon-beta:index.html"],{encoding:"utf8"});
 
 function fail(message){
   console.error("worldgen check failed:",message);
@@ -22,6 +22,11 @@ function moduleBody(html){
 // Parse without executing browser-dependent code.
 try{new Function(moduleBody(current));}
 catch(error){fail("JavaScript syntax error: "+error.message);}
+
+// Wind work must not silently alter the World DNA that defines the Epsilon Beta checkpoint.
+const betaDNA=section(epsilonBeta,"function makeWorldDNA(seedHash){","function generate(seed){");
+const currentDNA=section(current,"function makeWorldDNA(seedHash){","function generate(seed){");
+if(betaDNA!==currentDNA)fail("World DNA changed relative to Epsilon Beta during wind work");
 
 // World DNA must be deterministic, bounded, and safe before it is allowed to influence legacy systems.
 const dnaSource=section(current,"function makeWorldDNA(seedHash){","function generate(seed){");
@@ -99,15 +104,15 @@ for(const [k,s] of Object.entries(traitStats)){
   if(s.max-s.min<.12||variance<.001)fail(`World DNA trait lacks useful variation: ${k}`);
 }
 
-const epsilonShapeEnd=epsilonAlpha.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
+const epsilonShapeEnd=epsilonBeta.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
 const currentShapeEnd=current.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
-const epsilonShape=section(epsilonAlpha,"function shape(",epsilonShapeEnd);
+const epsilonShape=section(epsilonBeta,"function shape(",epsilonShapeEnd);
 const currentShape=section(current,"function shape(",currentShapeEnd);
-if(epsilonShape!==currentShape)fail("legacy shape() changed relative to Epsilon Alpha");
+if(epsilonShape!==currentShape)fail("legacy shape() changed relative to Epsilon Beta");
 
-const epsilonFlora=section(epsilonAlpha,"function floraDensity","function makeFaunaCatalog");
+const epsilonFlora=section(epsilonBeta,"function floraDensity","function makeFaunaCatalog");
 const currentFlora=section(current,"function floraDensity","function makeFaunaCatalog");
-if(epsilonFlora!==currentFlora)fail("protected flora generation changed relative to Epsilon Alpha");
+if(epsilonFlora!==currentFlora)fail("protected flora generation changed relative to Epsilon Beta");
 
 for(const marker of [
   "function naturalMountainShape(x,z)",
@@ -130,7 +135,13 @@ for(const marker of [
   "G.dna=dna;applyWorldDNA(G,dna);",
   "dna.geologicalContrast",
   "dna.biosphere",
-  "dna.volatility"
+  "dna.volatility",
+  "function makeWindReactiveMaterial(material,mode)",
+  "function attachWindToFlora(group,chunk)",
+  "attachWindToFlora(group,chunk);",
+  "windForceUniform.value=windForce",
+  "weather.currentWind=windForce",
+  "slant=weather.drift*weather.windSpeed*gust*ratio"
 ]){
   if(!current.includes(marker))fail("missing terrain architecture marker: "+marker);
 }
@@ -152,6 +163,8 @@ if(!current.includes("return h+plainsMacroRelief(x,z)"))fail("plains macro relie
 
 console.log("worldgen checks passed");
 console.log("- JavaScript syntax: OK");
-console.log("- Epsilon Alpha base shapes: unchanged");
-console.log("- Epsilon Alpha flora block: unchanged");
+console.log("- Epsilon Beta base shapes: unchanged");
+console.log("- Epsilon Beta flora block: unchanged");
 console.log("- World DNA determinism and bounds: OK");
+console.log("- Epsilon Beta World DNA: unchanged");
+console.log("- Living wind architecture markers: OK");
