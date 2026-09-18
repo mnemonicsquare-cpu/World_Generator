@@ -1934,7 +1934,7 @@ function buildDetailedCarModel(bytes){
   const cabinMaterials=[],headlightMaterials=[],tailLightMaterials=[],headlightCenters=[],tailLightCenters=[];
   const materialUsage=Array(materialCount).fill(0);let bodyIndexTotal=0;
   for(const g of bodyRecord.groups){materialUsage[g.materialIndex]+=g.count;bodyIndexTotal+=g.count;}
-  let cabinGlassGroups=0,headlightGroups=0,tailLightGroups=0;
+  let cabinGlassGroups=0,headlightGroups=0,tailLightGroups=0;const rearDebug=[];
   function groupBounds(g){
     let minX=Infinity,minY=Infinity,minZ=Infinity,maxX=-Infinity,maxY=-Infinity,maxZ=-Infinity,sx=0,sy=0,sz=0,n=0;
     for(let i=g.start;i<g.start+g.count;i++){
@@ -1956,6 +1956,7 @@ function buildDetailedCarModel(bytes){
     const red=meta.r>meta.g*1.12&&meta.r>meta.b*1.1&&meta.r>.07;
     const redSmall=red&&usage<.12&&meta.metalness<.62&&spanY<height*.42&&spanZ<depth*.22&&spanX<width*.7;
     const lampWidth=lateral>.12||spanX>width*.18;
+    if(zn>.62&&yn<.76)rearDebug.push({z:zn,s:`${gi}:z${zn.toFixed(2)}y${yn.toFixed(2)}x${lateral.toFixed(2)} c${meta.r.toFixed(2)}/${meta.g.toFixed(2)}/${meta.b.toFixed(2)} g${meta.glass?1:0} u${usage.toFixed(2)} m${meta.metalness.toFixed(2)} q${(spanX/width).toFixed(2)}/${(spanY/height).toFixed(2)}/${(spanZ/depth).toFixed(2)}`});
     let role="";
     if(meta.glass&&zn<.22&&yn>.14&&yn<.62&&lampWidth)role="head";
     else if((meta.glass||redSmall)&&zn>.70&&yn>.10&&yn<.70&&lampWidth)role="tail";
@@ -1967,7 +1968,7 @@ function buildDetailedCarModel(bytes){
     else if(role==="head"){headlightGroups++;headlightMaterials.push(m);headlightCenters.push(center);}
     else {tailLightGroups++;tailLightMaterials.push(m);tailLightCenters.push(center);}
   });
-  if(!cabinGlassGroups||!headlightGroups||!tailLightGroups)throw new Error(`CAR2 native groups missing head=${headlightGroups} tail=${tailLightGroups} cabin=${cabinGlassGroups}`);
+  if(!cabinGlassGroups||!headlightGroups||!tailLightGroups){rearDebug.sort((a,b)=>b.z-a.z);throw new Error(`CAR2 groups h=${headlightGroups} t=${tailLightGroups} c=${cabinGlassGroups} rear ${rearDebug.slice(0,3).map(v=>v.s).join(";")}`);}
   const averageCenter=(list,fallback)=>{
     if(!list.length)return fallback.clone();const out=new T.Vector3();for(const p of list)out.add(p);return out.multiplyScalar(1/list.length);
   };
