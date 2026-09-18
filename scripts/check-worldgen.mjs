@@ -388,6 +388,26 @@ if(maxStep>75)fail("road centerline has a discontinuous step: "+maxStep);
 if(maxX-minX<220)fail("road is too straight over long travel: lateral range "+(maxX-minX));
 if(turning<12)fail("road does not produce enough genuine turns over long travel: "+turning);
 
+
+const clearanceSource=section(current,"function growLSystemFlora","function makeWindClimate");
+for(const marker of [
+  "}else if(!houseReserved(x,z)&&y>waterLevelAt(x,z)&&r()<.06+(1-baseDensity)*.18)",
+  "if(roadReserved(X,Z,Math.max(w,d)*.7+2))return;",
+  "if(roadReserved(X,Z,s+2))continue;",
+  "if(!roadReserved(x,z,4))mesh(new T.OctahedronGeometry"
+])if(!clearanceSource.includes(marker))fail("road clearance guard missing from rocks/ruins: "+marker);
+
+const homeSection=section(current,"function planHomes","function buildHomes");
+if(!homeSection.includes("roadReserved(x,z,34)"))fail("building placement road buffer is too small or missing");
+
+const planeSection=section(current,"function createPlane","function planeInteractionDistance");
+if(!planeSection.includes("roadReserved(x,z,8)"))fail("aircraft spawn can occupy the road corridor");
+
+const faunaUpdate=section(current,"function updateFauna(dt){","const windTimeUniform");
+if(!faunaUpdate.includes("!houseReserved(nx,nz)"))fail("moving fauna can enter reserved road space");
+
+const generationSection=section(current,"const spawn=findNaturalSpawn();","const weatherRoll=");
+if(!generationSection.includes("roadReserved(x,z,30)"))fail("ruin centers are not kept far enough from the road");
 console.log("worldgen checks passed");
 console.log("- JavaScript syntax: OK");
 console.log("- Epsilon Beta base shapes: unchanged");
