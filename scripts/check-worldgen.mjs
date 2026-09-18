@@ -337,7 +337,7 @@ for(const legacyPattern of [
   if(current.includes(legacyPattern))fail("legacy path-based placement returned: "+legacyPattern);
 }
 
-if(!current.includes("centerY<=G.water+.85"))fail("spawn center is not required to be dry");
+if(!current.includes("centerY<=waterLevelAt(x,z)+.85"))fail("spawn center is not required to be dry");
 if(!current.includes("G.water=Math.min(G.water,anchor.y-1.15)"))fail("absolute land guard is missing");
 
 if(!current.includes("smooth(clamp((30-G.relief)/24,0,1))"))fail("flat-world relief gate is missing");
@@ -346,7 +346,7 @@ if(!current.includes("return h+plainsMacroRelief(x,z)"))fail("plains macro relie
 console.log("worldgen checks passed");
 console.log("- JavaScript syntax: OK");
 console.log("- Epsilon Beta base shapes: unchanged");
-console.log("- Epsilon Beta flora block: unchanged");
+console.log("- Legacy flora equations preserved inside regional profiles: OK");
 console.log("- World DNA determinism and bounds: OK");
 console.log("- Epsilon Beta World DNA: unchanged");
 console.log("- Living wind architecture markers: OK");
