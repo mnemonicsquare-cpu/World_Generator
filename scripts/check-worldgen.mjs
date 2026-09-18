@@ -24,7 +24,8 @@ try{new Function(moduleBody(current));}
 catch(error){fail("JavaScript syntax error: "+error.message);}
 
 const epsilonShape=section(epsilon,"function shape(","function height(x,z){");
-const currentShape=section(current,"function shape(","function baseHeight(x,z){");
+const currentShapeEnd=current.includes("function naturalMountainShape")?"function naturalMountainShape":"function baseHeight(x,z){";
+const currentShape=section(current,"function shape(",currentShapeEnd);
 if(epsilonShape!==currentShape)fail("legacy shape() changed relative to Epsilon");
 
 const epsilonFlora=section(epsilon,"function floraDensity","function makeFaunaCatalog");
@@ -32,6 +33,8 @@ const currentFlora=section(current,"function floraDensity","function makeFaunaCa
 if(epsilonFlora!==currentFlora)fail("protected flora generation changed relative to Epsilon");
 
 for(const marker of [
+  "function naturalMountainShape(x,z)",
+  "function terrainShape(k,x,z)",
   "function baseHeight(x,z)",
   "function geologicalHeight(x,z,h)",
   "function applyPathHeight(x,z,h)",
