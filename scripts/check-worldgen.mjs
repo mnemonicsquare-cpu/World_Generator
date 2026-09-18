@@ -352,6 +352,42 @@ if(!current.includes("G.water=Math.min(G.water,anchor.y-1.15)"))fail("absolute l
 if(!current.includes("smooth(clamp((30-G.relief)/24,0,1))"))fail("flat-world relief gate is missing");
 if(!current.includes("return h+plainsMacroRelief(x,z)"))fail("plains macro relief is not applied");
 
+
+const roadSection=section(current,"function roadRandom(i,salt=0){","function applyHomeHeight(x,z,h){");
+for(const required of [
+  "initInfiniteRoad","roadCenterX","roadFrame2D","roadDistance","roadReserved","roadElevation",
+  "applyInfiniteRoadHeight","makeRoadChunk","roadDiagnostic","ROAD_HALF","ROAD_BLEND"
+])if(!current.includes(required))fail("missing infinite-road primitive: "+required);
+if(!current.includes("const base=worldTerrainWithoutRoad(x,z);return applyHomeHeight(x,z,applyInfiniteRoadHeight"))fail("road shaping is not composed after seamless-world terrain");
+if(!current.includes("if(homes.some(h=>Math.hypot(x-h.x,z-h.z)<120)||roadReserved(x,z,24))continue;"))fail("buildings can still occupy the road corridor");
+if(!current.includes("return roadReserved(x,z)||homes.some"))fail("vegetation/fauna reservation does not include the road");
+if(!current.includes("const road=makeRoadChunk(cx,cz,group);"))fail("road surface is not chunk streamed");
+if(!current.includes('document.body.dataset.roadSegments'))fail("road runtime diagnostics are missing");
+if(!current.includes('document.body.dataset.roadMaxGrade'))fail("road grade diagnostics are missing");
+
+const roadMathSource=section(current,"function roadRandom(i,salt=0){","function worldTerrainWithoutRoad(x,z){");
+let roadMath;
+try{
+  roadMath=new Function(`
+    const roadHash=0x12345678,roadOriginX=317.25,roadOriginZ=-441.75,roadReady=true;
+    const roadDNA={macroAmp:230,macroWave:3900,macroPhase:1.27,midAmp:105,midWave:1320,midPhase:2.31,fineAmp:34,fineWave:570,finePhase:.61};
+    ${roadMathSource}
+    return {roadCenterX,roadFrame2D,roadDistance};
+  `)();
+}catch(error){fail("Infinite-road math harness could not be built: "+error.message);}
+let previous=null,maxStep=0,turning=0,lastDx=null,minX=Infinity,maxX=-Infinity;
+for(let z=-12000;z<=12000;z+=20){
+  const x=roadMath.roadCenterX(z),frame=roadMath.roadFrame2D(z);
+  if(!Number.isFinite(x)||!Number.isFinite(frame.dx))fail("road centerline produced a non-finite value");
+  if(Math.abs(roadMath.roadDistance(x,z))>1e-9)fail("road centerline does not have zero road distance");
+  if(previous)maxStep=Math.max(maxStep,Math.hypot(x-previous.x,z-previous.z));
+  if(lastDx!==null&&Math.sign(frame.dx)!==Math.sign(lastDx)&&Math.abs(frame.dx-lastDx)>.01)turning++;
+  lastDx=frame.dx;previous={x,z};minX=Math.min(minX,x);maxX=Math.max(maxX,x);
+}
+if(maxStep>75)fail("road centerline has a discontinuous step: "+maxStep);
+if(maxX-minX<220)fail("road is too straight over long travel: lateral range "+(maxX-minX));
+if(turning<12)fail("road does not produce enough genuine turns over long travel: "+turning);
+
 console.log("worldgen checks passed");
 console.log("- JavaScript syntax: OK");
 console.log("- Epsilon Beta base shapes: unchanged");
