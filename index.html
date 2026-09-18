@@ -189,6 +189,19 @@ function applyInfiniteRoadHeight(x,z,h){
   const blend=1-smooth(clamp((d-ROAD_SHOULDER)/(ROAD_BLEND-ROAD_SHOULDER),0,1));
   return mix(h,target,blend);
 }
+function makeRoadAsphaltMaterial(){
+  const asphalt=new T.MeshStandardMaterial({color:0x303236,roughness:.965,metalness:.01});
+  asphalt.onBeforeCompile=shader=>{
+    shader.vertexShader=shader.vertexShader
+      .replace("#include <common>","#include <common>\nvarying vec3 vRoadWorld;")
+      .replace("#include <begin_vertex>","#include <begin_vertex>\nvRoadWorld=(modelMatrix*vec4(transformed,1.0)).xyz;");
+    shader.fragmentShader=shader.fragmentShader
+      .replace("#include <common>","#include <common>\nvarying vec3 vRoadWorld;\nfloat roadAsphaltHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}")
+      .replace("#include <map_fragment>","#include <map_fragment>\nfloat roadCoarse=roadAsphaltHash(floor(vRoadWorld.xz*2.8));\nfloat roadFine=roadAsphaltHash(floor(vRoadWorld.xz*10.5)+19.0);\nfloat roadGrain=(roadCoarse-.5)*.105+(roadFine-.5)*.035;\nfloat roadAggregate=step(.965,roadFine)*.045;\ndiffuseColor.rgb*=1.0+roadGrain+roadAggregate;");
+  };
+  asphalt.customProgramCacheKey=()=>"road-asphalt-dark-gray-v1";
+  return asphalt;
+}
 function makeRoadChunk(cx,cz,parent){
   if(!roadReady)return null;
   const baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE,verts=[],indices=[],marks=[],markIndices=[];
@@ -211,9 +224,8 @@ function makeRoadChunk(cx,cz,parent){
     }
   }
   if(!segments)return null;
-  const palette=regionalPaletteAt(baseX+CHUNK_SIZE*.5,baseZ+CHUNK_SIZE*.5);
   const geo=new T.BufferGeometry();geo.setAttribute("position",new T.Float32BufferAttribute(verts,3));geo.setIndex(indices);geo.computeVertexNormals();
-  const asphalt=new T.MeshStandardMaterial({color:new T.Color(0x24272a).lerp(palette.rock,.13),roughness:.96,metalness:.02});
+  const asphalt=makeRoadAsphaltMaterial();
   const mesh=new T.Mesh(geo,asphalt);mesh.receiveShadow=true;mesh.renderOrder=2;parent.add(mesh);
   let marking=null;
   if(marks.length){

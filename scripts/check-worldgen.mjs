@@ -364,6 +364,17 @@ if(!current.includes("return roadReserved(x,z)||homes.some"))fail("vegetation/fa
 if(!current.includes("const road=makeRoadChunk(cx,cz,group);"))fail("road surface is not chunk streamed");
 if(!current.includes('document.body.dataset.roadSegments'))fail("road runtime diagnostics are missing");
 if(!current.includes('document.body.dataset.roadMaxGrade'))fail("road grade diagnostics are missing");
+if(!roadSection.includes("function makeRoadAsphaltMaterial()"))fail("dark-gray asphalt material factory is missing");
+for(const asphaltMarker of [
+  "color:0x303236",
+  "roughness:.965",
+  "roadAsphaltHash",
+  "vRoadWorld",
+  "roadGrain",
+  "roadAggregate",
+  '"road-asphalt-dark-gray-v1"'
+])if(!roadSection.includes(asphaltMarker))fail("dark-gray asphalt surface marker missing: "+asphaltMarker);
+if(roadSection.includes("lerp(palette.rock"))fail("road asphalt is still tinted by the current world palette");
 
 const roadMathSource=section(current,"function roadRandom(i,salt=0){","function worldTerrainWithoutRoad(x,z){");
 let roadMath;
