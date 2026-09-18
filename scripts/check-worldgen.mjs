@@ -321,7 +321,7 @@ for(const marker of [
   "growGrass(group,chunk)",
   "function makeFogProfile(dna,wet,terrainRadius=TERRAIN_RADIUS)",
   "new T.Fog(horizon,G.fogNear,G.fogFar)",
-  "scene.fog.near=Math.max(12,e.fogNear",
+  "scene.fog.near=Math.max(12,env.fogNear",
   "scene.fog.far=Math.max(scene.fog.near+68",
   "document.body.dataset.fogNear"
 ]){
