@@ -1977,6 +1977,8 @@ async function upgradeCarModel(targetCar){
     document.body.dataset.carTireBlack=detailed.tireBlack?"1":"0";document.body.dataset.carGlassOpaque=detailed.glassOpaque?"1":"0";
     document.body.dataset.carGlassCount=String(detailed.glassCount);document.body.dataset.carWheelLocalBottom=detailed.wheelLocalBottom.toFixed(4);
     document.body.dataset.carVisualLift=detailed.visualLift.toFixed(4);
+    const roadTop=roadSurfaceY(targetCar.group.position.z,0)+ROAD_VISUAL_LIFT;
+    document.body.dataset.carWheelRoadClearance=(targetCar.group.position.y+detailed.wheelLocalBottom-roadTop).toFixed(4);
   }catch(error){
     if(car===targetCar){
       targetCar.modelDetailed=false;document.body.dataset.carModel="fallback";
