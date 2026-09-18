@@ -302,7 +302,7 @@ for(const marker of [
   "attachWindToFlora(group,chunk);",
   "windForceUniform.value=windForce",
   "weather.currentWind=windForce",
-  "slant=weather.drift*weather.windSpeed*gust*ratio",
+  "slant=weather.drift*windSpeed*gust*ratio",
   "function makeWindClimate(seedHash,dna)",
   "windClimate=clamp(",
   "gale=galeRoll<.16",
