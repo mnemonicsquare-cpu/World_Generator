@@ -2003,6 +2003,27 @@ function updateCar(dt){
   for(const wheel of car.wheels)wheel.rotation.x-=spin;
   if(car.engineOn)updateCarEngineAudio();else if(carEngineAudio)carEngineAudio.gain.gain.setTargetAtTime(0,audio?.ctx.currentTime||0,.08);
 }
+function carSmokeDiagnostic(){
+  if(!SMOKE_TEST||!car)return;
+  const saved={
+    position:car.group.position.clone(),yaw:car.yaw,pitch:car.pitch,roll:car.roll,speed:car.speed,steer:car.steer,occupied:car.occupied,engineOn:car.engineOn,
+    camPosition:cam.position.clone(),camQuaternion:cam.quaternion.clone(),wheelAngles:car.wheels.map(w=>w.rotation.x),pivotAngles:car.frontPivots.map(p=>p.rotation.y)
+  };
+  const start=car.group.position.clone();
+  car.occupied=true;car.engineOn=false;car.speed=8;car.steer=.18;
+  for(let i=0;i<12;i++)updateCar(1/60);
+  const moved=car.group.position.distanceTo(start),finite=[car.group.position.x,car.group.position.y,car.group.position.z,car.yaw,car.pitch,car.roll,car.speed].every(Number.isFinite);
+  updateCarCamera(1/60);
+  const cameraGap=cam.position.distanceTo(car.group.position);
+  document.body.dataset.carReady="1";
+  document.body.dataset.carRoadDistance=roadDistance(saved.position.x,saved.position.z).toFixed(3);
+  document.body.dataset.carSmokeMoved=moved.toFixed(3);
+  document.body.dataset.carCameraGap=cameraGap.toFixed(3);
+  document.body.dataset.carFinite=finite?"1":"0";
+  car.group.position.copy(saved.position);car.yaw=saved.yaw;car.pitch=saved.pitch;car.roll=saved.roll;car.speed=saved.speed;car.steer=saved.steer;car.occupied=saved.occupied;car.engineOn=saved.engineOn;
+  car.group.rotation.set(car.pitch,car.yaw,car.roll);car.wheels.forEach((w,i)=>w.rotation.x=saved.wheelAngles[i]);car.frontPivots.forEach((p,i)=>p.rotation.y=saved.pivotAngles[i]);
+  cam.position.copy(saved.camPosition);cam.quaternion.copy(saved.camQuaternion);
+}
 
 function makeFogProfile(dna,wet,terrainRadius=TERRAIN_RADIUS){
   const moisture=clamp(dna.humidity*.64+dna.oceanicity*.18+wet*.18,0,1);
@@ -2135,6 +2156,7 @@ if(SMOKE_TEST){
   }
 }
 document.body.dataset.roadSegments=String(roadSegments);document.body.dataset.roadMaxGrade=roadStats.grade.toFixed(4);document.body.dataset.roadLateralRange=roadStats.range.toFixed(1);document.body.dataset.roadMinRadius=Number.isFinite(roadStats.minRadius)?roadStats.minRadius.toFixed(1):"9999";document.body.dataset.roadFarGrade=roadFarGrade.toFixed(4);document.body.dataset.roadFarOk=roadFarOk?"1":"0";
+if(car){document.body.dataset.carReady="1";document.body.dataset.carRoadDistance=roadDistance(car.group.position.x,car.group.position.z).toFixed(3)}else{document.body.dataset.carReady="0";document.body.dataset.carRoadDistance="999"}carSmokeDiagnostic();
 document.body.dataset.grassInstances=String(flora.grass);document.body.dataset.grassCover=G.grass.cover.toFixed(3);document.body.dataset.fogNear=G.fogNear.toFixed(1);document.body.dataset.fogFar=G.fogFar.toFixed(1);document.body.dataset.fogMoisture=G.fogMoisture.toFixed(3);let generations=[...new Set(floraCatalog.map(s=>s.iterations))].sort().join(","),names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};document.body.dataset.generationStage="complete";$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · бескрайний · "+wx[wt]+": "+weather.count+" частиц · рядом: "+flora.plants+" растений, "+floraCatalog.length+" форм, поколения "+generations+" · грибы: "+flora.mushrooms+" · фауна: "+flora.animals+" / "+faunaCatalog.length+" видов · птицы: "+flora.birds+" / "+birdCatalog.length+" видов · руины: "+sites.length+" · строения: "+homes.length+" · дорога: бесконечная";if(audio)audio.filter.frequency.value=250+G.slender*900}
 
 function waterLevelAt(x=0,z=0){return regionalEnabled?universeSeaLevel:G.water}
