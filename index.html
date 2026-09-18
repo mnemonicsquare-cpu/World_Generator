@@ -1971,6 +1971,13 @@ function circularRegionValue(context,key,nested=null){
 function regionalEnvironmentAt(x,z){
   if(!regionalEnabled)return {primary:{key:"0,0",weight:1,profile:G},palette:worldPalette,horizon:celestial?.horizon||new T.Color(),hue:G.hue,
     fogMoisture:G.fogMoisture,fogIntensity:G.fogIntensity,fogNear:G.fogNear,fogFar:G.fogFar,forestCover:G.forestCover,wet:G.wet,windAngle:weather?.windAngle||0,windSpeed:weather?.windSpeed||1,gustiness:weather?.gustiness||1};
+  const originDistance=Math.hypot(x-universeOriginX,z-universeOriginZ);
+  if(originProfile&&originDistance<originFastRadius){
+    const wind=originProfile.wind;
+    return {primary:{key:"0,0",weight:1,profile:originProfile},palette:worldPalette,horizon:originProfile.horizon,hue:originProfile.hue,
+      fogMoisture:originProfile.fogMoisture,fogIntensity:originProfile.fogIntensity,fogNear:originProfile.fogNear,fogFar:originProfile.fogFar,
+      forestCover:originProfile.forestCover,wet:originProfile.wet,windAngle:wind.windAngle,windSpeed:wind.windSpeed,gustiness:wind.gustiness};
+  }
   const context=worldBlendAt(x,z),primary=context[0],palette=regionalPaletteAt(x,z),horizon=blendColor(context,"horizon","profile"),hue=circularRegionValue(context,"hue");
   let wx=0,wz=0;for(const item of context){wx+=Math.cos(item.profile.wind.windAngle)*item.weight;wz+=Math.sin(item.profile.wind.windAngle)*item.weight;}
   return {context,primary,palette,horizon,hue,
