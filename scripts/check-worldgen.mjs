@@ -428,7 +428,10 @@ for(const marker of [
   "new DecompressionStream(\"gzip\")",
   "assets/car_model_",
   "function buildDetailedCarModel(bytes)",
-  "color:glass?new T.Color(0x050607)",
+  'role==="head"',
+  'role==="tail"',
+  'role==="cabin"',
+  "bodyRecord.geometry.groups[gi].materialIndex=mi",
   "tireMaterial.color.setHex(0x08090a)",
   "wheelLocalBottom:sourceWheelBottom+visualLift",
   "function upgradeCarModel(targetCar)",
@@ -436,6 +439,13 @@ for(const marker of [
   "document.body.dataset.carGlassOpaque",
   "document.body.dataset.carWheelLocalBottom",
   "document.body.dataset.carWheelRoadClearance",
+  "document.body.dataset.carNativeHeadlightGroups",
+  "document.body.dataset.carNativeTailGroups",
+  "document.body.dataset.carNativeCabinGlassGroups",
+  "document.body.dataset.carHeadlightYellow",
+  "document.body.dataset.carHeadlightNight",
+  "document.body.dataset.carReverseLight",
+  "document.body.dataset.carLightGeometryAdded",
   'document.body.dataset.carModel="detailed"',
   "document.body.dataset.carDetailedVerts",
   "function makeFallbackCarModel()",
@@ -452,7 +462,11 @@ for(const marker of [
   "function updateCarCamera(dt)",
   "cam.position.lerp(desired",
   "cam.lookAt(target)",
+  "function updateCarLights(day=1)",
+  "new T.SpotLight(0xffd36a,0,48",
+  "function carLightSmokeDiagnostic()",
   "function updateCar(dt)",
+  "car.reverseActive=!!",
   "Math.tan(car.steer)*car.speed/2.53",
   "function carSmokeDiagnostic()"
 ])if(!carSection.includes(marker))fail("road-car architecture marker missing: "+marker);
@@ -462,6 +476,9 @@ if(!current.includes('if(car?.occupied){\n    updateCar(dt);updatePlane(dt);upda
 if(!current.includes('if(!plane?.occupied&&!car?.occupied&&e.code==="Space"&&grounded)'))fail("car handbrake conflicts with on-foot jumping");
 if(!clearSection.includes("stopCarEngineAudio()")||!clearSection.includes("car=null"))fail("new-world reset does not fully dispose car state");
 if(!current.includes('document.body.dataset.carReady')||!current.includes('document.body.dataset.carSmokeMoved')||!current.includes('document.body.dataset.carCameraGap'))fail("car browser smoke diagnostics are missing");
+if(!current.includes('updateNightSky(e,day,front,top,h,tw);updateCarLights(day)'))fail("native headlights are not coupled to the day/night cycle");
+if(carSection.includes("headLenses")||carSection.includes("tailLenses")||carSection.includes('name="car-light-rig"'))fail("auxiliary floating lamp geometry was reintroduced");
+if(!carSection.includes('document.body.dataset.carLightGeometryAdded="0"'))fail("native-light no-extra-geometry diagnostic is missing");
 
 // Detailed user-provided Blender car asset must be present, gzip-valid, and contain substantial real geometry.
 const carAssetText=Array.from({length:6},(_,i)=>{
