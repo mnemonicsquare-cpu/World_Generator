@@ -110,6 +110,10 @@ const epsilonShape=section(epsilonBeta,"function shape(",epsilonShapeEnd);
 const currentShape=section(current,"function shape(",currentShapeEnd);
 if(epsilonShape!==currentShape)fail("legacy shape() changed relative to Epsilon Beta");
 
+const populateFlora=section(current,"function populateChunkFlora(chunk){","function removeChunkFlora(chunk){");
+const treePos=populateFlora.indexOf("growLSystemFlora"),windPos=populateFlora.indexOf("attachWindToFlora(group,chunk);"),groundPos=populateFlora.indexOf("growGroundFlora");
+if(!(treePos>=0&&windPos>treePos&&groundPos>windPos))fail("ground flora can accidentally receive tree wind deformation");
+
 const epsilonFlora=section(epsilonBeta,"function floraDensity","function makeFaunaCatalog");
 const currentFlora=section(current,"function floraDensity","function makeFaunaCatalog");
 if(epsilonFlora!==currentFlora)fail("protected flora generation changed relative to Epsilon Beta");
@@ -141,7 +145,13 @@ for(const marker of [
   "attachWindToFlora(group,chunk);",
   "windForceUniform.value=windForce",
   "weather.currentWind=windForce",
-  "slant=weather.drift*weather.windSpeed*gust*ratio"
+  "slant=weather.drift*weather.windSpeed*gust*ratio",
+  "windClimate=clamp(",
+  "gale=galeRoll<.16",
+  "debrisCount=G.forestCover>.16",
+  "living-wind-v2-",
+  "weather.debris.material.opacity",
+  "water.material.roughness=clamp(.17+windForce*.13"
 ]){
   if(!current.includes(marker))fail("missing terrain architecture marker: "+marker);
 }
@@ -168,3 +178,5 @@ console.log("- Epsilon Beta flora block: unchanged");
 console.log("- World DNA determinism and bounds: OK");
 console.log("- Epsilon Beta World DNA: unchanged");
 console.log("- Living wind architecture markers: OK");
+console.log("- Mushrooms excluded from wind binding: OK");
+console.log("- Strong-wind climate and debris markers: OK");
