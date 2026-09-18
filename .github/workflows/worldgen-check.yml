@@ -82,6 +82,14 @@ jobs:
             awk -v g="$road_far_grade" 'BEGIN{if(g>0.10)exit 1}' || { echo "Cross-world road grade too steep for ${seed}: $road_far_grade"; exit 1; }
             awk -v r="$road_range" 'BEGIN{if(r<120)exit 1}' || { echo "Road is too straight for ${seed}: lateral range=$road_range"; exit 1; }
             awk -v r="$road_radius" 'BEGIN{if(r<32)exit 1}' || { echo "Road turn radius too tight for ${seed}: $road_radius m"; exit 1; }
+            road_normal_min="$(grep -o 'data-road-normal-min="[-0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            road_visible="$(grep -o 'data-road-visible-from-above="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            if [[ -z "$road_normal_min" || "$road_visible" != "1" ]]; then
+              echo "Road mesh is not visibly front-facing from above for ${seed}: normal=${road_normal_min:-missing}, visible=${road_visible:-missing}"
+              grep -o 'data-road-[a-z-]*="[^"]*"' "$out" | head -20 || true
+              exit 1
+            fi
+            awk -v n="$road_normal_min" 'BEGIN{if(n<0.2)exit 1}' || { echo "Road normals point downward or sideways for ${seed}: normal=$road_normal_min"; exit 1; }
             car_ready="$(grep -o 'data-car-ready="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
             car_road_distance="$(grep -o 'data-car-road-distance="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             car_moved="$(grep -o 'data-car-smoke-moved="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"

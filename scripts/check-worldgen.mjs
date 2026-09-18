@@ -381,6 +381,19 @@ if(roadSection.includes("lerp(palette.rock"))fail("road asphalt is still tinted 
 if(roadSection.includes("roadAsphaltHash")||roadSection.includes("vRoadWorld"))fail("old shader-patched asphalt path is still present");
 if(!current.includes('document.body.dataset.roadAsphaltColor="242629"'))fail("road asphalt runtime color diagnostic is missing");
 if(!current.includes('document.body.dataset.roadLift=".12"'))fail("road lift runtime diagnostic is missing");
+if(!roadSection.includes("inds.push(n,n+2,n+1,n,n+3,n+2)"))fail("road quad winding is not upward-facing; asphalt would be back-face culled from above");
+if(!roadSection.includes("side:T.FrontSide"))fail("road material front-face intent is not explicit");
+if(!roadSection.includes("function roadRenderDiagnostic()"))fail("road render visibility diagnostic is missing");
+if(!current.includes('document.body.dataset.roadNormalMin'))fail("road normal runtime diagnostic is missing");
+if(!current.includes('document.body.dataset.roadVisibleFromAbove'))fail("road ray-visibility runtime diagnostic is missing");
+
+// Independent winding sanity check: the road's [left0,right0,right1,left1] quad with indices [0,2,1] must point +Y.
+{
+  const v=[[-4,0,0],[4,0,0],[4,0,8],[-4,0,8]],tri=[0,2,1];
+  const a=v[tri[0]],b=v[tri[1]],d=v[tri[2]],ab=[b[0]-a[0],b[1]-a[1],b[2]-a[2]],ad=[d[0]-a[0],d[1]-a[1],d[2]-a[2]];
+  const ny=ab[2]*ad[0]-ab[0]*ad[2];
+  if(ny<=0)fail("road winding sanity harness expected an upward normal");
+}
 
 const roadMathSource=section(current,"function roadRandom(i,salt=0){","function worldTerrainWithoutRoad(x,z){");
 let roadMath;
