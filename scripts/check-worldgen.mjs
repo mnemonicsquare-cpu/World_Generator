@@ -28,6 +28,35 @@ const betaDNA=section(epsilonBeta,"function makeWorldDNA(seedHash){","function g
 const currentDNA=section(current,"function makeWorldDNA(seedHash){","function generate(seed){");
 if(betaDNA!==currentDNA)fail("World DNA changed relative to Epsilon Beta during wind work");
 
+// Every world must have a bounded fog corridor; humidity pulls it close without exposing terrain edges.
+const fogSource=section(current,"function makeFogProfile(dna,wet,terrainRadius=TERRAIN_RADIUS){","function makeWorldDNA(seedHash){");
+let fogTools;
+try{
+  fogTools=new Function(`
+    const CHUNK_SIZE=160,TERRAIN_RADIUS=6;
+    const clamp=(x,a,b)=>Math.min(b,Math.max(a,x)),mix=(a,b,t)=>a+(b-a)*t,smooth=x=>x*x*(3-2*x);
+    ${fogSource}
+    return {makeFogProfile};
+  `)();
+}catch(error){fail("Fog profile test harness could not be built: "+error.message);}
+const dryFog=fogTools.makeFogProfile({humidity:0,oceanicity:0},0,6);
+const wetFog=fogTools.makeFogProfile({humidity:1,oceanicity:1},1,6);
+const mobileDryFog=fogTools.makeFogProfile({humidity:0,oceanicity:0},0,5);
+for(const profile of [dryFog,wetFog,mobileDryFog]){
+  for(const key of ["moisture","humidityFog","near","far"])if(!Number.isFinite(profile[key]))fail("Fog profile produced non-finite "+key);
+  if(profile.moisture<0||profile.moisture>1||profile.humidityFog<0||profile.humidityFog>1)fail("Fog climate trait left normalized range");
+  if(profile.near<12||profile.far<=profile.near+65)fail("Fog corridor collapsed or inverted");
+}
+if(dryFog.near<480||dryFog.far>900||dryFog.far>=6*160-55)fail("Desktop dry haze no longer hides the distant terrain boundary");
+if(mobileDryFog.near<390||mobileDryFog.far>=5*160-55)fail("Mobile dry haze no longer hides the closer terrain boundary");
+if(wetFog.near>40||wetFog.far>190)fail("Maximum-humidity worlds no longer surround the player with close fog");
+if(!(wetFog.near<dryFog.near*.12&&wetFog.far<dryFog.far*.25))fail("Humidity no longer has a strong fog-distance effect");
+for(let i=0;i<=100;i++){
+  const h=i/100,p=fogTools.makeFogProfile({humidity:h,oceanicity:h},h,6);
+  if(p.near>dryFog.near+.001||p.far>dryFog.far+.001||p.near<17.9||p.far<144.9)fail("Fog profile exceeded safety bounds across humidity sweep");
+  if(i&&p.near>fogTools.makeFogProfile({humidity:(i-1)/100,oceanicity:(i-1)/100},(i-1)/100,6).near+.001)fail("Fog near distance is not monotonic with humidity");
+}
+
 // World DNA must be deterministic, bounded, and safe before it is allowed to influence legacy systems.
 const dnaSource=section(current,"function makeWorldDNA(seedHash){","function generate(seed){");
 let dnaTools;
@@ -233,7 +262,12 @@ for(const marker of [
   "function growGrass(parent,chunk)",
   "procedural-grass-v1",
   "grassData",
-  "growGrass(group,chunk)"
+  "growGrass(group,chunk)",
+  "function makeFogProfile(dna,wet,terrainRadius=TERRAIN_RADIUS)",
+  "new T.Fog(horizon,G.fogNear,G.fogFar)",
+  "scene.fog.near=Math.max(12,e.fogNear",
+  "scene.fog.far=Math.max(scene.fog.near+68",
+  "document.body.dataset.fogNear"
 ]){
   if(!current.includes(marker))fail("missing terrain architecture marker: "+marker);
 }
@@ -266,3 +300,4 @@ console.log("- Wind climate determinism, rarity and bounds: OK");
 console.log("- Grass DNA determinism, rarity and bounds: OK");
 console.log("- Grass GPU instancing and no-collision architecture: OK");
 console.log("- Mushroom/tree/grass layering order: OK");
+console.log("- Universal haze and humidity fog distances: OK");
