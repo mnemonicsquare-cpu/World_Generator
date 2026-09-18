@@ -2,7 +2,7 @@ import fs from "node:fs";
 import {execFileSync} from "node:child_process";
 
 const current=fs.readFileSync("index.html","utf8");
-const epsilon=execFileSync("git",["show","origin/epsilon:index.html"],{encoding:"utf8"});
+const epsilonAlpha=execFileSync("git",["show","origin/epsilon-alpha:index.html"],{encoding:"utf8"});
 
 function fail(message){
   console.error("worldgen check failed:",message);
@@ -42,25 +42,33 @@ for(let seedHash=0;seedHash<512;seedHash++){
   for(const trait of dnaTraits){
     if(!Number.isFinite(a[trait])||a[trait]<0||a[trait]>1)fail(`World DNA trait out of range: ${trait}=${a[trait]}`);
   }
-  const g={
-    wet:.5,relief:56,roughness:1.2,terrainVariation:.5,regionStrength:.5,regionScale:.004,
-    freq:.007,warp:55,forestCover:.5,forestPatchiness:.5,forestScale:.0045,forestContrast:1,slender:.5
-  };
-  dnaTools.applyWorldDNA(g,a);
-  for(const key of ["wet","terrainVariation","regionStrength","forestCover","forestPatchiness","slender"]){
-    if(!Number.isFinite(g[key])||g[key]<0||g[key]>1)fail(`DNA application broke normalized parameter ${key}`);
+  const cases=[
+    {wet:0,relief:2,roughness:.08,terrainVariation:0,regionStrength:0,regionScale:.0015,freq:.003,warp:18,forestCover:0,forestPatchiness:0,forestScale:.0018,forestContrast:.25,slender:0},
+    {wet:.5,relief:56,roughness:1.2,terrainVariation:.5,regionStrength:.5,regionScale:.004,freq:.007,warp:55,forestCover:.5,forestPatchiness:.5,forestScale:.0045,forestContrast:1,slender:.5},
+    {wet:1,relief:110,roughness:3.18,terrainVariation:1,regionStrength:1,regionScale:.0075,freq:.014,warp:110,forestCover:1,forestPatchiness:1,forestScale:.0098,forestContrast:2,slender:1}
+  ];
+  for(const source of cases){
+    const g={...source};
+    dnaTools.applyWorldDNA(g,a);
+    for(const key of ["wet","terrainVariation","regionStrength","forestCover","forestPatchiness","slender"]){
+      if(!Number.isFinite(g[key])||g[key]<0||g[key]>1)fail(`DNA application broke normalized parameter ${key}`);
+    }
+    for(const key of ["relief","roughness","regionScale","freq","warp","forestScale","forestContrast"]){
+      if(!Number.isFinite(g[key]))fail(`DNA application produced non-finite ${key}`);
+    }
+    if(g.relief<2||g.relief>110||g.roughness<.05||g.roughness>3.2||g.forestScale<.0014||g.forestScale>.0095||g.forestContrast<.25||g.forestContrast>2)fail("DNA application broke generator safety bounds");
+    if(g.regionScale<=0||g.freq<=0||g.warp<=0)fail("DNA application broke positive terrain scale");
   }
-  if(g.relief<2||g.relief>110||g.roughness<.05||g.roughness>3.2||g.forestScale<.0014||g.forestScale>.0095||g.forestContrast<.25||g.forestContrast>2)fail("DNA application broke generator safety bounds");
 }
 
-const epsilonShape=section(epsilon,"function shape(","function height(x,z){");
+const epsilonShape=section(epsilonAlpha,"function shape(","function height(x,z){");
 const currentShapeEnd=current.includes("function naturalMountainShape")?"function naturalMountainShape":"function baseHeight(x,z){";
 const currentShape=section(current,"function shape(",currentShapeEnd);
-if(epsilonShape!==currentShape)fail("legacy shape() changed relative to Epsilon");
+if(epsilonShape!==currentShape)fail("legacy shape() changed relative to Epsilon Alpha");
 
-const epsilonFlora=section(epsilon,"function floraDensity","function makeFaunaCatalog");
+const epsilonFlora=section(epsilonAlpha,"function floraDensity","function makeFaunaCatalog");
 const currentFlora=section(current,"function floraDensity","function makeFaunaCatalog");
-if(epsilonFlora!==currentFlora)fail("protected flora generation changed relative to Epsilon");
+if(epsilonFlora!==currentFlora)fail("protected flora generation changed relative to Epsilon Alpha");
 
 for(const marker of [
   "function naturalMountainShape(x,z)",
@@ -105,6 +113,6 @@ if(!current.includes("return h+plainsMacroRelief(x,z)"))fail("plains macro relie
 
 console.log("worldgen checks passed");
 console.log("- JavaScript syntax: OK");
-console.log("- Epsilon base shapes: unchanged");
-console.log("- Epsilon flora block: unchanged");
+console.log("- Epsilon Alpha base shapes: unchanged");
+console.log("- Epsilon Alpha flora block: unchanged");
 console.log("- World DNA determinism and bounds: OK");
