@@ -33,6 +33,8 @@ jobs:
             "$chrome" --headless=new --no-sandbox --disable-dev-shm-usage --use-gl=swiftshader --enable-unsafe-swiftshader --virtual-time-budget=12000 --dump-dom "http://127.0.0.1:8000/?seed=${seed}" >"$out" 2>"$log"
             if ! grep -Fq "Мир ${seed} · бескрайний" "$out"; then
               echo "Browser smoke test did not finish generation for ${seed}"
+              grep -o 'data-runtime-error="[^"]*"' "$out" | head -1 || true
+              grep -o 'id="name">[^<]*' "$out" | head -1 || true
               cat "$log"
               exit 1
             fi
