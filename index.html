@@ -1860,7 +1860,105 @@ function updateCarEngineAudio(){
   carEngineAudio.filter.frequency.setTargetAtTime(300+rpm*930,ctx.currentTime,.1);
   carEngineAudio.gain.gain.setTargetAtTime(sound&&car.engineOn?.028+rpm*.043:0,ctx.currentTime,.08);
 }
-function makeCarModel(){
+
+const DETAILED_CAR_PARTS=6;
+let detailedCarBytesPromise=null;
+async function loadDetailedCarBytes(){
+  if(detailedCarBytesPromise)return detailedCarBytesPromise;
+  detailedCarBytesPromise=(async()=>{
+    const parts=await Promise.all(Array.from({length:DETAILED_CAR_PARTS},async(_,i)=>{
+      const response=await fetch("assets/car_model_"+i+".b64?v=car2");
+      if(!response.ok)throw new Error("car asset part "+i+" HTTP "+response.status);
+      return response.text();
+    }));
+    const b64=parts.join("").replace(/\s+/g,""),binary=atob(b64),gz=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++)gz[i]=binary.charCodeAt(i);
+    if(typeof DecompressionStream!=="function")throw new Error("gzip decompression is unavailable");
+    const stream=new Blob([gz]).stream().pipeThrough(new DecompressionStream("gzip"));
+    const raw=new Uint8Array(await new Response(stream).arrayBuffer());
+    if(raw.length<32||raw[0]!==67||raw[1]!==65||raw[2]!==82||raw[3]!==50)throw new Error("invalid CAR2 model asset");
+    return raw;
+  })();
+  return detailedCarBytesPromise;
+}
+function buildDetailedCarModel(bytes){
+  const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);let offset=4;
+  const need=n=>{if(offset+n>view.byteLength)throw new Error("truncated CAR2 model asset")};
+  const u8=()=>{need(1);return view.getUint8(offset++)};
+  const u16=()=>{need(2);const v=view.getUint16(offset,true);offset+=2;return v};
+  const u32=()=>{need(4);const v=view.getUint32(offset,true);offset+=4;return v};
+  const i16=()=>{need(2);const v=view.getInt16(offset,true);offset+=2;return v};
+  const f32=()=>{need(4);const v=view.getFloat32(offset,true);offset+=4;return v};
+  const skip=n=>{need(n);offset+=n};
+  const materialCount=u16(),meshCount=u16(),sourceScale=f32();
+  if(materialCount<1||materialCount>64||meshCount!==2||!Number.isFinite(sourceScale))throw new Error("unsupported CAR2 header");
+  const wheelTransforms=[];
+  for(let i=0;i<4;i++)wheelTransforms.push({x:f32(),y:f32(),z:f32(),scale:f32()});
+  const materials=[];
+  for(let i=0;i<materialCount;i++){
+    const r=u8()/255,g=u8()/255,b=u8()/255,alpha=u8()/255,metalness=u8()/255,roughness=u8()/255;
+    const er=u8()/255,eg=u8()/255,eb=u8()/255,flags=u8(),glass=(flags&1)!==0||alpha<.99;
+    const material=new T.MeshStandardMaterial({
+      color:new T.Color(r,g,b),metalness,roughness:clamp(roughness,.08,1),
+      emissive:new T.Color(er,eg,eb),emissiveIntensity:(er+eg+eb)>.02?1.05:0,
+      transparent:glass,opacity:glass?clamp(alpha,.22,.9):1,depthWrite:!glass,
+      side:glass?T.DoubleSide:T.FrontSide
+    });
+    materials.push(material);
+  }
+  const records=new Map;
+  for(let m=0;m<meshCount;m++){
+    const id=u8();skip(3);const vertexCount=u32(),groupCount=u16();skip(2);
+    const translation=new T.Vector3(f32(),f32(),f32());
+    if(vertexCount<3||vertexCount>100000||groupCount<1||groupCount>64)throw new Error("invalid CAR2 mesh record");
+    const positions=new Float32Array(vertexCount*3);
+    for(let i=0;i<positions.length;i++)positions[i]=i16()/10000;
+    const allIndices=[],groups=[];let start=0;
+    for(let g=0;g<groupCount;g++){
+      const materialIndex=u8();skip(1);skip(2);const count=u32();
+      if(materialIndex>=materials.length||count<3||count>1000000)throw new Error("invalid CAR2 material group");
+      groups.push({start,count,materialIndex});
+      for(let i=0;i<count;i++)allIndices.push(u16());
+      start+=count;
+    }
+    const geometry=new T.BufferGeometry();
+    geometry.setAttribute("position",new T.BufferAttribute(positions,3));
+    geometry.setIndex(new T.BufferAttribute(new Uint16Array(allIndices),1));
+    geometry.clearGroups();for(const g of groups)geometry.addGroup(g.start,g.count,g.materialIndex);
+    geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.computeBoundingSphere();
+    records.set(id,{geometry,translation,vertexCount});
+  }
+  if(offset!==view.byteLength||!records.has(0)||!records.has(1))throw new Error("CAR2 asset layout mismatch");
+  const group=new T.Group(),bodyRecord=records.get(0),wheelRecord=records.get(1);
+  const body=new T.Mesh(bodyRecord.geometry,materials);body.position.copy(bodyRecord.translation);group.add(body);
+  const wheels=[],frontPivots=[];
+  for(let i=0;i<wheelTransforms.length;i++){
+    const w=wheelTransforms[i],pivot=new T.Group();pivot.position.set(w.x,w.y,w.z);group.add(pivot);
+    const wheel=new T.Mesh(wheelRecord.geometry,materials),scale=Math.abs(w.scale);
+    wheel.scale.set(Math.sign(w.scale||1)*scale,scale,scale);pivot.add(wheel);wheels.push(wheel);if(i<2)frontPivots.push(pivot);
+  }
+  group.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});
+  return {group,wheels,frontPivots,detailed:true,vertexTotal:bodyRecord.vertexCount+wheelRecord.vertexCount*4};
+}
+async function upgradeCarModel(targetCar){
+  document.body.dataset.carModel="loading";document.body.dataset.carDetailedVerts="0";delete document.body.dataset.carModelError;
+  try{
+    const detailed=buildDetailedCarModel(await loadDetailedCarBytes());
+    if(!car||car!==targetCar){disposeTree(detailed.group);return}
+    for(const child of [...targetCar.group.children]){targetCar.group.remove(child);disposeTree(child)}
+    while(detailed.group.children.length)targetCar.group.add(detailed.group.children[0]);
+    targetCar.wheels=detailed.wheels;targetCar.frontPivots=detailed.frontPivots;targetCar.modelDetailed=true;
+    document.body.dataset.carModel="detailed";document.body.dataset.carDetailedVerts=String(detailed.vertexTotal);
+  }catch(error){
+    if(car===targetCar){
+      targetCar.modelDetailed=false;document.body.dataset.carModel="fallback";
+      document.body.dataset.carModelError=String(error?.message||error).slice(0,180);
+    }
+    console.warn("Detailed car model fallback:",error);
+  }
+}
+
+function makeFallbackCarModel(){
   const group=new T.Group();group.rotation.order="YXZ";
   const paint=new T.Color(0xb9dce0),paintLight=new T.Color(0xd5ebed),chrome=new T.Color(0xdde6e7),rubber=new T.Color(0x151718),glass=new T.Color(0x55727a);
   const bodyMat=new T.MeshStandardMaterial({color:paint,roughness:.43,metalness:.08});
@@ -1936,11 +2034,12 @@ function carHitsObstacle(x,z,yaw){
 }
 function createCar(){
   if(!roadReady)return;
-  const z=roadOriginZ-13,f=roadFrame2D(z),lateral=2.15,x=f.x+f.sideX*lateral,yaw=Math.atan(f.dx),model=makeCarModel();
+  const z=roadOriginZ-13,f=roadFrame2D(z),lateral=2.15,x=f.x+f.sideX*lateral,yaw=Math.atan(f.dx),model=makeFallbackCarModel();
   scene.add(model.group);
   const pose=carGroundPose(x,z,yaw);
-  car={group:model.group,wheels:model.wheels,frontPivots:model.frontPivots,yaw,pitch:pose.pitch,roll:pose.roll,speed:0,steer:0,occupied:false,engineOn:false};
+  car={group:model.group,wheels:model.wheels,frontPivots:model.frontPivots,yaw,pitch:pose.pitch,roll:pose.roll,speed:0,steer:0,occupied:false,engineOn:false,modelDetailed:false};
   car.group.position.set(x,pose.y,z);car.group.rotation.set(pose.pitch,yaw,pose.roll);
+  upgradeCarModel(car);
 }
 function carInteractionDistance(){
   if(!car)return Infinity;
