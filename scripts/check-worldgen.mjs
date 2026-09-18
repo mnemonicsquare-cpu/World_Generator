@@ -206,6 +206,10 @@ const clearSection=section(current,"function clear(){","function instances(");
 for(const marker of ["regionalEnabled=false","originProfile=null","originFastRadius=0","universeOriginX=universeOriginZ=0","regionProfiles.clear()","universeHash=0","universeSeaLevel=0"])if(!clearSection.includes(marker))fail("new-seed reset lost regional state guard: "+marker);
 if(!current.includes("universeOriginX=cam.position.x;universeOriginZ=cam.position.z"))fail("regional origin is not anchored to the actual spawn point");
 if(!current.includes("Math.round((wx-universeOriginX)/WORLD_CELL)"))fail("region indexing is not relative to the spawn-anchored origin");
+if(!current.includes("Math.hypot(x-universeOriginX,z-universeOriginZ)"))fail("origin fast path is not measured from the spawn-anchored center");
+if(!current.includes("if(originProfile&&originDistance<originFastRadius)"))fail("atmosphere lost the direct origin-world fast path");
+if(!current.includes('document.body.dataset.frameContrast'))fail("browser visual contrast diagnostic is missing");
+
 if(!current.includes("rawTerrainHeightFor(item.profile,x,z)+item.profile.heightOffset"))fail("regional terrain is not height-aligned to the common sea level");
 if(!current.includes("waterLevelAt(x,z)"))fail("regional ecology is not using the common water level");
 
