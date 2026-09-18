@@ -366,15 +366,21 @@ if(!current.includes('document.body.dataset.roadSegments'))fail("road runtime di
 if(!current.includes('document.body.dataset.roadMaxGrade'))fail("road grade diagnostics are missing");
 if(!roadSection.includes("function makeRoadAsphaltMaterial()"))fail("dark-gray asphalt material factory is missing");
 for(const asphaltMarker of [
-  "color:0x303236",
-  "roughness:.965",
-  "roadAsphaltHash",
-  "vRoadWorld",
-  "roadGrain",
-  "roadAggregate",
-  '"road-asphalt-dark-gray-v1"'
-])if(!roadSection.includes(asphaltMarker))fail("dark-gray asphalt surface marker missing: "+asphaltMarker);
+  "color:0x242629",
+  "roughness:.985",
+  "metalness:0",
+  "polygonOffset:true",
+  "polygonOffsetFactor:-2",
+  "const roadLift=.12,markLift=.17",
+  "y0+roadLift",
+  "y1+roadLift",
+  "y0+markLift",
+  "y1+markLift"
+])if(!roadSection.includes(asphaltMarker))fail("visible asphalt surface marker missing: "+asphaltMarker);
 if(roadSection.includes("lerp(palette.rock"))fail("road asphalt is still tinted by the current world palette");
+if(roadSection.includes("roadAsphaltHash")||roadSection.includes("vRoadWorld"))fail("old shader-patched asphalt path is still present");
+if(!current.includes('document.body.dataset.roadAsphaltColor="242629"'))fail("road asphalt runtime color diagnostic is missing");
+if(!current.includes('document.body.dataset.roadLift=".12"'))fail("road lift runtime diagnostic is missing");
 
 const roadMathSource=section(current,"function roadRandom(i,salt=0){","function worldTerrainWithoutRoad(x,z){");
 let roadMath;
