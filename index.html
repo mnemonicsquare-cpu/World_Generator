@@ -1049,7 +1049,8 @@ function growGrass(parent,chunk){
   const maxInstances=LOW_POWER?620:1320,candidateLimit=Math.max(90,Math.floor(maxInstances*(.18+g.cover*.82)));
   const side=Math.ceil(Math.sqrt(candidateLimit)),cell=CHUNK_SIZE/side,r=rng(chunkSeed(chunk.cx,chunk.cz,0x2c936f));
   const terrainPos=chunk.terrain.geometry.attributes.position,terrainNormal=chunk.terrain.geometry.attributes.normal,row=CHUNK_SEG+1;
-  const matrices=[],grassData=[],matrix=new T.Matrix4(),q=new T.Quaternion(),scale=new T.Vector3(),pos=new T.Vector3(),yAxis=new T.Vector3(0,1,0);
+  const colors=grassColors(),geo=makeGrassGeometry(),material=makeGrassMaterial(colors.base,colors.tip),mesh=new T.InstancedMesh(geo,material,candidateLimit);
+  const data=new Float32Array(candidateLimit*4),matrix=new T.Matrix4(),q=new T.Quaternion(),scale=new T.Vector3(),pos=new T.Vector3(),yAxis=new T.Vector3(0,1,0);
   const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE;
   function sample(lx,lz){
     const fx=clamp(lx/CHUNK_STEP,0,CHUNK_SEG-.0001),fz=clamp(lz/CHUNK_STEP,0,CHUNK_SEG-.0001);
@@ -1066,21 +1067,16 @@ function growGrass(parent,chunk){
     if(y<=G.water+.16||density<=.012||r()>density||houseReserved(x,z))continue;
     const localCluster=noise(x*(g.midScale*1.9)+71,z*(g.midScale*1.9)-113);
     const height=g.height*(1+(r()-.5)*2*g.heightVariation)*mix(.72,1.22,localCluster);
-    const spread=mix(.78,1.28,.35+r()*.65)*mix(.82,1.18,g.clumpiness);
-    const yaw=r()*Math.PI*2;
-    pos.set(lx,y+.018,lz);q.setFromAxisAngle(yAxis,yaw);scale.set(spread,height,spread);matrix.compose(pos,q,scale);
-    matrices.push(matrix.clone());
-    const rawPhase=x*.031+z*.027+r()*1.8,phase=((rawPhase%6.28318530718)+6.28318530718)%6.28318530718;
-    grassData.push(phase,g.flexibility*(.82+r()*.34),(r()-.5)*2,height);count++;
+    const spread=mix(.78,1.28,.35+r()*.65)*mix(.82,1.18,g.clumpiness),yaw=r()*Math.PI*2;
+    pos.set(lx,y+.018,lz);q.setFromAxisAngle(yAxis,yaw);scale.set(spread,height,spread);matrix.compose(pos,q,scale);mesh.setMatrixAt(count,matrix);
+    const rawPhase=x*.031+z*.027+r()*1.8,phase=((rawPhase%6.28318530718)+6.28318530718)%6.28318530718,k=count*4;
+    data[k]=phase;data[k+1]=g.flexibility*(.82+r()*.34);data[k+2]=(r()-.5)*2;data[k+3]=height;count++;
   }
-  if(!count)return {count:0};
-  const colors=grassColors(),geo=makeGrassGeometry(),material=makeGrassMaterial(colors.base,colors.tip),mesh=new T.InstancedMesh(geo,material,count);
-  for(let i=0;i<count;i++)mesh.setMatrixAt(i,matrices[i]);
-  mesh.geometry.setAttribute("grassData",new T.InstancedBufferAttribute(new Float32Array(grassData),4));
-  mesh.instanceMatrix.setUsage(T.StaticDrawUsage);mesh.castShadow=false;mesh.receiveShadow=false;mesh.frustumCulled=true;mesh.userData.grass=true;
+  if(!count){geo.dispose();material.dispose();return {count:0};}
+  mesh.count=count;mesh.geometry.setAttribute("grassData",new T.InstancedBufferAttribute(data,4));
+  mesh.instanceMatrix.setUsage(T.StaticDrawUsage);mesh.instanceMatrix.needsUpdate=true;mesh.castShadow=false;mesh.receiveShadow=false;mesh.frustumCulled=true;mesh.userData.grass=true;
   parent.add(mesh);return {count};
 }
-
 function populateChunkFlora(chunk){
   if(chunk.flora)return;
   const group=new T.Group();chunk.group.add(group);chunk.flora=group;
