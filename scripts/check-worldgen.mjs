@@ -177,6 +177,8 @@ const grassRenderSection=section(current,"function makeGrassGeometry(){","functi
 if(grassRenderSection.includes("buildingSolids.push")||grassRenderSection.includes("collision")||grassRenderSection.includes("collider"))fail("grass unexpectedly participates in collision logic");
 if(!grassRenderSection.includes("new T.InstancedMesh")||!grassRenderSection.includes("InstancedBufferAttribute"))fail("grass is not using the required instanced GPU path");
 if(!grassRenderSection.includes("LOW_POWER?620:1320"))fail("grass instance safety caps are missing");
+if(!grassRenderSection.includes("makeGrassGeometry(g.width)"))fail("Grass DNA width is not applied to geometry");
+if(!grassRenderSection.includes("const blades=3,levels=[0,.54,1]"))fail("grass blade geometry complexity changed unexpectedly");
 if(!grassRenderSection.includes("castShadow=false")||!grassRenderSection.includes("receiveShadow=false"))fail("grass shadow cost guard is missing");
 
 const epsilonFlora=section(epsilonBeta,"function floraDensity","function makeFaunaCatalog");
