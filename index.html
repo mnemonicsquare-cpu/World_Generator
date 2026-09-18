@@ -127,14 +127,33 @@ function terrainPatch(x,z,radius=10){
   }
   return {y:sum/offsets.length,min,max,spread:max-min,dry:dry/offsets.length};
 }
+function calibrateWaterLevel(){
+  const original=G.water,r=rng(G.hash^0x71a4d3),samples=[];let anchor={x:0,z:0,y:-Infinity};
+  const span=960,grid=15,step=span*2/(grid-1);
+  for(let iz=0;iz<grid;iz++)for(let ix=0;ix<grid;ix++){
+    const x=-span+ix*step+(r()-.5)*step*.48,z=-span+iz*step+(r()-.5)*step*.48;
+    const y=naturalTerrainHeight(x,z);samples.push(y);
+    if(y>anchor.y)anchor={x,z,y};
+  }
+  samples.sort((a,b)=>a-b);
+  const oceanic=G.kind===0||G.kind===5,targetDry=oceanic?.14:.22;
+  const currentDry=samples.reduce((n,y)=>n+(y>G.water+.8),0)/samples.length;
+  if(currentDry<targetDry){
+    const index=Math.max(0,Math.min(samples.length-1,Math.floor((1-targetDry)*(samples.length-1))));
+    G.water=Math.min(G.water,samples[index]-.85);
+  }
+  // Absolute guard: even an unusually flat/deep seed must retain real land.
+  G.water=Math.min(G.water,anchor.y-1.15);
+  G.waterOriginal=original;G.landAnchor=anchor;G.sampledDry=samples.reduce((n,y)=>n+(y>G.water+.8),0)/samples.length;
+}
 function findNaturalSpawn(){
   const r=rng(G.hash^0x53a17b);let fallback=null;
   for(const radius of [280,520,900]){
     let best=null;
     for(let i=0;i<180;i++){
       const angle=r()*Math.PI*2,dist=Math.sqrt(r())*radius;
-      const x=Math.cos(angle)*dist,z=Math.sin(angle)*dist,p=terrainPatch(x,z,11);
-      if(p.max<=G.water+.75)continue;
+      const x=Math.cos(angle)*dist,z=Math.sin(angle)*dist,centerY=naturalTerrainHeight(x,z),p=terrainPatch(x,z,11);
+      if(centerY<=G.water+.85)continue;
       const coastPenalty=Math.max(0,.78-p.dry)*24;
       const lowPenalty=Math.max(0,G.water+1.4-p.y)*7;
       const score=p.spread*1.55+coastPenalty+lowPenalty+dist*.0015;
@@ -143,8 +162,9 @@ function findNaturalSpawn(){
     }
     if(best&&best.p.dry>=.78&&best.p.spread<5.2&&best.p.y>G.water+.9)return [best.x,ground(best.x,best.z)+1.75,best.z];
   }
-  if(fallback)return [fallback.x,Math.max(ground(fallback.x,fallback.z),G.water+.2)+1.75,fallback.z];
-  return [0,Math.max(ground(0,0),G.water+.2)+1.75,0];
+  if(fallback)return [fallback.x,ground(fallback.x,fallback.z)+1.75,fallback.z];
+  const anchor=G.landAnchor||{x:0,z:0};
+  return [anchor.x,ground(anchor.x,anchor.z)+1.75,anchor.z];
 }
 function floraDensity(x,z,y){
   const broad=fbm(x*G.forestScale+G.phase*37,z*G.forestScale-G.phase*23);
@@ -1409,6 +1429,7 @@ G.geology={
   ridgeScale:.0022+geoR()*.0016,ridgeSharpness:1.8+geoR()*1.0,canyonScale:.0018+geoR()*.0018,canyonWidth:.045+geoR()*.045,
   basinCell:380+geoR()*300,basinRadius:.18+geoR()*.14,terraceStep:4.5+geoR()*5.5,terraceSoftness:.34+geoR()*.24,phaseX:geoR()*900,phaseZ:geoR()*900
 };
+calibrateWaterLevel();
 const fogR=rng(G.hash^0x18f2a7),foggy=fogR()<.22+G.wet*.52;G.foggy=foggy;G.fogDensity=foggy?.00115+G.wet*.0018:.00011;
 const paletteR=rng(G.hash^0x6ca91),baseHue=G.hue,botanicalShift=(paletteR()-.5)*.11;
 let sky=col(baseHue,.2+paletteR()*.12,.46+paletteR()*.1),
