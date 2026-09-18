@@ -36,6 +36,7 @@ jobs:
               echo "Browser rendered no completed frame for ${seed}"
               grep -o 'data-frame-stage="[^"]*"' "$out" | head -1 || true
               grep -o 'data-update-stage="[^"]*"' "$out" | head -1 || true
+              grep -o 'data-update-error="[^"]*"' "$out" | head -1 || true
               grep -o 'data-runtime-error="[^"]*"' "$out" | head -1 || true
               cat "$log"
               exit 1
