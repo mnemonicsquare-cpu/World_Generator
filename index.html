@@ -11,7 +11,7 @@ const cam=new T.PerspectiveCamera(66,innerWidth/innerHeight,.1,1200);cam.rotatio
 let scene,water,G,rnd,weather,celestial,audio,sound=false,yaw=0,pitch=-.05,jump=0,grounded=true,plane=null,planeEngineAudio=null,planeLookYaw=0,planeLookPitch=0;
 const keys=new Set,clock=new T.Clock,temp=new T.Object3D,CHUNK_SIZE=160,CHUNK_SEG=28,CHUNK_STEP=CHUNK_SIZE/CHUNK_SEG;
 const chunks=new Map;let chunkQueue=[],chunkX=Infinity,chunkZ=Infinity,floraCatalog=[],faunaCatalog=[],faunaAgents=[],birdCatalog=[],birdAgents=[],faunaStarterPlaced=false,birdStarterPlaced=false,worldPalette;
-const TERRAIN_RADIUS=matchMedia("(pointer:coarse)").matches?5:6,FLORA_RADIUS=2;
+const LOW_POWER=matchMedia("(pointer:coarse)").matches,TERRAIN_RADIUS=LOW_POWER?5:6,FLORA_RADIUS=2;
 let mobileForward=0,mobileSide=0,mobileBoost=false,mobileThrottleDown=false;
 const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost;
 function hash(s){let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(),16777619);return h>>>0}
@@ -936,6 +936,143 @@ function attachWindToFlora(group,chunk){
   });
 }
 
+
+function makeGrassDNA(seedHash,dna){
+  const r=rng((seedHash^0x31f4a93b)>>>0);
+  const comfort=1-clamp(Math.abs(dna.temperature-.53)*1.72,0,1);
+  const productivity=clamp(dna.fertility*.48+dna.biosphere*.32+dna.humidity*.2,0,1);
+  let cover=clamp(productivity*.82+comfort*.17+(r()-.5)*.24,0,1);
+  const sparseWorld=r()<.12;if(sparseWorld)cover*=.035+r()*.16;
+  const dryness=clamp((1-dna.humidity)*.54+(1-dna.fertility)*.28+r()*.18,0,1);
+  return {
+    cover,patchiness:r(),clumpiness:r(),shadeTolerance:.28+r()*.58,
+    height:.24+r()*1.08+productivity*.28,heightVariation:.18+r()*.48,
+    width:.055+r()*.085,flexibility:.72+r()*.56,
+    hueShift:(r()-.5)*.105,hueSpan:.012+r()*.052,tipShift:(r()-.5)*.065,
+    dryness,saturationShift:(r()-.5)*.08,
+    macroScale:.00135+r()*.00225,midScale:.0045+r()*.0065,
+    phaseX:r()*900,phaseZ:r()*900,sparseWorld
+  };
+}
+function grassDensity(x,z,y,slope){
+  const g=G.grass;
+  const macro=noise(x*g.macroScale+g.phaseX,z*g.macroScale-g.phaseZ);
+  const mid=noise(x*g.midScale-g.phaseZ*.37,z*g.midScale+g.phaseX*.41);
+  const field=macro*.68+mid*.32;
+  const patchAmp=.3+g.patchiness*1.02;
+  let density=clamp(g.cover+(field-.5)*patchAmp,0,1);
+  const forestField=noise(x*G.forestScale+G.phase*37,z*G.forestScale-G.phase*23);
+  const forestShade=clamp(G.forestCover+(forestField-.5)*G.forestContrast*.72,0,1);
+  density*=mix(.5+g.shadeTolerance*.45,1,1-forestShade);
+  const dryEdge=smooth(clamp((y-G.water-.12)/2.2,0,1));
+  const altitude=clamp((y-G.water)/(20+G.relief*.34),0,1);
+  const highland=mix(1,.42,smooth(clamp((altitude-.52)/.48,0,1)));
+  const slopeFit=1-smooth(clamp((slope-.16)/.58,0,1));
+  return smooth(clamp(density*dryEdge*highland*slopeFit,0,1));
+}
+function makeGrassGeometry(width=G.grass.width){
+  const positions=[],blades=9,golden=2.399963229728653;
+  for(let b=0;b<blades;b++){
+    const a=b*golden,rad=b===0?0:.18+((b*37)%11)/10*.72,ox=Math.cos(a)*rad,oz=Math.sin(a)*rad;
+    const facing=a*1.73+.31,px=Math.cos(facing),pz=Math.sin(facing);
+    const w=width*(.72+((b*19)%7)/12),h=.72+((b*23)%9)/32,lean=(b%3-1)*width*.85;
+    positions.push(
+      ox-px*w,0,oz-pz*w,
+      ox+px*w,0,oz+pz*w,
+      ox+Math.cos(a)*lean,h,oz+Math.sin(a)*lean
+    );
+  }
+  const geo=new T.BufferGeometry();geo.setAttribute("position",new T.Float32BufferAttribute(positions,3));geo.computeVertexNormals();
+  return geo;
+}
+function grassColors(){
+  const g=G.grass;
+  const base=worldPalette.leaf.clone().lerp(worldPalette.land,.14+g.dryness*.38)
+    .offsetHSL(g.hueShift+g.hueSpan*.18,g.saturationShift-g.dryness*.09,-.085-g.dryness*.025);
+  const tip=base.clone().offsetHSL(g.tipShift-g.hueSpan*.35,.035-g.dryness*.075,.13-g.dryness*.025);
+  return {base,tip};
+}
+function makeGrassMaterial(base,tip){
+  const material=new T.MeshLambertMaterial({color:0xffffff,side:T.DoubleSide});
+  material.onBeforeCompile=shader=>{
+    shader.uniforms.uWindTime=windTimeUniform;
+    shader.uniforms.uWindDirection=windDirectionUniform;
+    shader.uniforms.uWindForce=windForceUniform;
+    shader.uniforms.uGrassBase={value:base};
+    shader.uniforms.uGrassTip={value:tip};
+    shader.vertexShader=shader.vertexShader
+      .replace("#include <common>",`#include <common>
+uniform float uWindTime;
+uniform vec2 uWindDirection;
+uniform float uWindForce;
+attribute vec4 grassData;
+varying float vGrassHeight;
+varying float vGrassTint;`)
+      .replace("#include <project_vertex>",`
+vGrassHeight=clamp(position.y,0.0,1.0);
+vGrassTint=grassData.z;
+vec4 mvPosition=vec4(transformed,1.0);
+#ifdef USE_BATCHING
+  mvPosition=batchingMatrix*mvPosition;
+#endif
+#ifdef USE_INSTANCING
+  mvPosition=instanceMatrix*mvPosition;
+#endif
+float h=vGrassHeight*vGrassHeight*(1.18-.18*vGrassHeight);
+float oscillation=sin(uWindTime*(1.7+uWindForce*.52)+grassData.x+position.y*2.35);
+float wave=.82+.18*oscillation;
+float bend=h*grassData.y*grassData.w*(.035+uWindForce*.29)*wave;
+float flutter=oscillation*h*grassData.y*(.006+uWindForce*.022);
+mvPosition.x+=uWindDirection.x*bend+uWindDirection.y*flutter;
+mvPosition.z+=uWindDirection.y*bend-uWindDirection.x*flutter;
+mvPosition=modelViewMatrix*mvPosition;
+gl_Position=projectionMatrix*mvPosition;`);
+    shader.fragmentShader=shader.fragmentShader
+      .replace("#include <common>",`#include <common>
+uniform vec3 uGrassBase;
+uniform vec3 uGrassTip;
+varying float vGrassHeight;
+varying float vGrassTint;`)
+      .replace("#include <color_fragment>",`#include <color_fragment>
+vec3 grassGradient=mix(uGrassBase,uGrassTip,smoothstep(0.0,1.0,vGrassHeight));
+diffuseColor.rgb*=grassGradient*(.88+vGrassTint*.22);`);
+  };
+  material.customProgramCacheKey=()=>"procedural-grass-v1";
+  return material;
+}
+function growGrass(parent,chunk){
+  const g=G.grass;if(!g||g.cover<.012)return {count:0};
+  const maxInstances=LOW_POWER?900:2200,candidateLimit=Math.max(70,Math.floor(maxInstances*(.12+g.cover*.88)));
+  const side=Math.ceil(Math.sqrt(candidateLimit)),cell=CHUNK_SIZE/side,r=rng(chunkSeed(chunk.cx,chunk.cz,0x2c936f));
+  const terrainPos=chunk.terrain.geometry.attributes.position,terrainNormal=chunk.terrain.geometry.attributes.normal,row=CHUNK_SEG+1;
+  const colors=grassColors(),geo=makeGrassGeometry(g.width),material=makeGrassMaterial(colors.base,colors.tip),mesh=new T.InstancedMesh(geo,material,candidateLimit);
+  const data=new Float32Array(candidateLimit*4),matrix=new T.Matrix4(),q=new T.Quaternion(),scale=new T.Vector3(),pos=new T.Vector3(),yAxis=new T.Vector3(0,1,0);
+  const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE;
+  function sample(lx,lz){
+    const fx=clamp(lx/CHUNK_STEP,0,CHUNK_SEG-.0001),fz=clamp(lz/CHUNK_STEP,0,CHUNK_SEG-.0001);
+    const ix=Math.floor(fx),iz=Math.floor(fz),u=fx-ix,v=fz-iz;
+    const A=terrainPos.getY(iz*row+ix),B=terrainPos.getY(iz*row+ix+1),C=terrainPos.getY((iz+1)*row+ix),D=terrainPos.getY((iz+1)*row+ix+1);
+    const y=u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D);
+    const ni=Math.min(CHUNK_SEG,Math.round(fz))*row+Math.min(CHUNK_SEG,Math.round(fx)),ny=Math.max(.08,terrainNormal.getY(ni));
+    return [y,Math.sqrt(Math.max(0,1-ny*ny))/ny];
+  }
+  let count=0;
+  for(let i=0;i<candidateLimit;i++){
+    const gx=i%side,gz=Math.floor(i/side),lx=(gx+.12+r()*.76)*cell,lz=(gz+.12+r()*.76)*cell;
+    const [y,slope]=sample(lx,lz),x=baseX+lx,z=baseZ+lz,density=grassDensity(x,z,y,slope);
+    if(y<=G.water+.16||density<=.012||r()>density||houseReserved(x,z))continue;
+    const localCluster=noise(x*(g.midScale*1.9)+71,z*(g.midScale*1.9)-113);
+    const height=clamp(g.height*(1+(r()-.5)*2*g.heightVariation)*mix(.72,1.22,localCluster),.12,2.1);
+    const spread=mix(.78,1.28,.35+r()*.65)*mix(.82,1.18,g.clumpiness),yaw=r()*Math.PI*2;
+    pos.set(lx,y+.018,lz);q.setFromAxisAngle(yAxis,yaw);scale.set(spread,height,spread);matrix.compose(pos,q,scale);mesh.setMatrixAt(count,matrix);
+    const rawPhase=x*.031+z*.027+r()*1.8,phase=((rawPhase%6.28318530718)+6.28318530718)%6.28318530718,k=count*4;
+    data[k]=phase;data[k+1]=g.flexibility*(.82+r()*.34);data[k+2]=(r()-.5)*2;data[k+3]=height;count++;
+  }
+  if(!count){geo.dispose();material.dispose();return {count:0};}
+  mesh.count=count;mesh.geometry.setAttribute("grassData",new T.InstancedBufferAttribute(data,4));
+  mesh.instanceMatrix.setUsage(T.StaticDrawUsage);mesh.instanceMatrix.needsUpdate=true;mesh.castShadow=false;mesh.receiveShadow=false;mesh.frustumCulled=true;mesh.userData.grass=true;
+  parent.add(mesh);return {count};
+}
 function populateChunkFlora(chunk){
   if(chunk.flora)return;
   const group=new T.Group();chunk.group.add(group);chunk.flora=group;
@@ -943,8 +1080,9 @@ function populateChunkFlora(chunk){
   attachWindToFlora(group,chunk);
   // Ground flora is intentionally added after wind binding: mushrooms must remain completely still.
   const groundCover=growGroundFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.accent);
+  const grass=growGrass(group,chunk);
   const fauna=populateChunkFauna(chunk),birds=populateChunkBirds(chunk);
-  chunk.stats={plants:trees.plants,mushrooms:groundCover.mushrooms,animals:fauna.animals,birds:birds.birds};
+  chunk.stats={plants:trees.plants,mushrooms:groundCover.mushrooms,grass:grass.count,animals:fauna.animals,birds:birds.birds};
 }
 function removeChunkFlora(chunk){
   removeChunkFauna(chunk);removeChunkBirds(chunk);
@@ -1552,7 +1690,7 @@ regionStrength:Math.pow(rnd(),.72),regionScale:.0015+rnd()*.006,regionWidth:.12+
 terrainVariation:Math.pow(rnd(),1.15),roughness:.08+Math.pow(rnd(),1.3)*3.1,pathRelief:.12+rnd()*.88,
 forestCover:Math.pow(coverSeed,.72),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
 forestContrast:.25+rnd()*1.75};
-const dna=makeWorldDNA(G.hash);G.dna=dna;applyWorldDNA(G,dna);
+const dna=makeWorldDNA(G.hash);G.dna=dna;applyWorldDNA(G,dna);G.grass=makeGrassDNA(G.hash,dna);
 G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;
 G.legacyPath=G.path;G.path=1e12;
 const plainsR=rng(G.hash^0x4c31a95),plainsStrength=smooth(clamp((30-G.relief)/24,0,1));
@@ -1616,7 +1754,7 @@ else if(cold>.58&&weatherRoll<.18+cold*.52)wt="snow";
 else if(G.wet>.55&&weatherRoll<.38+G.wet*.45+dna.volatility*.12)wt="rain";
 else wt="spores";
 weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fog:scene.fog.density};celestial.nightSky=makeNightSky();
-let flora=[...chunks.values()].reduce((a,c)=>(a.plants+=c.stats?.plants||0,a.mushrooms+=c.stats?.mushrooms||0,a.animals+=c.stats?.animals||0,a.birds+=c.stats?.birds||0,a),{plants:0,mushrooms:0,animals:0,birds:0}),generations=[...new Set(floraCatalog.map(s=>s.iterations))].sort().join(","),names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · бескрайний · "+wx[wt]+": "+weather.count+" частиц · рядом: "+flora.plants+" растений, "+floraCatalog.length+" форм, поколения "+generations+" · грибы: "+flora.mushrooms+" · фауна: "+flora.animals+" / "+faunaCatalog.length+" видов · птицы: "+flora.birds+" / "+birdCatalog.length+" видов · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+let flora=[...chunks.values()].reduce((a,c)=>(a.plants+=c.stats?.plants||0,a.mushrooms+=c.stats?.mushrooms||0,a.grass+=c.stats?.grass||0,a.animals+=c.stats?.animals||0,a.birds+=c.stats?.birds||0,a),{plants:0,mushrooms:0,grass:0,animals:0,birds:0});document.body.dataset.grassInstances=String(flora.grass);document.body.dataset.grassCover=G.grass.cover.toFixed(3);let generations=[...new Set(floraCatalog.map(s=>s.iterations))].sort().join(","),names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · бескрайний · "+wx[wt]+": "+weather.count+" частиц · рядом: "+flora.plants+" растений, "+floraCatalog.length+" форм, поколения "+generations+" · грибы: "+flora.mushrooms+" · фауна: "+flora.animals+" / "+faunaCatalog.length+" видов · птицы: "+flora.birds+" / "+birdCatalog.length+" видов · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
 function update(dt){
   const e=celestial;e.age+=dt;
   const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
