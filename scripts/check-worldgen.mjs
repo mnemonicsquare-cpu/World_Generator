@@ -366,13 +366,13 @@ if(!current.includes("const road=makeRoadChunk(cx,cz,group);"))fail("road surfac
 if(!current.includes('document.body.dataset.roadSegments'))fail("road runtime diagnostics are missing");
 if(!current.includes('document.body.dataset.roadMaxGrade'))fail("road grade diagnostics are missing");
 if(!roadSection.includes("function makeRoadAsphaltMaterial()"))fail("dark-gray asphalt material factory is missing");
+if(!current.includes("ROAD_VISUAL_LIFT=.12"))fail("shared road visual lift constant is missing");
 for(const asphaltMarker of [
   "color:0x242629",
   "roughness:.985",
   "metalness:0",
   "polygonOffset:true",
   "polygonOffsetFactor:-2",
-  "ROAD_VISUAL_LIFT=.12",
   "const roadLift=ROAD_VISUAL_LIFT,markLift=ROAD_VISUAL_LIFT+.05",
   "y0+roadLift",
   "y1+roadLift",
@@ -435,6 +435,7 @@ for(const marker of [
   "document.body.dataset.carTireBlack",
   "document.body.dataset.carGlassOpaque",
   "document.body.dataset.carWheelLocalBottom",
+  "document.body.dataset.carWheelRoadClearance",
   'document.body.dataset.carModel="detailed"',
   "document.body.dataset.carDetailedVerts",
   "function makeFallbackCarModel()",
