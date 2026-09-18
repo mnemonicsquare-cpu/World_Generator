@@ -43,12 +43,23 @@ function naturalMountainShape(x,z){
   return(broad-.46)*G.relief*.5+ridge*envelope*G.relief*.46;
 }
 function terrainShape(k,x,z){return k===2?naturalMountainShape(x,z):shape(k,x,z)}
+function rollingRelief(x,z){
+  const f=G.terrainFloor;
+  const wx=(fbm(x*f.warpScale+f.phaseX,z*f.warpScale-f.phaseZ,2)-.5)*f.warp;
+  const wz=(fbm(x*f.warpScale-f.phaseZ,z*f.warpScale+f.phaseX,2)-.5)*f.warp;
+  const u=x+wx,v=z+wz;
+  const broad=fbm(u*f.scale+83,v*f.scale-131,3)-.5;
+  const mid=fbm(u*f.scale*2.65-217,v*f.scale*2.65+173,2)-.5;
+  const region=.38+.62*smooth(clamp((fbm(u*f.scale*.42+311,v*f.scale*.42-269,2)-.3)/.48,0,1));
+  return (broad*.82+mid*.18)*f.amplitude*2*region;
+}
 function baseHeight(x,z){
   const rawRegion=fbm(x*G.regionScale+130,z*G.regionScale-80);
   const region=smooth(clamp((rawRegion-(.5-G.regionWidth))/(G.regionWidth*2),0,1))*G.regionStrength;
   let h=mix(terrainShape(G.kind,x,z),terrainShape(G.second,x,z),region);
   const reliefField=fbm(x*.0027-91,z*.0027+147);
-  return h*mix(1,.34+reliefField*1.32,G.terrainVariation);
+  h*=mix(1,.34+reliefField*1.32,G.terrainVariation);
+  return h+rollingRelief(x,z);
 }
 function basinField(x,z){
   const g=G.geology,cell=g.basinCell,cx=Math.floor(x/cell),cz=Math.floor(z/cell);let field=0;
@@ -1420,6 +1431,12 @@ terrainVariation:Math.pow(rnd(),1.15),roughness:.08+Math.pow(rnd(),1.3)*3.1,path
 forestCover:Math.pow(coverSeed,.72),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
 forestContrast:.25+rnd()*1.75};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;
 G.legacyPath=G.path;G.path=1e12;
+const floorR=rng(G.hash^0x41c64e6d),flatNeed=smooth(clamp((28-G.relief)/26,0,1));
+G.terrainFloor={
+  amplitude:1+flatNeed*(6.2+floorR()*1.6),
+  scale:.00105+floorR()*.0007,warpScale:.00042+floorR()*.00028,warp:55+floorR()*95,
+  phaseX:floorR()*1200,phaseZ:floorR()*1200
+};
 const geoR=rng(G.hash^0x5f3759df),geoDominant=Math.floor(geoR()*4),geoStrengths=[Math.pow(geoR(),2.6),Math.pow(geoR(),2.6),Math.pow(geoR(),2.6),Math.pow(geoR(),2.6)];
 geoStrengths[geoDominant]=Math.max(geoStrengths[geoDominant],.62+geoR()*.34);
 if(geoR()<.14){for(let i=0;i<geoStrengths.length;i++)geoStrengths[i]*=.5;geoStrengths[geoDominant]=Math.max(geoStrengths[geoDominant],.36);}
