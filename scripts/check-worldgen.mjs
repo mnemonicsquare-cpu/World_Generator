@@ -132,6 +132,37 @@ if(galeCount<450||galeCount>850)fail("Gale worlds are no longer a rare minority:
 if(strongCount<350||strongCount>900)fail("Strong-wind world frequency is implausible: "+strongCount+"/4096");
 if(maxSpeed-minSpeed<1.5)fail("Wind climate lacks meaningful speed variation");
 
+// Grass DNA must be deterministic, broad, and bounded without altering World DNA.
+const grassSource=section(current,"function makeGrassDNA(seedHash,dna){","function grassDensity(x,z,y,slope){");
+let grassTools;
+try{
+  grassTools=new Function(`
+    const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+    function rng(s){return()=>{s|=0;s=s+0x6d2b79f5|0;let t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296}}
+    ${grassSource}
+    return {makeGrassDNA};
+  `)();
+}catch(error){fail("Grass DNA test harness could not be built: "+error.message);}
+let sparseGrassWorlds=0,denseGrassWorlds=0,almostBareWorlds=0,minGrassCover=Infinity,maxGrassCover=-Infinity;
+for(let seedHash=0;seedHash<4096;seedHash++){
+  const dna=dnaTools.makeWorldDNA(seedHash),a=grassTools.makeGrassDNA(seedHash,dna),b=grassTools.makeGrassDNA(seedHash,dna);
+  if(JSON.stringify(a)!==JSON.stringify(b))fail("Grass DNA is not deterministic at hash "+seedHash);
+  for(const key of ["cover","patchiness","clumpiness","dryness"]){
+    if(!Number.isFinite(a[key])||a[key]<0||a[key]>1)fail("Grass DNA normalized trait out of range: "+key);
+  }
+  if(a.shadeTolerance<.28||a.shadeTolerance>.86||a.height<.24||a.height>1.6||a.heightVariation<.18||a.heightVariation>.66)fail("Grass morphology exceeded safety bounds");
+  if(a.width<.055||a.width>.14||a.flexibility<.72||a.flexibility>1.28||a.hueSpan<.012||a.hueSpan>.064)fail("Grass render trait exceeded safety bounds");
+  if(a.macroScale<=0||a.midScale<=a.macroScale)fail("Grass spatial scales are invalid");
+  if(a.sparseWorld)sparseGrassWorlds++;
+  if(a.cover>.7)denseGrassWorlds++;
+  if(a.cover<.08)almostBareWorlds++;
+  minGrassCover=Math.min(minGrassCover,a.cover);maxGrassCover=Math.max(maxGrassCover,a.cover);
+}
+if(sparseGrassWorlds<350||sparseGrassWorlds>650)fail("Sparse-grass worlds are no longer a rare minority: "+sparseGrassWorlds+"/4096");
+if(denseGrassWorlds<300)fail("Grass DNA no longer produces enough genuinely grassy worlds");
+if(almostBareWorlds<180)fail("Grass DNA no longer produces enough nearly bare worlds");
+if(maxGrassCover-minGrassCover<.75)fail("Grass cover lacks meaningful world-to-world variation");
+
 const epsilonShapeEnd=epsilonBeta.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
 const currentShapeEnd=current.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
 const epsilonShape=section(epsilonBeta,"function shape(",epsilonShapeEnd);
@@ -139,8 +170,14 @@ const currentShape=section(current,"function shape(",currentShapeEnd);
 if(epsilonShape!==currentShape)fail("legacy shape() changed relative to Epsilon Beta");
 
 const populateFlora=section(current,"function populateChunkFlora(chunk){","function removeChunkFlora(chunk){");
-const treePos=populateFlora.indexOf("growLSystemFlora"),windPos=populateFlora.indexOf("attachWindToFlora(group,chunk);"),groundPos=populateFlora.indexOf("growGroundFlora");
-if(!(treePos>=0&&windPos>treePos&&groundPos>windPos))fail("ground flora can accidentally receive tree wind deformation");
+const treePos=populateFlora.indexOf("growLSystemFlora"),windPos=populateFlora.indexOf("attachWindToFlora(group,chunk);"),groundPos=populateFlora.indexOf("growGroundFlora"),grassPos=populateFlora.indexOf("growGrass(group,chunk)");
+if(!(treePos>=0&&windPos>treePos&&groundPos>windPos&&grassPos>groundPos))fail("flora layering order is unsafe for mushrooms or grass");
+
+const grassRenderSection=section(current,"function makeGrassGeometry(){","function populateChunkFlora(chunk){");
+if(grassRenderSection.includes("buildingSolids.push")||grassRenderSection.includes("collision")||grassRenderSection.includes("collider"))fail("grass unexpectedly participates in collision logic");
+if(!grassRenderSection.includes("new T.InstancedMesh")||!grassRenderSection.includes("InstancedBufferAttribute"))fail("grass is not using the required instanced GPU path");
+if(!grassRenderSection.includes("LOW_POWER?620:1320"))fail("grass instance safety caps are missing");
+if(!grassRenderSection.includes("castShadow=false")||!grassRenderSection.includes("receiveShadow=false"))fail("grass shadow cost guard is missing");
 
 const epsilonFlora=section(epsilonBeta,"function floraDensity","function makeFaunaCatalog");
 const currentFlora=section(current,"function floraDensity","function makeFaunaCatalog");
@@ -180,7 +217,16 @@ for(const marker of [
   "debrisCount=G.forestCover>.16",
   "living-wind-v2-",
   "weather.debris.material.opacity",
-  "water.material.roughness=clamp(.17+windForce*.13"
+  "water.material.roughness=clamp(.17+windForce*.13",
+  "function makeGrassDNA(seedHash,dna)",
+  "G.grass=makeGrassDNA(G.hash,dna)",
+  "function grassDensity(x,z,y,slope)",
+  "function makeGrassGeometry()",
+  "function makeGrassMaterial(base,tip)",
+  "function growGrass(parent,chunk)",
+  "procedural-grass-v1",
+  "grassData",
+  "growGrass(group,chunk)"
 ]){
   if(!current.includes(marker))fail("missing terrain architecture marker: "+marker);
 }
@@ -210,3 +256,6 @@ console.log("- Living wind architecture markers: OK");
 console.log("- Mushrooms excluded from wind binding: OK");
 console.log("- Strong-wind climate and debris markers: OK");
 console.log("- Wind climate determinism, rarity and bounds: OK");
+console.log("- Grass DNA determinism, rarity and bounds: OK");
+console.log("- Grass GPU instancing and no-collision architecture: OK");
+console.log("- Mushroom/tree/grass layering order: OK");
