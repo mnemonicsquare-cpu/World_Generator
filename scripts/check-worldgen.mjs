@@ -104,6 +104,34 @@ for(const [k,s] of Object.entries(traitStats)){
   if(s.max-s.min<.12||variance<.001)fail(`World DNA trait lacks useful variation: ${k}`);
 }
 
+// Wind climate is a deterministic world trait: rare gales must stay rare, bounded, and reproducible.
+const windSource=section(current,"function makeWindClimate(seedHash,dna){","function makeWeather(type,c){");
+let windTools;
+try{
+  windTools=new Function(`
+    const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+    function rng(s){return()=>{s|=0;s=s+0x6d2b79f5|0;let t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296}}
+    ${windSource}
+    return {makeWindClimate};
+  `)();
+}catch(error){fail("Wind climate test harness could not be built: "+error.message);}
+let galeCount=0,strongCount=0,minSpeed=Infinity,maxSpeed=-Infinity;
+const referenceDNA={volatility:.5,oceanicity:.5};
+for(let seedHash=0;seedHash<4096;seedHash++){
+  const a=windTools.makeWindClimate(seedHash,referenceDNA),b=windTools.makeWindClimate(seedHash,referenceDNA);
+  for(const key of ["windClimate","windSpeed","windAngle","gustiness"]){
+    if(a[key]!==b[key])fail("Wind climate is not deterministic for "+key+" at hash "+seedHash);
+    if(!Number.isFinite(a[key]))fail("Wind climate produced non-finite "+key);
+  }
+  if(a.windClimate<0||a.windClimate>1.42||a.windSpeed<.28||a.windSpeed>3.475||a.windAngle<0||a.windAngle>=Math.PI*2)fail("Wind climate exceeded safety bounds");
+  if(a.gale)galeCount++;
+  if(a.windClimate>.9)strongCount++;
+  minSpeed=Math.min(minSpeed,a.windSpeed);maxSpeed=Math.max(maxSpeed,a.windSpeed);
+}
+if(galeCount<450||galeCount>850)fail("Gale worlds are no longer a rare minority: "+galeCount+"/4096");
+if(strongCount<350||strongCount>900)fail("Strong-wind world frequency is implausible: "+strongCount+"/4096");
+if(maxSpeed-minSpeed<1.5)fail("Wind climate lacks meaningful speed variation");
+
 const epsilonShapeEnd=epsilonBeta.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
 const currentShapeEnd=current.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
 const epsilonShape=section(epsilonBeta,"function shape(",epsilonShapeEnd);
@@ -146,6 +174,7 @@ for(const marker of [
   "windForceUniform.value=windForce",
   "weather.currentWind=windForce",
   "slant=weather.drift*weather.windSpeed*gust*ratio",
+  "function makeWindClimate(seedHash,dna)",
   "windClimate=clamp(",
   "gale=galeRoll<.16",
   "debrisCount=G.forestCover>.16",
@@ -180,3 +209,4 @@ console.log("- Epsilon Beta World DNA: unchanged");
 console.log("- Living wind architecture markers: OK");
 console.log("- Mushrooms excluded from wind binding: OK");
 console.log("- Strong-wind climate and debris markers: OK");
+console.log("- Wind climate determinism, rarity and bounds: OK");
