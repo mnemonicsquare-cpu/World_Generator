@@ -14,6 +14,7 @@ let scene,water,G,rnd,weather,celestial,audio,sound=false,yaw=0,pitch=-.05,jump=
 const keys=new Set,clock=new T.Clock,temp=new T.Object3D,CHUNK_SIZE=160,CHUNK_SEG=28,CHUNK_STEP=CHUNK_SIZE/CHUNK_SEG;
 const chunks=new Map;let chunkQueue=[],chunkX=Infinity,chunkZ=Infinity,floraCatalog=[],faunaCatalog=[],faunaAgents=[],birdCatalog=[],birdAgents=[],faunaStarterPlaced=false,birdStarterPlaced=false,worldPalette;
 const LOW_POWER=matchMedia("(pointer:coarse)").matches,TERRAIN_RADIUS=LOW_POWER?5:6,FLORA_RADIUS=2;
+const SMOKE_TEST=new URLSearchParams(location.search).has("smoke");
 let mobileForward=0,mobileSide=0,mobileBoost=false,mobileThrottleDown=false;
 let universeSeed="",universeHash=0,originProfile=null,regionalEnabled=false,universeSeaLevel=0,originFastRadius=0,universeOriginX=0,universeOriginZ=0;
 const WORLD_CELL=CHUNK_SIZE*22,WORLD_BLEND=CHUNK_SIZE*3.5,WORLD_PROFILE_CACHE_MAX=36,regionProfiles=new Map;
@@ -1994,10 +1995,9 @@ function initRegionalWorlds(seed,sky,horizon){
   originProfile.catalogs={flora:floraCatalog,fauna:faunaCatalog,birds:birdCatalog};regionProfiles.clear();regionProfiles.set("0,0",originProfile);regionalEnabled=true;
 }
 function update(dt){
-  document.body.dataset.updateStage="start";
   const e=celestial;e.age+=dt;let env;
-  try{env=regionalEnvironmentAt(cam.position.x,cam.position.z);document.body.dataset.updateStage="environment";}
-  catch(error){document.body.dataset.updateError=String(error?.stack||error).slice(0,700);document.body.dataset.updateStage="environment-error";throw error;}
+  try{env=regionalEnvironmentAt(cam.position.x,cam.position.z);}
+  catch(error){document.body.dataset.updateError=String(error?.stack||error).slice(0,700);throw error;}
   const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
   const front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength;
   const directionWobble=.035*Math.sin(e.age*.073+weather.phase)+.018*Math.sin(e.age*.29+weather.phase*.7);
@@ -2013,7 +2013,7 @@ function update(dt){
   const paletteNight=col(env.hue,.25,.13),paletteSunset=col(env.hue+.12,.4,.42),lightH=paletteNight.clone().lerp(env.horizon,day).lerp(paletteSunset,tw*.35);
   e.hemi.color.copy(lightH).lerp(col(env.hue,.12,.64),(1-day)*.65);e.hemi.intensity=.85+day*.95;
   e.light.position.set(Math.cos(a)*450,alt*500,-400);e.light.intensity=(.05+day*2.5)*(1-front*.45);
-  e.sun.position.set(cam.position.x+Math.cos(a)*430,cam.position.y+alt*480,cam.position.z-650);e.sun.visible=alt>-.12;updateNightSky(e,day,front,top,h,tw);document.body.dataset.updateStage="sky";
+  e.sun.position.set(cam.position.x+Math.cos(a)*430,cam.position.y+alt*480,cam.position.z-650);e.sun.visible=alt>-.12;updateNightSky(e,day,front,top,h,tw);
 
   const p=weather.a,type=weather.type,stride=weather.stride,half=70,low=cam.position.y-24,high=cam.position.y+52;
   weather.points.material.opacity=front*(type==="rain"?.58:type==="spores"?.72:.66);
@@ -2035,7 +2035,7 @@ function update(dt){
       p[k+3]=p[k]-weather.windX*slant;p[k+4]=p[k+1]+weather.streak;p[k+5]=p[k+2]-weather.windZ*slant;
     }
   }
-  weather.points.geometry.attributes.position.needsUpdate=true;document.body.dataset.updateStage="weather";
+  weather.points.geometry.attributes.position.needsUpdate=true;
   if(weather.debris){
     const dp=weather.debrisA,halfD=58,lowD=cam.position.y-13,highD=cam.position.y+25;
     weather.debris.material.opacity=clamp((windForce-.18)/.78,0,1)*(.12+env.forestCover*.32);
@@ -2051,9 +2051,9 @@ function update(dt){
     }
     weather.debris.geometry.attributes.position.needsUpdate=true;
   }
-  document.body.dataset.updateStage="debris";water.material.roughness=clamp(.17+windForce*.13+Math.sin(e.age*.4)*.018,.16,.38);
+  water.material.roughness=clamp(.17+windForce*.13+Math.sin(e.age*.4)*.018,.16,.38);
   const waterTint=col(env.hue+.08,.5,.3);water.material.color.lerp(waterTint,clamp(dt*1.4,0,1));
-  document.body.dataset.worldRegion=env.primary.key;document.body.dataset.worldBlend=env.primary.weight.toFixed(3);document.body.dataset.worldProfileCache=String(regionProfiles.size);document.body.dataset.updateStage="complete";
+  document.body.dataset.worldRegion=env.primary.key;document.body.dataset.worldBlend=env.primary.weight.toFixed(3);document.body.dataset.worldProfileCache=String(regionProfiles.size);
 }
 async function toggleAudio(){if(!audio){let ctx=new AudioContext,master=ctx.createGain(),filter=ctx.createBiquadFilter(),buf=ctx.createBuffer(1,ctx.sampleRate*4,ctx.sampleRate),d=buf.getChannelData(0),r=rng(G.hash^999),last=0;for(let i=0;i<d.length;i++){last=(last+(r()*2-1)*.03)/1.03;d[i]=last*4}let src=ctx.createBufferSource();src.buffer=buf;src.loop=true;filter.type="lowpass";filter.frequency.value=250+G.slender*900;src.connect(filter).connect(master).connect(ctx.destination);master.gain.value=0;src.start();audio={ctx,master,filter}}await audio.ctx.resume();sound=!sound;audio.master.gain.setTargetAtTime(sound?.25:0,audio.ctx.currentTime,.4);$("#sound").textContent="Звук: "+(sound?"вкл.":"выкл.")}
 
@@ -2201,9 +2201,18 @@ function resizeView(){
   cam.aspect=w/h;cam.updateProjectionMatrix();rend.setSize(w,h);
 }
 addEventListener("resize",resizeView);visualViewport?.addEventListener("resize",resizeView);screen.orientation?.addEventListener("change",()=>setTimeout(resizeView,120));resizeView();generate(new URLSearchParams(location.search).get("seed")||fresh());
+function recordSmokeFrameContrast(){
+  if(!SMOKE_TEST)return;
+  const gl=rend.getContext(),w=gl.drawingBufferWidth,h=gl.drawingBufferHeight,pixels=new Uint8Array(4*4*4),values=[];
+  for(const fy of [.14,.34,.56,.78])for(const fx of [.18,.5,.82]){
+    const x=clamp(Math.floor(w*fx)-2,0,Math.max(0,w-4)),y=clamp(Math.floor(h*fy)-2,0,Math.max(0,h-4));
+    gl.readPixels(x,y,4,4,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+    for(let i=0;i<pixels.length;i+=4)values.push(Math.round(pixels[i]*.2126+pixels[i+1]*.7152+pixels[i+2]*.0722));
+  }
+  document.body.dataset.frameContrast=String(Math.max(...values)-Math.min(...values));
+}
 let renderedFrames=0;
 rend.setAnimationLoop(()=>{
-  document.body.dataset.frameStage="start";
   const dt=Math.min(clock.getDelta(),.05),f=+keys.has("KeyW")-+keys.has("KeyS")+mobileForward,s=+keys.has("KeyD")-+keys.has("KeyA")+mobileSide;
   if(plane?.occupied){
     updatePlane(dt);updatePlaneCamera();
@@ -2216,6 +2225,8 @@ rend.setAnimationLoop(()=>{
     for(let i=0;i<steps;i++)walkFrame(dt/steps,dx/steps,dz/steps);
     updatePlane(dt);cam.rotation.set(pitch,yaw,0);cam.fov=mix(cam.fov,boosting()&&Math.hypot(f,s)?79:66,1-Math.exp(-dt*8));
   }
-  cam.updateProjectionMatrix();updatePlaneInteractionUI();document.body.dataset.frameStage="before-chunks";updateChunks();document.body.dataset.frameStage="after-chunks";updateFauna(dt);document.body.dataset.frameStage="after-fauna";updateBirds(dt);document.body.dataset.frameStage="after-birds";update(dt);document.body.dataset.frameStage="after-update";updateSoundscape(dt);document.body.dataset.frameStage="before-render";rend.render(scene,cam);renderedFrames++;document.body.dataset.frameStage="rendered";document.body.dataset.renderedFrames=String(renderedFrames);
+  cam.updateProjectionMatrix();updatePlaneInteractionUI();updateChunks();updateFauna(dt);updateBirds(dt);update(dt);updateSoundscape(dt);rend.render(scene,cam);
+  renderedFrames++;
+  if(renderedFrames===1){recordSmokeFrameContrast();document.body.dataset.renderedFrames="1";}
 });
 </script><!-- atmosphere-sky-fog-experiment --></body></html>
