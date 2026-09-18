@@ -1062,7 +1062,7 @@ function growGrass(parent,chunk){
     const [y,slope]=sample(lx,lz),x=baseX+lx,z=baseZ+lz,density=grassDensity(x,z,y,slope);
     if(y<=G.water+.16||density<=.012||r()>density||houseReserved(x,z))continue;
     const localCluster=noise(x*(g.midScale*1.9)+71,z*(g.midScale*1.9)-113);
-    const height=g.height*(1+(r()-.5)*2*g.heightVariation)*mix(.72,1.22,localCluster);
+    const height=clamp(g.height*(1+(r()-.5)*2*g.heightVariation)*mix(.72,1.22,localCluster),.12,2.1);
     const spread=mix(.78,1.28,.35+r()*.65)*mix(.82,1.18,g.clumpiness),yaw=r()*Math.PI*2;
     pos.set(lx,y+.018,lz);q.setFromAxisAngle(yAxis,yaw);scale.set(spread,height,spread);matrix.compose(pos,q,scale);mesh.setMatrixAt(count,matrix);
     const rawPhase=x*.031+z*.027+r()*1.8,phase=((rawPhase%6.28318530718)+6.28318530718)%6.28318530718,k=count*4;
