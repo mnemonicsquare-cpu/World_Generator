@@ -388,6 +388,52 @@ if(maxStep>75)fail("road centerline has a discontinuous step: "+maxStep);
 if(maxX-minX<220)fail("road is too straight over long travel: lateral range "+(maxX-minX));
 if(turning<12)fail("road does not produce enough genuine turns over long travel: "+turning);
 
+// Drivable road car: model, spawn, controls, collision, and third-person camera must stay wired together.
+const carSection=section(current,"function stopCarEngineAudio(){","function makeFogProfile(dna,wet,terrainRadius=TERRAIN_RADIUS){");
+for(const marker of [
+  "function makeCarModel()",
+  "new T.Color(0xb9dce0)",
+  "new T.SphereGeometry(1,24,14)",
+  "const wheels=[],frontPivots=[]",
+  "function createCar()",
+  "const z=roadOriginZ-13",
+  "lateral=2.15",
+  "function enterCar()",
+  "function exitCar()",
+  "function interactVehicle()",
+  "function updateCarCamera(dt)",
+  "cam.position.lerp(desired",
+  "cam.lookAt(target)",
+  "function updateCar(dt)",
+  "Math.tan(car.steer)*car.speed/2.53",
+  "function carSmokeDiagnostic()"
+])if(!carSection.includes(marker))fail("road-car architecture marker missing: "+marker);
+if(!current.includes("createPlane(sites);createCar();"))fail("car is not spawned with the generated world");
+if(!current.includes('button.textContent="Сесть в автомобиль · E"'))fail("car entry interaction is not exposed to the player");
+if(!current.includes('if(car?.occupied){\n    updateCar(dt);updatePlane(dt);updateCarCamera(dt);'))fail("third-person car branch is not first-class in the animation loop");
+if(!current.includes('if(!plane?.occupied&&!car?.occupied&&e.code==="Space"&&grounded)'))fail("car handbrake conflicts with on-foot jumping");
+if(!clearSection.includes("stopCarEngineAudio()")||!clearSection.includes("car=null"))fail("new-world reset does not fully dispose car state");
+if(!current.includes('document.body.dataset.carReady')||!current.includes('document.body.dataset.carSmokeMoved')||!current.includes('document.body.dataset.carCameraGap'))fail("car browser smoke diagnostics are missing");
+
+const carPoseSource=section(current,"function carLocalToWorld(","function carHitsObstacle(");
+let carPoseTools;
+try{
+  carPoseTools=new Function(`
+    const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+    function ground(x,z){return 12-x*.015-z*.045;}
+    function waterLevelAt(){return -1000;}
+    ${carPoseSource}
+    return {carLocalToWorld,carGroundPose};
+  `)();
+}catch(error){fail("Car ground-pose harness could not be built: "+error.message);}
+for(const yaw of [0,.3,1.1,-1.7,Math.PI]){
+  const pose=carPoseTools.carGroundPose(20,-30,yaw);
+  for(const key of ["y","pitch","roll"])if(!Number.isFinite(pose[key]))fail("car ground pose produced non-finite "+key);
+  if(Math.abs(pose.pitch)>.381||Math.abs(pose.roll)>.281)fail("car body attitude escaped safety clamp");
+}
+const forward=carPoseTools.carLocalToWorld(0,0,0,-2,0),right=carPoseTools.carLocalToWorld(0,0,2,0,0);
+if(Math.abs(forward.x)>1e-9||Math.abs(forward.z+2)>1e-9||Math.abs(right.x-2)>1e-9||Math.abs(right.z)>1e-9)fail("car local/world transform is inconsistent with forward motion");
+
 
 const clearanceSource=section(current,"function growLSystemFlora","function makeWindClimate");
 for(const marker of [
@@ -421,4 +467,5 @@ console.log("- Wind climate determinism, rarity and bounds: OK");
 console.log("- Grass DNA determinism, rarity and bounds: OK");
 console.log("- Grass GPU instancing and no-collision architecture: OK");
 console.log("- Mushroom/tree/grass layering order: OK");
+console.log("- Drivable road car model, spawn, physics, interaction and third-person camera: OK");
 console.log("- Universal haze and humidity fog distances: OK");

@@ -82,6 +82,19 @@ jobs:
             awk -v g="$road_far_grade" 'BEGIN{if(g>0.10)exit 1}' || { echo "Cross-world road grade too steep for ${seed}: $road_far_grade"; exit 1; }
             awk -v r="$road_range" 'BEGIN{if(r<120)exit 1}' || { echo "Road is too straight for ${seed}: lateral range=$road_range"; exit 1; }
             awk -v r="$road_radius" 'BEGIN{if(r<32)exit 1}' || { echo "Road turn radius too tight for ${seed}: $road_radius m"; exit 1; }
+            car_ready="$(grep -o 'data-car-ready="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_road_distance="$(grep -o 'data-car-road-distance="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_moved="$(grep -o 'data-car-smoke-moved="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_camera_gap="$(grep -o 'data-car-camera-gap="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_finite="$(grep -o 'data-car-finite="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            if [[ "$car_ready" != "1" || "$car_finite" != "1" || -z "$car_road_distance" || -z "$car_moved" || -z "$car_camera_gap" ]]; then
+              echo "Road-car diagnostics were not emitted or are invalid for ${seed}"
+              grep -o 'data-car-[a-z-]*="[^"]*"' "$out" | head -10 || true
+              exit 1
+            fi
+            awk -v d="$car_road_distance" 'BEGIN{if(d>4.8)exit 1}' || { echo "Car did not spawn on the road for ${seed}: distance=$car_road_distance"; exit 1; }
+            awk -v m="$car_moved" 'BEGIN{if(m<0.5)exit 1}' || { echo "Car smoke drive did not move for ${seed}: moved=$car_moved"; exit 1; }
+            awk -v g="$car_camera_gap" 'BEGIN{if(g<0.4||g>20)exit 1}' || { echo "Third-person car camera geometry is invalid for ${seed}: gap=$car_camera_gap"; exit 1; }
             fog_near="$(grep -o 'data-fog-near="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_far="$(grep -o 'data-fog-far="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_moisture="$(grep -o 'data-fog-moisture="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
