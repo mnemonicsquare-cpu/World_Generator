@@ -2205,6 +2205,6 @@ rend.setAnimationLoop(()=>{
     for(let i=0;i<steps;i++)walkFrame(dt/steps,dx/steps,dz/steps);
     updatePlane(dt);cam.rotation.set(pitch,yaw,0);cam.fov=mix(cam.fov,boosting()&&Math.hypot(f,s)?79:66,1-Math.exp(-dt*8));
   }
-  cam.updateProjectionMatrix();updatePlaneInteractionUI();document.body.dataset.frameStage="before-chunks";updateChunks();document.body.dataset.frameStage="after-chunks";updateFauna(dt);updateBirds(dt);update(dt);document.body.dataset.frameStage="after-update";updateSoundscape(dt);rend.render(scene,cam);renderedFrames++;document.body.dataset.frameStage="rendered";document.body.dataset.renderedFrames=String(renderedFrames);
+  cam.updateProjectionMatrix();updatePlaneInteractionUI();document.body.dataset.frameStage="before-chunks";updateChunks();document.body.dataset.frameStage="after-chunks";updateFauna(dt);document.body.dataset.frameStage="after-fauna";updateBirds(dt);document.body.dataset.frameStage="after-birds";update(dt);document.body.dataset.frameStage="after-update";updateSoundscape(dt);document.body.dataset.frameStage="before-render";rend.render(scene,cam);renderedFrames++;document.body.dataset.frameStage="rendered";document.body.dataset.renderedFrames=String(renderedFrames);
 });
 </script><!-- atmosphere-sky-fog-experiment --></body></html>
