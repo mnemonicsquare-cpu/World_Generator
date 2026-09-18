@@ -127,24 +127,23 @@ function applyHomeHeight(x,z,h){
   }
   return h;
 }
-function legacyNaturalTerrainHeight(x,z){
+function naturalTerrainHeight(x,z){
   let h=baseHeight(x,z);
   h=geologicalHeight(x,z,h);
   return applyPathHeight(x,z,h);
 }
-function naturalTerrainHeight(x,z){
-  if(!regionalEnabled)return legacyNaturalTerrainHeight(x,z);
+function regionalNaturalTerrainHeight(x,z){
   const context=worldBlendAt(x,z);
-  if(context.length===1&&context[0].profile===originProfile)return legacyNaturalTerrainHeight(x,z);
+  if(context.length===1&&context[0].profile===originProfile)return naturalTerrainHeight(x,z);
   let h=0;for(const item of context)h+=(rawTerrainHeightFor(item.profile,x,z)+item.profile.heightOffset)*item.weight;
   return h;
 }
-function height(x,z){return applyHomeHeight(x,z,naturalTerrainHeight(x,z))}
+function height(x,z){return applyHomeHeight(x,z,regionalEnabled?regionalNaturalTerrainHeight(x,z):naturalTerrainHeight(x,z))}
 function terrainPatch(x,z,radius=10){
   const offsets=[[0,0],[radius,0],[-radius,0],[0,radius],[0,-radius],[radius*.7,radius*.7],[-radius*.7,radius*.7],[radius*.7,-radius*.7],[-radius*.7,-radius*.7]];
   let min=Infinity,max=-Infinity,sum=0,dry=0;
   for(const [dx,dz] of offsets){
-    const y=naturalTerrainHeight(x+dx,z+dz);min=Math.min(min,y);max=Math.max(max,y);sum+=y;if(y>waterLevelAt(x,z)+.55)dry++;
+    const y=naturalTerrainHeight(x+dx,z+dz);min=Math.min(min,y);max=Math.max(max,y);sum+=y;if(y>(regionalEnabled?universeSeaLevel:G.water)+.55)dry++;
   }
   return {y:sum/offsets.length,min,max,spread:max-min,dry:dry/offsets.length};
 }
@@ -174,14 +173,14 @@ function findNaturalSpawn(){
     for(let i=0;i<180;i++){
       const angle=r()*Math.PI*2,dist=Math.sqrt(r())*radius;
       const x=Math.cos(angle)*dist,z=Math.sin(angle)*dist,centerY=ground(x,z),p=terrainPatch(x,z,11);
-      if(centerY<=waterLevelAt(x,z)+.85)continue;
+      if(centerY<=(regionalEnabled?universeSeaLevel:G.water)+.85)continue;
       const coastPenalty=Math.max(0,.78-p.dry)*24;
-      const lowPenalty=Math.max(0,waterLevelAt(x,z)+1.4-p.y)*7;
+      const lowPenalty=Math.max(0,(regionalEnabled?universeSeaLevel:G.water)+1.4-p.y)*7;
       const score=p.spread*1.55+coastPenalty+lowPenalty+dist*.0015;
       if(!best||score<best.score)best={x,z,p,score};
       if(!fallback||score<fallback.score)fallback={x,z,p,score};
     }
-    if(best&&best.p.dry>=.78&&best.p.spread<5.2&&best.p.y>waterLevelAt(x,z)+.9)return [best.x,ground(best.x,best.z)+1.75,best.z];
+    if(best&&best.p.dry>=.78&&best.p.spread<5.2&&best.p.y>(regionalEnabled?universeSeaLevel:G.water)+.9)return [best.x,ground(best.x,best.z)+1.75,best.z];
   }
   if(fallback)return [fallback.x,ground(fallback.x,fallback.z)+1.75,fallback.z];
   const anchor=G.landAnchor||{x:0,z:0};
@@ -797,7 +796,7 @@ function makeFaunaBody(species,seed){
 function addFaunaAgent(chunk,species,index,x,z,homeX,homeZ,seed){
   const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE,y=height(x,z);
   const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
-  if(x<baseX+2||x>baseX+CHUNK_SIZE-2||z<baseZ+2||z>baseZ+CHUNK_SIZE-2||y<waterLevelAt(x,z)+.55||slope>.95||houseReserved(x,z))return false;
+  if(x<baseX+2||x>baseX+CHUNK_SIZE-2||z<baseZ+2||z>baseZ+CHUNK_SIZE-2||y<(regionalEnabled?universeSeaLevel:G.water)+.55||slope>.95||houseReserved(x,z))return false;
   const body=makeFaunaBody(species,seed),ar=rng(seed^0x61c88647),heading=ar()*6.28;
   body.root.position.set(x-baseX,y,z-baseZ);body.root.rotation.y=heading;chunk.fauna.add(body.root);
   const agent={chunk,species,group:body.root,visual:body.visual,legs:body.legs,random:ar,heading,targetHeading:heading,
@@ -885,7 +884,7 @@ function updateFauna(dt){
     a.heading+=clamp(diff,-a.species.turn*dt,a.species.turn*dt);
     const step=a.speed*moveScale*dt,nx=wx+Math.sin(a.heading)*step,nz=wz+Math.cos(a.heading)*step,ny=height(nx,nz);
     const slope=Math.hypot(height(nx+1.5,nz)-ny,height(nx,nz+1.5)-ny)/1.5;
-    if(ny>waterLevelAt(x,z)+.55&&slope<.9&&!houseReserved(nx,nz)){
+    if(ny>(regionalEnabled?universeSeaLevel:G.water)+.55&&slope<.9&&!houseReserved(nx,nz)){
       a.group.position.x=nx-baseX;a.group.position.z=nz-baseZ;a.group.position.y=ny;
     }else{
       a.targetHeading=a.heading+Math.PI*(.65+a.random()*.7);a.turnTimer=.45;
@@ -1568,7 +1567,7 @@ function createPlane(sites=[]){
   for(let i=0;i<150;i++){
     const angle=r()*Math.PI*2,dist=24+Math.sqrt(r())*78;
     const x=cam.position.x+Math.cos(angle)*dist,z=cam.position.z+Math.sin(angle)*dist,y=height(x,z);
-    if(y<waterLevelAt(x,z)+.9||houseReserved(x,z)||sites.some(p=>Math.hypot(x-p[0],z-p[1])<22))continue;
+    if(y<(regionalEnabled?universeSeaLevel:G.water)+.9||houseReserved(x,z)||sites.some(p=>Math.hypot(x-p[0],z-p[1])<22))continue;
     const heading=r()*Math.PI*2,c=Math.cos(heading),s=Math.sin(heading);
     const probes=[[-3.7,0],[3.7,0],[0,-2.6],[0,2.6],[0,0]].map(([lx,lz])=>height(x+lx*c+lz*s,z-lx*s+lz*c));
     const spread=Math.max(...probes)-Math.min(...probes),score=spread+Math.abs(dist-46)*.01;
@@ -1842,7 +1841,7 @@ function regionBlendGeometry(x,z){
   return active;
 }
 function rawTerrainHeightFor(profile,x,z){
-  return withWorldProfile(profile,()=>legacyNaturalTerrainHeight(x,z));
+  return withWorldProfile(profile,()=>naturalTerrainHeight(x,z));
 }
 function calibrateRegionalWater(profile,centerX,centerZ){
   const original=profile.water,r=rng(profile.hash^0x71a4d3),samples=[];let anchor=-Infinity;
