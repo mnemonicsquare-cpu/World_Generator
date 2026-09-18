@@ -23,6 +23,36 @@ function moduleBody(html){
 try{new Function(moduleBody(current));}
 catch(error){fail("JavaScript syntax error: "+error.message);}
 
+// World DNA must be deterministic, bounded, and safe before it is allowed to influence legacy systems.
+const dnaSource=section(current,"function makeWorldDNA(seedHash){","function generate(seed){");
+let dnaTools;
+try{
+  dnaTools=new Function(`
+    const clamp=(x,a,b)=>Math.min(b,Math.max(a,x)),mix=(a,b,t)=>a+(b-a)*t;
+    function rng(s){return()=>{s|=0;s=s+0x6d2b79f5|0;let t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296}}
+    ${dnaSource}
+    return {makeWorldDNA,applyWorldDNA};
+  `)();
+}catch(error){fail("World DNA test harness could not be built: "+error.message);}
+
+const dnaTraits=["age","internalHeat","oceanicity","temperature","humidity","tectonics","erosion","fertility","biosphere","volatility","geologicalContrast","anomaly"];
+for(let seedHash=0;seedHash<512;seedHash++){
+  const a=dnaTools.makeWorldDNA(seedHash),b=dnaTools.makeWorldDNA(seedHash);
+  if(JSON.stringify(a)!==JSON.stringify(b))fail("World DNA is not deterministic for hash "+seedHash);
+  for(const trait of dnaTraits){
+    if(!Number.isFinite(a[trait])||a[trait]<0||a[trait]>1)fail(`World DNA trait out of range: ${trait}=${a[trait]}`);
+  }
+  const g={
+    wet:.5,relief:56,roughness:1.2,terrainVariation:.5,regionStrength:.5,regionScale:.004,
+    freq:.007,warp:55,forestCover:.5,forestPatchiness:.5,forestScale:.0045,forestContrast:1,slender:.5
+  };
+  dnaTools.applyWorldDNA(g,a);
+  for(const key of ["wet","terrainVariation","regionStrength","forestCover","forestPatchiness","slender"]){
+    if(!Number.isFinite(g[key])||g[key]<0||g[key]>1)fail(`DNA application broke normalized parameter ${key}`);
+  }
+  if(g.relief<2||g.relief>110||g.roughness<.05||g.roughness>3.2||g.forestScale<.0014||g.forestScale>.0095||g.forestContrast<.25||g.forestContrast>2)fail("DNA application broke generator safety bounds");
+}
+
 const epsilonShape=section(epsilon,"function shape(","function height(x,z){");
 const currentShapeEnd=current.includes("function naturalMountainShape")?"function naturalMountainShape":"function baseHeight(x,z){";
 const currentShape=section(current,"function shape(",currentShapeEnd);
@@ -47,7 +77,13 @@ for(const marker of [
   "G.legacyPath=G.path;G.path=1e12;",
   "calibrateWaterLevel();",
   "G.plains={",
-  "G.geology={"
+  "G.geology={",
+  "function makeWorldDNA(seedHash)",
+  "function applyWorldDNA(g,dna)",
+  "G.dna=dna;applyWorldDNA(G,dna);",
+  "dna.geologicalContrast",
+  "dna.biosphere",
+  "dna.volatility"
 ]){
   if(!current.includes(marker))fail("missing terrain architecture marker: "+marker);
 }
@@ -71,3 +107,4 @@ console.log("worldgen checks passed");
 console.log("- JavaScript syntax: OK");
 console.log("- Epsilon base shapes: unchanged");
 console.log("- Epsilon flora block: unchanged");
+console.log("- World DNA determinism and bounds: OK");
