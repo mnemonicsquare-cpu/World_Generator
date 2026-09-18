@@ -35,6 +35,7 @@ if(epsilonFlora!==currentFlora)fail("protected flora generation changed relative
 for(const marker of [
   "function naturalMountainShape(x,z)",
   "function terrainShape(k,x,z)",
+  "function plainsMacroRelief(x,z)",
   "function baseHeight(x,z)",
   "function geologicalHeight(x,z,h)",
   "function applyPathHeight(x,z,h)",
@@ -45,6 +46,7 @@ for(const marker of [
   "function findNaturalSpawn()",
   "G.legacyPath=G.path;G.path=1e12;",
   "calibrateWaterLevel();",
+  "G.plains={",
   "G.geology={"
 ]){
   if(!current.includes(marker))fail("missing terrain architecture marker: "+marker);
@@ -61,6 +63,9 @@ for(const legacyPattern of [
 
 if(!current.includes("centerY<=G.water+.85"))fail("spawn center is not required to be dry");
 if(!current.includes("G.water=Math.min(G.water,anchor.y-1.15)"))fail("absolute land guard is missing");
+
+if(!current.includes("smooth(clamp((30-G.relief)/24,0,1))"))fail("flat-world relief gate is missing");
+if(!current.includes("return h+plainsMacroRelief(x,z)"))fail("plains macro relief is not applied");
 
 console.log("worldgen checks passed");
 console.log("- JavaScript syntax: OK");
