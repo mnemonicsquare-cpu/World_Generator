@@ -51,7 +51,7 @@ function basinField(x,z){
   return field;
 }
 function geologicalHeight(x,z,h){
-  const g=G.geology;
+  const g=G.geology,base=h;
   const macro=fbm(x*g.macroScale+g.phaseX,z*g.macroScale-g.phaseZ,3);
   let u=x,v=z;
   if(g.ridgeStrength>.04||g.canyonStrength>.05){
@@ -73,7 +73,8 @@ function geologicalHeight(x,z,h){
     const mask=smooth(clamp((macro-.42)/.34,0,1))*g.plateauStrength;
     if(mask>.01){
       const step=g.terraceStep,q=h/step,level=Math.floor(q),fraction=q-level;
-      const terraced=(level+smooth(clamp((fraction-.2)/.60,0,1)))*step;
+      const edge=(1-g.terraceSoftness)*.5;
+      const terraced=(level+smooth(clamp((fraction-edge)/g.terraceSoftness,0,1)))*step;
       h=mix(h,terraced,mask*.68);
     }
   }
@@ -84,7 +85,8 @@ function geologicalHeight(x,z,h){
     const depth=(8+G.relief*.16)*g.canyonStrength*region;
     h-=depth*(Math.pow(line,1.35)*.38+Math.pow(line,3.2)*.82);
   }
-  return h;
+  const limit=10+G.relief*.23;
+  return base+clamp(h-base,-limit*.88,limit);
 }
 function applyPathHeight(x,z,h){
   const p=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve),pathBlend=Math.exp(-p*p/190);
@@ -1351,14 +1353,14 @@ regionStrength:Math.pow(rnd(),.72),regionScale:.0015+rnd()*.006,regionWidth:.12+
 terrainVariation:Math.pow(rnd(),1.15),roughness:.08+Math.pow(rnd(),1.3)*3.1,pathRelief:.12+rnd()*.88,
 forestCover:Math.pow(coverSeed,.72),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
 forestContrast:.25+rnd()*1.75};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;
-const geoR=rng(G.hash^0x5f3759df),geoDominant=Math.floor(geoR()*4),geoStrengths=[Math.pow(geoR(),2),Math.pow(geoR(),2),Math.pow(geoR(),2),Math.pow(geoR(),2)];
+const geoR=rng(G.hash^0x5f3759df),geoDominant=Math.floor(geoR()*4),geoStrengths=[Math.pow(geoR(),2.6),Math.pow(geoR(),2.6),Math.pow(geoR(),2.6),Math.pow(geoR(),2.6)];
 geoStrengths[geoDominant]=Math.max(geoStrengths[geoDominant],.62+geoR()*.34);
 if(geoR()<.14){for(let i=0;i<geoStrengths.length;i++)geoStrengths[i]*=.5;geoStrengths[geoDominant]=Math.max(geoStrengths[geoDominant],.36);}
 G.geology={
   dominant:geoDominant,ridgeStrength:geoStrengths[0],basinStrength:geoStrengths[1],plateauStrength:geoStrengths[2],canyonStrength:geoStrengths[3],
   macroScale:.00055+geoR()*.00045,angle:geoR()*Math.PI*2,warpScale:.0007+geoR()*.00045,warp:28+geoR()*92,
   ridgeScale:.0027+geoR()*.0023,ridgeSharpness:2.6+geoR()*2.4,canyonScale:.0018+geoR()*.0018,canyonWidth:.045+geoR()*.045,
-  basinCell:380+geoR()*300,basinRadius:.18+geoR()*.14,terraceStep:4.5+geoR()*5.5,phaseX:geoR()*900,phaseZ:geoR()*900
+  basinCell:380+geoR()*300,basinRadius:.18+geoR()*.14,terraceStep:4.5+geoR()*5.5,terraceSoftness:.34+geoR()*.24,phaseX:geoR()*900,phaseZ:geoR()*900
 };
 const fogR=rng(G.hash^0x18f2a7),foggy=fogR()<.22+G.wet*.52;G.foggy=foggy;G.fogDensity=foggy?.00115+G.wet*.0018:.00011;
 const paletteR=rng(G.hash^0x6ca91),baseHue=G.hue,botanicalShift=(paletteR()-.5)*.11;
