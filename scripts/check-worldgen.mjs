@@ -177,6 +177,8 @@ const grassRenderSection=section(current,"function makeGrassGeometry(width=G.gra
 if(grassRenderSection.includes("buildingSolids.push")||grassRenderSection.includes("collision")||grassRenderSection.includes("collider"))fail("grass unexpectedly participates in collision logic");
 if(!grassRenderSection.includes("new T.InstancedMesh")||!grassRenderSection.includes("InstancedBufferAttribute"))fail("grass is not using the required instanced GPU path");
 if(!grassRenderSection.includes("new T.MeshLambertMaterial"))fail("grass material is no longer using the lightweight lit path");
+if(grassRenderSection.includes("pow(vGrassHeight"))fail("grass vertex shader regained an avoidable pow() cost");
+if(!grassRenderSection.includes("float oscillation=sin("))fail("grass wind shader lost its single-wave optimized path");
 if(!grassRenderSection.includes("LOW_POWER?900:2200"))fail("grass instance safety caps are missing");
 if(!grassRenderSection.includes("makeGrassGeometry(g.width)"))fail("Grass DNA width is not applied to geometry");
 if(!grassRenderSection.includes("positions=[],blades=9,golden=2.399963229728653"))fail("grass blade geometry complexity changed unexpectedly");
