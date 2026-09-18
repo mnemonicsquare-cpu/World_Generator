@@ -50,8 +50,8 @@ function rollingRelief(x,z){
   const u=x+wx,v=z+wz;
   const broad=fbm(u*f.scale+83,v*f.scale-131,3)-.5;
   const mid=fbm(u*f.scale*2.65-217,v*f.scale*2.65+173,2)-.5;
-  const region=.38+.62*smooth(clamp((fbm(u*f.scale*.42+311,v*f.scale*.42-269,2)-.3)/.48,0,1));
-  return (broad*.82+mid*.18)*f.amplitude*2*region;
+  const region=.55+.45*smooth(clamp((fbm(u*f.scale*.42+311,v*f.scale*.42-269,2)-.3)/.48,0,1));
+  return (broad*.82+mid*.18)*f.amplitude*7*region;
 }
 function baseHeight(x,z){
   const rawRegion=fbm(x*G.regionScale+130,z*G.regionScale-80);
