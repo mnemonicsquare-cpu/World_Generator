@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import {execFileSync} from "node:child_process";
+import {gunzipSync} from "node:zlib";
 
 const current=fs.readFileSync("index.html","utf8");
 const epsilonBeta=execFileSync("git",["show","origin/epsilon-beta:index.html"],{encoding:"utf8"});
@@ -421,11 +422,20 @@ if(turning<12)fail("road does not produce enough genuine turns over long travel:
 // Drivable road car: model, spawn, controls, collision, and third-person camera must stay wired together.
 const carSection=section(current,"function stopCarEngineAudio(){","function makeFogProfile(dna,wet,terrainRadius=TERRAIN_RADIUS){");
 for(const marker of [
-  "function makeCarModel()",
+  "const DETAILED_CAR_PARTS=6",
+  "function loadDetailedCarBytes()",
+  "new DecompressionStream(\"gzip\")",
+  "assets/car_model_",
+  "function buildDetailedCarModel(bytes)",
+  "function upgradeCarModel(targetCar)",
+  'document.body.dataset.carModel="detailed"',
+  "document.body.dataset.carDetailedVerts",
+  "function makeFallbackCarModel()",
   "new T.Color(0xb9dce0)",
   "new T.SphereGeometry(1,24,14)",
   "const wheels=[],frontPivots=[]",
   "function createCar()",
+  "upgradeCarModel(car)",
   "const z=roadOriginZ-13",
   "lateral=2.15",
   "function enterCar()",
@@ -444,6 +454,37 @@ if(!current.includes('if(car?.occupied){\n    updateCar(dt);updatePlane(dt);upda
 if(!current.includes('if(!plane?.occupied&&!car?.occupied&&e.code==="Space"&&grounded)'))fail("car handbrake conflicts with on-foot jumping");
 if(!clearSection.includes("stopCarEngineAudio()")||!clearSection.includes("car=null"))fail("new-world reset does not fully dispose car state");
 if(!current.includes('document.body.dataset.carReady')||!current.includes('document.body.dataset.carSmokeMoved')||!current.includes('document.body.dataset.carCameraGap'))fail("car browser smoke diagnostics are missing");
+
+// Detailed user-provided Blender car asset must be present, gzip-valid, and contain substantial real geometry.
+const carAssetText=Array.from({length:6},(_,i)=>{
+  const path=`assets/car_model_${i}.b64`;
+  if(!fs.existsSync(path))fail("missing detailed car asset part: "+path);
+  const part=fs.readFileSync(path,"utf8").trim();
+  if(part.length<1000)fail("detailed car asset part is unexpectedly small: "+path);
+  return part;
+}).join("");
+let carAsset;
+try{carAsset=gunzipSync(Buffer.from(carAssetText,"base64"));}
+catch(error){fail("detailed car asset could not be decoded: "+error.message);}
+if(carAsset.subarray(0,4).toString()!=="CAR2")fail("detailed car asset has invalid CAR2 signature");
+if(carAsset.length<100000)fail("detailed car asset is too small to contain the expected model geometry");
+const carMaterialCount=carAsset.readUInt16LE(4),carMeshCount=carAsset.readUInt16LE(6);
+if(carMaterialCount<5||carMaterialCount>64||carMeshCount!==2)fail("detailed car asset header is invalid");
+let carOffset=4+2+2+4+4*16+carMaterialCount*10;
+function readCarMeshVertexCount(){
+  if(carOffset+24>carAsset.length)fail("detailed car mesh header is truncated");
+  const vertexCount=carAsset.readUInt32LE(carOffset+4),groupCount=carAsset.readUInt16LE(carOffset+8);
+  carOffset+=24+vertexCount*6;
+  for(let g=0;g<groupCount;g++){
+    if(carOffset+8>carAsset.length)fail("detailed car material group is truncated");
+    const indexCount=carAsset.readUInt32LE(carOffset+4);carOffset+=8+indexCount*2;
+  }
+  return vertexCount;
+}
+const detailedBodyVertices=readCarMeshVertexCount(),detailedWheelVertices=readCarMeshVertexCount();
+if(carOffset!==carAsset.length)fail("detailed car asset contains an unexpected trailing or truncated payload");
+if(detailedBodyVertices<8000||detailedWheelVertices<3000)fail("detailed car geometry was unexpectedly simplified");
+if(detailedBodyVertices+detailedWheelVertices*4<20000)fail("detailed car visible vertex budget is below the expected model");
 
 const carPoseSource=section(current,"function carLocalToWorld(","function carHitsObstacle(");
 let carPoseTools;
@@ -498,4 +539,5 @@ console.log("- Grass DNA determinism, rarity and bounds: OK");
 console.log("- Grass GPU instancing and no-collision architecture: OK");
 console.log("- Mushroom/tree/grass layering order: OK");
 console.log("- Drivable road car model, spawn, physics, interaction and third-person camera: OK");
+console.log("- Detailed Blender car asset decode, geometry and fallback path: OK");
 console.log("- Universal haze and humidity fog distances: OK");

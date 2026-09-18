@@ -103,6 +103,13 @@ jobs:
             awk -v d="$car_road_distance" 'BEGIN{if(d>4.8)exit 1}' || { echo "Car did not spawn on the road for ${seed}: distance=$car_road_distance"; exit 1; }
             awk -v m="$car_moved" 'BEGIN{if(m<0.5)exit 1}' || { echo "Car smoke drive did not move for ${seed}: moved=$car_moved"; exit 1; }
             awk -v g="$car_camera_gap" 'BEGIN{if(g<0.4||g>20)exit 1}' || { echo "Third-person car camera geometry is invalid for ${seed}: gap=$car_camera_gap"; exit 1; }
+            car_model="$(grep -o 'data-car-model="[^"]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_detailed_verts="$(grep -o 'data-car-detailed-verts="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
+            if [[ "$car_model" != "detailed" || -z "$car_detailed_verts" || "$car_detailed_verts" -lt 20000 ]]; then
+              echo "Detailed Blender car model did not load for ${seed}: model=${car_model:-missing}, verts=${car_detailed_verts:-missing}"
+              grep -o 'data-car-model-error="[^"]*"' "$out" | head -1 || true
+              exit 1
+            fi
             fog_near="$(grep -o 'data-fog-near="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_far="$(grep -o 'data-fog-far="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_moisture="$(grep -o 'data-fog-moisture="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
