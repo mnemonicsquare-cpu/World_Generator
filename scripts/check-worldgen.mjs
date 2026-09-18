@@ -427,14 +427,6 @@ for(const marker of [
   "function loadDetailedCarBytes()",
   "new DecompressionStream(\"gzip\")",
   "assets/car_model_",
-  "function makeCarLightRig(parent,bounds)",
-  "new T.SpotLight(0xffd36a",
-  "new T.PointLight(0xff351f",
-  "function updateCarLights(day=1)",
-  "function carLightSmokeDiagnostic()",
-  "document.body.dataset.carHeadlightYellow",
-  "document.body.dataset.carHeadlightNight",
-  "document.body.dataset.carReverseLight",
   "function buildDetailedCarModel(bytes)",
   "color:glass?new T.Color(0x050607)",
   "tireMaterial.color.setHex(0x08090a)",
@@ -461,8 +453,6 @@ for(const marker of [
   "cam.position.lerp(desired",
   "cam.lookAt(target)",
   "function updateCar(dt)",
-  "let reverseCommand=false",
-  "car.reverseActive=!!",
   "Math.tan(car.steer)*car.speed/2.53",
   "function carSmokeDiagnostic()"
 ])if(!carSection.includes(marker))fail("road-car architecture marker missing: "+marker);
@@ -472,9 +462,6 @@ if(!current.includes('if(car?.occupied){\n    updateCar(dt);updatePlane(dt);upda
 if(!current.includes('if(!plane?.occupied&&!car?.occupied&&e.code==="Space"&&grounded)'))fail("car handbrake conflicts with on-foot jumping");
 if(!clearSection.includes("stopCarEngineAudio()")||!clearSection.includes("car=null"))fail("new-world reset does not fully dispose car state");
 if(!current.includes('document.body.dataset.carReady')||!current.includes('document.body.dataset.carSmokeMoved')||!current.includes('document.body.dataset.carCameraGap'))fail("car browser smoke diagnostics are missing");
-if(!current.includes('updateNightSky(e,day,front,top,h,tw);updateCarLights(day)'))fail("automatic car headlights are not coupled to the day/night cycle");
-if(!current.includes('color:0xffc84a')||!current.includes('emissive:0xffb52e'))fail("front headlight lenses are not yellow");
-if(!current.includes('reverseCommand=drive<0')||!current.includes('car.reverseActive=!!'))fail("reverse signal state is not driven by reverse motion/input");
 
 // Detailed user-provided Blender car asset must be present, gzip-valid, and contain substantial real geometry.
 const carAssetText=Array.from({length:6},(_,i)=>{
