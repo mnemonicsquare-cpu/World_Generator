@@ -122,6 +122,18 @@ jobs:
             fi
             awk -v b="$car_wheel_bottom" 'BEGIN{if(b<0.005||b>0.06)exit 1}' || { echo "Detailed wheel local contact height is invalid for ${seed}: $car_wheel_bottom"; exit 1; }
             awk -v c="$car_wheel_clearance" 'BEGIN{if(c<0.005||c>0.09)exit 1}' || { echo "Detailed wheels do not sit correctly above asphalt for ${seed}: clearance=$car_wheel_clearance"; exit 1; }
+            car_head_groups="$(grep -o 'data-car-native-headlight-groups="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
+            car_tail_groups="$(grep -o 'data-car-native-tail-groups="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
+            car_cabin_groups="$(grep -o 'data-car-native-cabin-glass-groups="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
+            car_head_yellow="$(grep -o 'data-car-headlight-yellow="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_head_night="$(grep -o 'data-car-headlight-night="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_reverse_light="$(grep -o 'data-car-reverse-light="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_extra_light_geometry="$(grep -o 'data-car-light-geometry-added="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            if [[ -z "$car_head_groups" || "$car_head_groups" -lt 1 || -z "$car_tail_groups" || "$car_tail_groups" -lt 1 || -z "$car_cabin_groups" || "$car_cabin_groups" -lt 1 || "$car_head_yellow" != "1" || "$car_head_night" != "1" || "$car_reverse_light" != "1" || "$car_extra_light_geometry" != "0" ]]; then
+              echo "Native car lamp diagnostics failed for ${seed}: headGroups=${car_head_groups:-missing}, tailGroups=${car_tail_groups:-missing}, cabinGroups=${car_cabin_groups:-missing}, yellow=${car_head_yellow:-missing}, night=${car_head_night:-missing}, reverse=${car_reverse_light:-missing}, extraGeometry=${car_extra_light_geometry:-missing}"
+              grep -o 'data-car-[a-z-]*="[^"]*"' "$out" | head -40 || true
+              exit 1
+            fi
             fog_near="$(grep -o 'data-fog-near="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_far="$(grep -o 'data-fog-far="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             fog_moisture="$(grep -o 'data-fog-moisture="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
