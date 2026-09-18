@@ -610,7 +610,7 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,accent,catalog=floraCatalo
         }
       }
       plants++;
-    }else if(y>waterLevelAt(x,z)&&r()<.06+(1-baseDensity)*.18){
+    }else if(!houseReserved(x,z)&&y>waterLevelAt(x,z)&&r()<.06+(1-baseDensity)*.18){
       const s=.5+r()*3;rocks.push([x-baseX,y+s*.3,z-baseZ,s,s*(.6+regionalScalarAt(x,z,"slender")),s*.8,r()*.2,r()*6.28,r()*.2]);
     }
   }
@@ -1297,12 +1297,12 @@ function updateChunks(){
   for(let i=0;i<2&&chunkQueue.length;i++){const c=chunkQueue.shift();if(c.upgrade)populateChunkFlora(chunks.get(c.key));else createChunk(c.x,c.z,c.detailed)}
   if(water){water.position.x=cam.position.x;water.position.z=cam.position.z;}
 }
-function ruin(x,z,type,stone,accent){let a=rnd()*6.28,box=new T.BoxGeometry(1,1,1),column=new T.CylinderGeometry(.8,1,1,7);function p(px,pz,w,h,d,g=box,up=0){let X=x+Math.cos(a)*px-Math.sin(a)*pz,Z=z+Math.sin(a)*px+Math.cos(a)*pz,o=mesh(g,stone,X,ground(X,Z)+h/2+up,Z,w,h,d);o.rotation.y=a}
+function ruin(x,z,type,stone,accent){let a=rnd()*6.28,box=new T.BoxGeometry(1,1,1),column=new T.CylinderGeometry(.8,1,1,7);function p(px,pz,w,h,d,g=box,up=0){let X=x+Math.cos(a)*px-Math.sin(a)*pz,Z=z+Math.sin(a)*px+Math.cos(a)*pz;if(roadReserved(X,Z,Math.max(w,d)*.7+2))return;let o=mesh(g,stone,X,ground(X,Z)+h/2+up,Z,w,h,d);o.rotation.y=a}
 if(type===0){for(let j=-2;j<=2;j++)for(const side of[-1,1])if(rnd()>.25)p(side*5,j*4,1,5+rnd()*5,1,column);p(0,-9,11,.7,1)}
 else if(type===1)for(let l=0;l<4;l++){let w=11-l*1.5;for(let s=0;s<4;s++)if(rnd()>.16*l){let A=s*Math.PI/2;p(Math.cos(A)*w/2,Math.sin(A)*w/2,s%2?w:1.1,2.6,s%2?1.1:w,box,l*2.6)}}
 else if(type===2){for(let n=0;n<32;n++){let s=n%4,j=Math.floor(n/4)-4,A=s*Math.PI/2;if(rnd()>.38)p(Math.cos(A)*7+(s%2?j*1.8:0),Math.sin(A)*7+(!(s%2)?j*1.8:0),1.5,.5+rnd()*2,1.5)}}
-else{for(let j=1;j<10;j++)if(rnd()>.2){let A=j/10*6.28;p(Math.cos(A)*10,Math.sin(A)*10,2,5+rnd()*6,.8)}mesh(new T.OctahedronGeometry(1),accent,x,ground(x,z)+2,z,1,3,1)}
-for(let j=0;j<18;j++){let A=rnd()*6.28,r=5+rnd()*18,s=.4+rnd(),X=x+Math.cos(A)*r,Z=z+Math.sin(A)*r;mesh(new T.IcosahedronGeometry(1,0),stone,X,ground(X,Z)+s*.3,Z,s,s*.6,s)}}
+else{for(let j=1;j<10;j++)if(rnd()>.2){let A=j/10*6.28;p(Math.cos(A)*10,Math.sin(A)*10,2,5+rnd()*6,.8)}if(!roadReserved(x,z,4))mesh(new T.OctahedronGeometry(1),accent,x,ground(x,z)+2,z,1,3,1)}
+for(let j=0;j<18;j++){let A=rnd()*6.28,r=5+rnd()*18,s=.4+rnd(),X=x+Math.cos(A)*r,Z=z+Math.sin(A)*r;if(roadReserved(X,Z,s+2))continue;mesh(new T.IcosahedronGeometry(1,0),stone,X,ground(X,Z)+s*.3,Z,s,s*.6,s)}}
 function makeWindClimate(seedHash,dna){
   const wr=rng((seedHash^0x51f2b7)>>>0),galeRoll=wr();
   const windClimate=clamp(.14+dna.volatility*.48+(1-dna.oceanicity)*.12+wr()*.34+(galeRoll<.16?.62:0),0,1.42);
@@ -1447,7 +1447,7 @@ function planHomes(spawnX=0,spawnZ=0){
     for(let tries=0;tries<150;tries++){
       const angle=placeR()*Math.PI*2,dist=105+Math.sqrt(placeR())*520;
       const x=spawnX+Math.cos(angle)*dist,z=spawnZ+Math.sin(angle)*dist;
-      if(homes.some(h=>Math.hypot(x-h.x,z-h.z)<120)||roadReserved(x,z,24))continue;
+      if(homes.some(h=>Math.hypot(x-h.x,z-h.z)<120)||roadReserved(x,z,34))continue;
       const p=terrainPatch(x,z,18),minClearance=plan.basement?5.2:1.1;
       if(p.min<=G.water+minClearance||p.dry<1)continue;
       const score=p.spread+Math.abs(dist-260)*.003+(noise(x*.0021+73,z*.0021-47)-.5)*.35;
@@ -1687,7 +1687,7 @@ function createPlane(sites=[]){
   for(let i=0;i<150;i++){
     const angle=r()*Math.PI*2,dist=24+Math.sqrt(r())*78;
     const x=cam.position.x+Math.cos(angle)*dist,z=cam.position.z+Math.sin(angle)*dist,y=height(x,z);
-    if(y<(regionalEnabled?universeSeaLevel:G.water)+.9||houseReserved(x,z)||sites.some(p=>Math.hypot(x-p[0],z-p[1])<22))continue;
+    if(y<(regionalEnabled?universeSeaLevel:G.water)+.9||houseReserved(x,z)||roadReserved(x,z,8)||sites.some(p=>Math.hypot(x-p[0],z-p[1])<22))continue;
     const heading=r()*Math.PI*2,c=Math.cos(heading),s=Math.sin(heading);
     const probes=[[-3.7,0],[3.7,0],[0,-2.6],[0,2.6],[0,0]].map(([lx,lz])=>height(x+lx*c+lz*s,z-lx*s+lz*c));
     const spread=Math.max(...probes)-Math.min(...probes),score=spread+Math.abs(dist-46)*.01;
@@ -1905,7 +1905,7 @@ const altitudeBase=G.water+.8,altitudeSpan=clamp(12+G.relief*(.28+terrainR()*.2)
 scene=new T.Scene;scene.background=sky;scene.fog=new T.Fog(horizon,G.fogNear,G.fogFar);let hemi=new T.HemisphereLight(horizon,land,.9),light=new T.DirectionalLight(col(G.hue+.42,.3,.9),2);scene.add(hemi,light);
 worldPalette={land,rock,leaf,accent,landLow,landMid,landHigh,rockLow,rockMid,rockHigh,altitudeBase,altitudeSpan,altitudeWarp,altitudeMid};floraCatalog=makeFloraCatalog();faunaCatalog=makeFaunaCatalog();birdCatalog=makeBirdCatalog();
 const spawn=findNaturalSpawn();cam.position.set(...spawn);initInfiniteRoad(G.hash,spawn[0],spawn[2]);cam.position.y=height(spawn[0],spawn[2])+1.75;yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();planHomes(spawn[0],spawn[2]);
-let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=cam.position.x+(rnd()-.5)*620,z=cam.position.z+(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
+let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=cam.position.x+(rnd()-.5)*620,z=cam.position.z+(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||roadReserved(x,z,30)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
 buildHomes();createPlane(sites);
 let wg=new T.PlaneGeometry((TERRAIN_RADIUS*2+2)*CHUNK_SIZE,(TERRAIN_RADIUS*2+2)*CHUNK_SIZE);wg.rotateX(-Math.PI/2);water=new T.Mesh(wg,new T.MeshStandardMaterial({color:col(G.hue+.08,.5,.3),metalness:.35,roughness:.2,transparent:true,opacity:.86}));water.position.set(cam.position.x,G.water,cam.position.z);scene.add(water);
 let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({color:col(G.hue+.42,.25,.9),fog:false}),-260,160,-600);for(let i=0;i<Math.floor(rnd()*4);i++){rnd();rnd();}

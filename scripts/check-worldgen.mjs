@@ -359,7 +359,7 @@ for(const required of [
   "applyInfiniteRoadHeight","makeRoadChunk","roadDiagnostic","ROAD_HALF","ROAD_BLEND"
 ])if(!current.includes(required))fail("missing infinite-road primitive: "+required);
 if(!current.includes("const base=worldTerrainWithoutRoad(x,z);return applyHomeHeight(x,z,applyInfiniteRoadHeight"))fail("road shaping is not composed after seamless-world terrain");
-if(!current.includes("if(homes.some(h=>Math.hypot(x-h.x,z-h.z)<120)||roadReserved(x,z,24))continue;"))fail("buildings can still occupy the road corridor");
+if(!current.includes("if(homes.some(h=>Math.hypot(x-h.x,z-h.z)<120)||roadReserved(x,z,34))continue;"))fail("buildings can still occupy the road corridor");
 if(!current.includes("return roadReserved(x,z)||homes.some"))fail("vegetation/fauna reservation does not include the road");
 if(!current.includes("const road=makeRoadChunk(cx,cz,group);"))fail("road surface is not chunk streamed");
 if(!current.includes('document.body.dataset.roadSegments'))fail("road runtime diagnostics are missing");
@@ -388,6 +388,26 @@ if(maxStep>75)fail("road centerline has a discontinuous step: "+maxStep);
 if(maxX-minX<220)fail("road is too straight over long travel: lateral range "+(maxX-minX));
 if(turning<12)fail("road does not produce enough genuine turns over long travel: "+turning);
 
+
+const clearanceSource=section(current,"function growLSystemFlora","function makeWindClimate");
+for(const marker of [
+  "}else if(!houseReserved(x,z)&&y>waterLevelAt(x,z)&&r()<.06+(1-baseDensity)*.18)",
+  "if(roadReserved(X,Z,Math.max(w,d)*.7+2))return;",
+  "if(roadReserved(X,Z,s+2))continue;",
+  "if(!roadReserved(x,z,4))mesh(new T.OctahedronGeometry"
+])if(!clearanceSource.includes(marker))fail("road clearance guard missing from rocks/ruins: "+marker);
+
+const homeSection=section(current,"function planHomes","function buildHomes");
+if(!homeSection.includes("roadReserved(x,z,34)"))fail("building placement road buffer is too small or missing");
+
+const planeSection=section(current,"function createPlane","function planeInteractionDistance");
+if(!planeSection.includes("roadReserved(x,z,8)"))fail("aircraft spawn can occupy the road corridor");
+
+const faunaUpdate=section(current,"function updateFauna(dt){","const windTimeUniform");
+if(!faunaUpdate.includes("!houseReserved(nx,nz)"))fail("moving fauna can enter reserved road space");
+
+const generationSection=section(current,"const spawn=findNaturalSpawn();","const weatherRoll=");
+if(!generationSection.includes("roadReserved(x,z,30)"))fail("ruin centers are not kept far enough from the road");
 console.log("worldgen checks passed");
 console.log("- JavaScript syntax: OK");
 console.log("- Epsilon Beta base shapes: unchanged");
