@@ -366,13 +366,14 @@ if(!current.includes("const road=makeRoadChunk(cx,cz,group);"))fail("road surfac
 if(!current.includes('document.body.dataset.roadSegments'))fail("road runtime diagnostics are missing");
 if(!current.includes('document.body.dataset.roadMaxGrade'))fail("road grade diagnostics are missing");
 if(!roadSection.includes("function makeRoadAsphaltMaterial()"))fail("dark-gray asphalt material factory is missing");
+if(!current.includes("ROAD_VISUAL_LIFT=.12"))fail("shared road visual lift constant is missing");
 for(const asphaltMarker of [
   "color:0x242629",
   "roughness:.985",
   "metalness:0",
   "polygonOffset:true",
   "polygonOffsetFactor:-2",
-  "const roadLift=.12,markLift=.17",
+  "const roadLift=ROAD_VISUAL_LIFT,markLift=ROAD_VISUAL_LIFT+.05",
   "y0+roadLift",
   "y1+roadLift",
   "y0+markLift",
@@ -427,7 +428,14 @@ for(const marker of [
   "new DecompressionStream(\"gzip\")",
   "assets/car_model_",
   "function buildDetailedCarModel(bytes)",
+  "color:glass?new T.Color(0x050607)",
+  "tireMaterial.color.setHex(0x08090a)",
+  "wheelLocalBottom:sourceWheelBottom+visualLift",
   "function upgradeCarModel(targetCar)",
+  "document.body.dataset.carTireBlack",
+  "document.body.dataset.carGlassOpaque",
+  "document.body.dataset.carWheelLocalBottom",
+  "document.body.dataset.carWheelRoadClearance",
   'document.body.dataset.carModel="detailed"',
   "document.body.dataset.carDetailedVerts",
   "function makeFallbackCarModel()",
@@ -491,8 +499,11 @@ let carPoseTools;
 try{
   carPoseTools=new Function(`
     const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+    const ROAD_HALF=4.8,ROAD_VISUAL_LIFT=.12;
     function ground(x,z){return 12-x*.015-z*.045;}
     function waterLevelAt(){return -1000;}
+    function roadDistance(){return 0;}
+    function roadSurfaceY(z){return 12-z*.045;}
     ${carPoseSource}
     return {carLocalToWorld,carGroundPose};
   `)();
@@ -502,6 +513,8 @@ for(const yaw of [0,.3,1.1,-1.7,Math.PI]){
   for(const key of ["y","pitch","roll"])if(!Number.isFinite(pose[key]))fail("car ground pose produced non-finite "+key);
   if(Math.abs(pose.pitch)>.381||Math.abs(pose.roll)>.281)fail("car body attitude escaped safety clamp");
 }
+const roadPose=carPoseTools.carGroundPose(20,-30,0);
+if(roadPose.y<13.45)fail("car road contact does not account for visible asphalt elevation");
 const forward=carPoseTools.carLocalToWorld(0,0,0,-2,0),right=carPoseTools.carLocalToWorld(0,0,2,0,0);
 if(Math.abs(forward.x)>1e-9||Math.abs(forward.z+2)>1e-9||Math.abs(right.x-2)>1e-9||Math.abs(right.z)>1e-9)fail("car local/world transform is inconsistent with forward motion");
 
