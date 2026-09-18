@@ -267,7 +267,7 @@ for(const marker of [
   "new T.Fog(horizon,G.fogNear,G.fogFar)",
   "scene.fog.near=Math.max(12,e.fogNear",
   "scene.fog.far=Math.max(scene.fog.near+68",
-  "data-fog-near"
+  "document.body.dataset.fogNear"
 ]){
   if(!current.includes(marker))fail("missing terrain architecture marker: "+marker);
 }
