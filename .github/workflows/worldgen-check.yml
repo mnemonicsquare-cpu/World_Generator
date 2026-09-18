@@ -51,6 +51,13 @@ jobs:
               echo "Dense grass smoke seed generated no visible grass"
               exit 1
             fi
+            fog_near="$(grep -o 'data-fog-near="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            fog_far="$(grep -o 'data-fog-far="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            fog_moisture="$(grep -o 'data-fog-moisture="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            if [[ -z "$fog_near" || -z "$fog_far" || -z "$fog_moisture" ]]; then
+              echo "Fog diagnostics were not emitted for ${seed}"
+              exit 1
+            fi
             if grep -Eiq 'THREE\.WebGLProgram: Shader Error|VALIDATE_STATUS false|ERROR: [0-9]+:' "$log"; then
               echo "WebGL shader failure detected for ${seed}"
               cat "$log"
