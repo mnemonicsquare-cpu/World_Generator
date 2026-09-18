@@ -1013,11 +1013,17 @@ else if(type===1)for(let l=0;l<4;l++){let w=11-l*1.5;for(let s=0;s<4;s++)if(rnd(
 else if(type===2){for(let n=0;n<32;n++){let s=n%4,j=Math.floor(n/4)-4,A=s*Math.PI/2;if(rnd()>.38)p(Math.cos(A)*7+(s%2?j*1.8:0),Math.sin(A)*7+(!(s%2)?j*1.8:0),1.5,.5+rnd()*2,1.5)}}
 else{for(let j=1;j<10;j++)if(rnd()>.2){let A=j/10*6.28;p(Math.cos(A)*10,Math.sin(A)*10,2,5+rnd()*6,.8)}mesh(new T.OctahedronGeometry(1),accent,x,ground(x,z)+2,z,1,3,1)}
 for(let j=0;j<18;j++){let A=rnd()*6.28,r=5+rnd()*18,s=.4+rnd(),X=x+Math.cos(A)*r,Z=z+Math.sin(A)*r;mesh(new T.IcosahedronGeometry(1,0),stone,X,ground(X,Z)+s*.3,Z,s,s*.6,s)}}
+function makeWindClimate(seedHash,dna){
+  const wr=rng((seedHash^0x51f2b7)>>>0),galeRoll=wr();
+  const windClimate=clamp(.14+dna.volatility*.48+(1-dna.oceanicity)*.12+wr()*.34+(galeRoll<.16?.62:0),0,1.42);
+  const windAngle=wr()*Math.PI*2,gale=galeRoll<.16;
+  return {windClimate,windSpeed:.28+windClimate*2.25,windAngle,gale,gustiness:.62+dna.volatility*.72+(gale?.52:0),random:wr};
+}
 function makeWeather(type,c){
-  const r=rng(G.hash^hash(type)^0x72d01),wr=rng(G.hash^hash("wind-climate")^0x51f2b7);
+  const r=rng(G.hash^hash(type)^0x72d01),windProfile=makeWindClimate(G.hash,G.dna),wr=windProfile.random;
+  const {windClimate,windSpeed,windAngle,gale,gustiness}=windProfile;
   const ranges={rain:[1500,3300],snow:[500,1900],dust:[350,1100],spores:[140,720]},range=ranges[type];
-  const galeRoll=wr(),windClimate=clamp(.14+G.dna.volatility*.48+(1-G.dna.oceanicity)*.12+wr()*.34+(galeRoll<.16?.62:0),0,1.42);
-  const windSpeed=.28+windClimate*2.25,n=Math.floor((range[0]+r()*(range[1]-range[0]+1))*mix(.72,1.4,clamp(windSpeed/3.5,0,1))),rain=type==="rain",stride=rain?6:3;
+  const n=Math.floor((range[0]+r()*(range[1]-range[0]+1))*mix(.72,1.4,clamp(windSpeed/3.5,0,1))),rain=type==="rain",stride=rain?6:3;
   const a=new Float32Array(n*stride),speed=new Float32Array(n),streak=.65+r()*1.5;
   for(let i=0;i<n;i++){
     const k=i*stride,x=(r()-.5)*110,y=r()*70-22,z=(r()-.5)*110;
@@ -1033,7 +1039,7 @@ function makeWeather(type,c){
     material=new T.PointsMaterial({color:c,size:type==="spores"?.15+r()*.16:type==="snow"?.13+r()*.2:.16,transparent:true,opacity:0,depthWrite:false,blending:type==="spores"?T.AdditiveBlending:T.NormalBlending});
     points=new T.Points(g,material);
   }
-  const windAngle=wr()*Math.PI*2,blizzard=type==="snow"?r():0,gale=galeRoll<.16;
+  const blizzard=type==="snow"?r():0;
   points.frustumCulled=false;scene.add(points);
   const debrisCount=G.forestCover>.16?Math.floor(150*G.forestCover*clamp((windClimate-.24)/1.08,0,1)):0;
   let debris=null,debrisA=null,debrisSpeed=null;
@@ -1048,7 +1054,7 @@ function makeWeather(type,c){
   }
   return {
     type,points,a,speed,stride,streak,count:n,phase:r()*6.28,strength:.32+r()*.68,windSpeed,windClimate,gale,
-    gustiness:.62+G.dna.volatility*.72+(gale?.52:0),random:r,windAngle,
+    gustiness,random:r,windAngle,
     windX:Math.cos(windAngle),windZ:Math.sin(windAngle),
     drift:type==="snow"?3+blizzard*22+windClimate*4:type==="dust"?5+r()*8+windClimate*5:type==="rain"?.55+r()*1.1+windClimate*.95:.65+r()*1.1+windClimate*1.4,
     fall:type==="rain"?30+r()*22:type==="snow"?.55+(1-blizzard)*4:type==="dust"?.08+r()*.35:0,
