@@ -31,10 +31,22 @@ if(k===2)return(n-.46)*G.relief*.45+Math.pow(1-Math.abs(Math.sin(u*G.freq*8+n*8)
 if(k===3){let h=(n-.46)*G.relief*.26,cell=180,cx=Math.floor(x/cell),cz=Math.floor(z/cell);for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){let X=cx+dx,Z=cz+dz;if(worldRandom(X,Z,0x391a)<.44)continue;let px=(X+worldRandom(X,Z,0x711))*cell,pz=(Z+worldRandom(X,Z,0x9b3))*cell,r=25+worldRandom(X,Z,0x4d1)*65,deep=(2+worldRandom(X,Z,0x8c7)*28)*(.12+G.relief/110),d=Math.hypot(x-px,z-pz)/r;h+=Math.exp(-(((d-1)/.18)**2))*deep*.55-Math.exp(-((d/.7)**4))*deep}return h}
 if(k===4){let w=.5+.5*Math.sin(u*G.freq*7+fbm(u*G.freq,v*G.freq*.5)*9);return w**2.5*G.relief*.3+(n-.42)*G.relief*.18}
 let ch=Math.abs(Math.sin(u*G.freq*3+fbm(u*G.freq,v*G.freq)*5));return(n-.41)*G.relief-Math.exp(-ch*ch*28)*(2+G.relief*.2)}
+function naturalMountainShape(x,z){
+  let c=Math.cos(G.angle),s=Math.sin(G.angle),u=x*c-z*s,v=x*s+z*c;
+  u+=(noise(x*.007+41,z*.007)-.5)*G.warp;v+=(noise(x*.007,z*.007+73)-.5)*G.warp;
+  const broad=fbm(u*G.freq*.68+31,v*G.freq*.68-47,4);
+  const bend=(noise(u*G.freq*.42+211,v*G.freq*.42-157)-.5)*90;
+  const ridgeNoise=fbm((u+bend)*G.freq*1.25,(v-bend*.35)*G.freq*.72,3);
+  const ridgeBase=1-Math.abs(ridgeNoise*2-1);
+  const ridge=smooth(clamp((ridgeBase-.22)/.68,0,1));
+  const envelope=smooth(clamp((broad-.33)/.5,0,1));
+  return(broad-.46)*G.relief*.5+ridge*envelope*G.relief*.46;
+}
+function terrainShape(k,x,z){return k===2?naturalMountainShape(x,z):shape(k,x,z)}
 function baseHeight(x,z){
   const rawRegion=fbm(x*G.regionScale+130,z*G.regionScale-80);
   const region=smooth(clamp((rawRegion-(.5-G.regionWidth))/(G.regionWidth*2),0,1))*G.regionStrength;
-  let h=mix(shape(G.kind,x,z),shape(G.second,x,z),region);
+  let h=mix(terrainShape(G.kind,x,z),terrainShape(G.second,x,z),region);
   const reliefField=fbm(x*.0027-91,z*.0027+147);
   return h*mix(1,.34+reliefField*1.32,G.terrainVariation);
 }
@@ -1359,7 +1371,7 @@ if(geoR()<.14){for(let i=0;i<geoStrengths.length;i++)geoStrengths[i]*=.5;geoStre
 G.geology={
   dominant:geoDominant,ridgeStrength:geoStrengths[0],basinStrength:geoStrengths[1],plateauStrength:geoStrengths[2],canyonStrength:geoStrengths[3],
   macroScale:.00055+geoR()*.00045,angle:geoR()*Math.PI*2,warpScale:.0007+geoR()*.00045,warp:28+geoR()*92,
-  ridgeScale:.0027+geoR()*.0023,ridgeSharpness:2.6+geoR()*2.4,canyonScale:.0018+geoR()*.0018,canyonWidth:.045+geoR()*.045,
+  ridgeScale:.0022+geoR()*.0016,ridgeSharpness:1.8+geoR()*1.0,canyonScale:.0018+geoR()*.0018,canyonWidth:.045+geoR()*.045,
   basinCell:380+geoR()*300,basinRadius:.18+geoR()*.14,terraceStep:4.5+geoR()*5.5,terraceSoftness:.34+geoR()*.24,phaseX:geoR()*900,phaseZ:geoR()*900
 };
 const fogR=rng(G.hash^0x18f2a7),foggy=fogR()<.22+G.wet*.52;G.foggy=foggy;G.fogDensity=foggy?.00115+G.wet*.0018:.00011;
