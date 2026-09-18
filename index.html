@@ -19,7 +19,7 @@ let mobileForward=0,mobileSide=0,mobileBoost=false,mobileThrottleDown=false;
 let universeSeed="",universeHash=0,originProfile=null,regionalEnabled=false,universeSeaLevel=0,originFastRadius=0,universeOriginX=0,universeOriginZ=0;
 const WORLD_CELL=CHUNK_SIZE*22,WORLD_BLEND=CHUNK_SIZE*3.5,WORLD_PROFILE_CACHE_MAX=36,regionProfiles=new Map;
 let roadReady=false,roadHash=0,roadOriginX=0,roadOriginZ=0,roadBaseY=0,roadDNA=null;
-const ROAD_HALF=4.8,ROAD_SHOULDER=7.2,ROAD_BLEND=34,ROAD_CLEAR=10.5,ROAD_MESH_STEP=8,ROAD_PROFILE_STEP=600,ROAD_PROFILE_CACHE_MAX=192,roadProfileCache=new Map;
+const ROAD_HALF=4.8,ROAD_SHOULDER=7.2,ROAD_BLEND=34,ROAD_CLEAR=10.5,ROAD_MESH_STEP=8,ROAD_PROFILE_STEP=600,ROAD_PROFILE_CACHE_MAX=192,ROAD_VISUAL_LIFT=.12,roadProfileCache=new Map;
 const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost;
 function hash(s){let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(),16777619);return h>>>0}
 function rng(s){return()=>{s|=0;s=s+0x6d2b79f5|0;let t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296}}
@@ -207,7 +207,7 @@ function makeRoadChunk(cx,cz,parent){
     const n=arr.length/3;for(const p of [a,b,c,d])arr.push(p[0]-baseX,p[1],p[2]-baseZ);inds.push(n,n+2,n+1,n,n+3,n+2);
   };
   const start=Math.floor(baseZ/ROAD_MESH_STEP)*ROAD_MESH_STEP-ROAD_MESH_STEP,end=baseZ+CHUNK_SIZE+ROAD_MESH_STEP;
-  const roadLift=.12,markLift=.17;
+  const roadLift=ROAD_VISUAL_LIFT,markLift=ROAD_VISUAL_LIFT+.05;
   let segments=0;
   for(let z=start;z<end;z+=ROAD_MESH_STEP){
     const z0=z,z1=z+ROAD_MESH_STEP,zm=(z0+z1)*.5,xm=roadCenterX(zm);
@@ -1894,17 +1894,18 @@ function buildDetailedCarModel(bytes){
   if(materialCount<1||materialCount>64||meshCount!==2||!Number.isFinite(sourceScale))throw new Error("unsupported CAR2 header");
   const wheelTransforms=[];
   for(let i=0;i<4;i++)wheelTransforms.push({x:f32(),y:f32(),z:f32(),scale:f32()});
-  const materials=[];
+  const materials=[],materialMeta=[];
   for(let i=0;i<materialCount;i++){
     const r=u8()/255,g=u8()/255,b=u8()/255,alpha=u8()/255,metalness=u8()/255,roughness=u8()/255;
     const er=u8()/255,eg=u8()/255,eb=u8()/255,flags=u8(),glass=(flags&1)!==0||alpha<.99;
     const material=new T.MeshStandardMaterial({
-      color:new T.Color(r,g,b),metalness,roughness:clamp(roughness,.08,1),
-      emissive:new T.Color(er,eg,eb),emissiveIntensity:(er+eg+eb)>.02?1.05:0,
-      transparent:glass,opacity:glass?clamp(alpha,.22,.9):1,depthWrite:!glass,
+      color:glass?new T.Color(0x050607):new T.Color(r,g,b),
+      metalness:glass?.04:metalness,roughness:glass?.32:clamp(roughness,.08,1),
+      emissive:glass?new T.Color(0x000000):new T.Color(er,eg,eb),emissiveIntensity:glass?0:(er+eg+eb)>.02?1.05:0,
+      transparent:false,opacity:1,depthWrite:true,
       side:glass?T.DoubleSide:T.FrontSide
     });
-    materials.push(material);
+    materials.push(material);materialMeta.push({glass,metalness,roughness,r,g,b});
   }
   const records=new Map;
   for(let m=0;m<meshCount;m++){
@@ -1926,19 +1927,43 @@ function buildDetailedCarModel(bytes){
     geometry.setIndex(new T.BufferAttribute(new Uint16Array(allIndices),1));
     geometry.clearGroups();for(const g of groups)geometry.addGroup(g.start,g.count,g.materialIndex);
     geometry.computeVertexNormals();geometry.computeBoundingBox();geometry.computeBoundingSphere();
-    records.set(id,{geometry,translation,vertexCount});
+    records.set(id,{geometry,translation,vertexCount,groups});
   }
   if(offset!==view.byteLength||!records.has(0)||!records.has(1))throw new Error("CAR2 asset layout mismatch");
   const group=new T.Group(),bodyRecord=records.get(0),wheelRecord=records.get(1);
-  const body=new T.Mesh(bodyRecord.geometry,materials);body.position.copy(bodyRecord.translation);group.add(body);
+  const wheelMaterials=materials.map(m=>m.clone()),wheelPos=wheelRecord.geometry.getAttribute("position"),wheelIndex=wheelRecord.geometry.index;
+  let tireMaterialIndex=-1,tireScore=-Infinity;
+  for(const g of wheelRecord.groups){
+    const meta=materialMeta[g.materialIndex];if(!meta||meta.glass)continue;
+    let radial=0;
+    for(let i=g.start;i<g.start+g.count;i++){
+      const vi=wheelIndex.getX(i),y=wheelPos.getY(vi),z=wheelPos.getZ(vi);radial+=Math.hypot(y,z);
+    }
+    const avgRadial=radial/Math.max(1,g.count),score=avgRadial*(1+meta.roughness*.35)*(1-meta.metalness*.45);
+    if(score>tireScore){tireScore=score;tireMaterialIndex=g.materialIndex}
+  }
+  if(tireMaterialIndex<0)throw new Error("CAR2 tire material could not be identified");
+  const tireMaterial=wheelMaterials[tireMaterialIndex];
+  tireMaterial.color.setHex(0x08090a);tireMaterial.metalness=.015;tireMaterial.roughness=.94;
+  tireMaterial.emissive.setHex(0x000000);tireMaterial.emissiveIntensity=0;tireMaterial.transparent=false;tireMaterial.opacity=1;tireMaterial.depthWrite=true;
+  wheelRecord.geometry.computeBoundingBox();
+  let sourceWheelBottom=Infinity;
+  for(const w of wheelTransforms)sourceWheelBottom=Math.min(sourceWheelBottom,w.y+wheelRecord.geometry.boundingBox.min.y*Math.abs(w.scale));
+  const visualLift=clamp(.02-sourceWheelBottom,-.35,.9);
+  const body=new T.Mesh(bodyRecord.geometry,materials);body.position.copy(bodyRecord.translation);body.position.y+=visualLift;group.add(body);
   const wheels=[],frontPivots=[];
   for(let i=0;i<wheelTransforms.length;i++){
-    const w=wheelTransforms[i],pivot=new T.Group();pivot.position.set(w.x,w.y,w.z);group.add(pivot);
-    const wheel=new T.Mesh(wheelRecord.geometry,materials),scale=Math.abs(w.scale);
+    const w=wheelTransforms[i],pivot=new T.Group();pivot.position.set(w.x,w.y+visualLift,w.z);group.add(pivot);
+    const wheel=new T.Mesh(wheelRecord.geometry,wheelMaterials),scale=Math.abs(w.scale);
     wheel.scale.set(Math.sign(w.scale||1)*scale,scale,scale);pivot.add(wheel);wheels.push(wheel);if(i<2)frontPivots.push(pivot);
   }
   group.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});
-  return {group,wheels,frontPivots,detailed:true,vertexTotal:bodyRecord.vertexCount+wheelRecord.vertexCount*4};
+  const glassCount=materialMeta.filter(m=>m.glass).length,glassOpaque=glassCount>0&&materialMeta.every((m,i)=>!m.glass||(materials[i].transparent===false&&materials[i].opacity===1&&materials[i].color.getHex()===0x050607));
+  const tireBlack=tireMaterial.color.getHex()===0x08090a&&tireMaterial.transparent===false&&tireMaterial.opacity===1;
+  return {
+    group,wheels,frontPivots,detailed:true,vertexTotal:bodyRecord.vertexCount+wheelRecord.vertexCount*4,
+    tireMaterialIndex,tireBlack,glassOpaque,glassCount,visualLift,wheelLocalBottom:sourceWheelBottom+visualLift
+  };
 }
 async function upgradeCarModel(targetCar){
   document.body.dataset.carModel="loading";document.body.dataset.carDetailedVerts="0";delete document.body.dataset.carModelError;
@@ -1949,6 +1974,9 @@ async function upgradeCarModel(targetCar){
     while(detailed.group.children.length)targetCar.group.add(detailed.group.children[0]);
     targetCar.wheels=detailed.wheels;targetCar.frontPivots=detailed.frontPivots;targetCar.modelDetailed=true;
     document.body.dataset.carModel="detailed";document.body.dataset.carDetailedVerts=String(detailed.vertexTotal);
+    document.body.dataset.carTireBlack=detailed.tireBlack?"1":"0";document.body.dataset.carGlassOpaque=detailed.glassOpaque?"1":"0";
+    document.body.dataset.carGlassCount=String(detailed.glassCount);document.body.dataset.carWheelLocalBottom=detailed.wheelLocalBottom.toFixed(4);
+    document.body.dataset.carVisualLift=detailed.visualLift.toFixed(4);
   }catch(error){
     if(car===targetCar){
       targetCar.modelDetailed=false;document.body.dataset.carModel="fallback";
@@ -2012,10 +2040,15 @@ function makeFallbackCarModel(){
 function carLocalToWorld(x,z,lx,lz,yaw){
   const c=Math.cos(yaw),s=Math.sin(yaw);return {x:x+lx*c+lz*s,z:z-lx*s+lz*c};
 }
+function carContactHeight(x,z){
+  const terrain=Math.max(ground(x,z),waterLevelAt(x,z));
+  if(roadDistance(x,z)<=ROAD_HALF+.35)return Math.max(terrain,roadSurfaceY(z,0)+ROAD_VISUAL_LIFT);
+  return terrain;
+}
 function carGroundPose(x,z,yaw){
   const hs=[];
   for(const lz of[-1.28,1.25])for(const lx of[-.86,.86]){
-    const p=carLocalToWorld(x,z,lx,lz,yaw);hs.push(Math.max(ground(p.x,p.z),waterLevelAt(p.x,p.z)));
+    const p=carLocalToWorld(x,z,lx,lz,yaw);hs.push(carContactHeight(p.x,p.z));
   }
   const front=(hs[0]+hs[1])*.5,rear=(hs[2]+hs[3])*.5,left=(hs[0]+hs[2])*.5,right=(hs[1]+hs[3])*.5;
   return {y:(hs[0]+hs[1]+hs[2]+hs[3])*.25+.015,pitch:clamp(Math.atan2(front-rear,2.53),-.38,.38),roll:clamp(Math.atan2(right-left,1.72),-.28,.28)};
