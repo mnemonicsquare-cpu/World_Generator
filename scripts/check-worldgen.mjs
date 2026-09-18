@@ -173,7 +173,7 @@ const populateFlora=section(current,"function populateChunkFlora(chunk){","funct
 const treePos=populateFlora.indexOf("growLSystemFlora"),windPos=populateFlora.indexOf("attachWindToFlora(group,chunk);"),groundPos=populateFlora.indexOf("growGroundFlora"),grassPos=populateFlora.indexOf("growGrass(group,chunk)");
 if(!(treePos>=0&&windPos>treePos&&groundPos>windPos&&grassPos>groundPos))fail("flora layering order is unsafe for mushrooms or grass");
 
-const grassRenderSection=section(current,"function makeGrassGeometry(){","function populateChunkFlora(chunk){");
+const grassRenderSection=section(current,"function makeGrassGeometry(width=G.grass.width){","function populateChunkFlora(chunk){");
 if(grassRenderSection.includes("buildingSolids.push")||grassRenderSection.includes("collision")||grassRenderSection.includes("collider"))fail("grass unexpectedly participates in collision logic");
 if(!grassRenderSection.includes("new T.InstancedMesh")||!grassRenderSection.includes("InstancedBufferAttribute"))fail("grass is not using the required instanced GPU path");
 if(!grassRenderSection.includes("LOW_POWER?620:1320"))fail("grass instance safety caps are missing");
@@ -223,7 +223,7 @@ for(const marker of [
   "function makeGrassDNA(seedHash,dna)",
   "G.grass=makeGrassDNA(G.hash,dna)",
   "function grassDensity(x,z,y,slope)",
-  "function makeGrassGeometry()",
+  "function makeGrassGeometry(width=G.grass.width)",
   "function makeGrassMaterial(base,tip)",
   "function growGrass(parent,chunk)",
   "procedural-grass-v1",
