@@ -6,6 +6,8 @@
 <script type="module">
 import*as T from"https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js";
 const $=s=>document.querySelector(s),clamp=T.MathUtils.clamp,mix=T.MathUtils.lerp,rend=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+const runtimeError=e=>{const value=e?.error?.stack||e?.reason?.stack||e?.message||String(e?.reason||"runtime error");document.body.dataset.runtimeError=String(value).slice(0,700)};
+addEventListener("error",runtimeError);addEventListener("unhandledrejection",runtimeError);
 rend.setPixelRatio(Math.min(devicePixelRatio,1.7));rend.setSize(innerWidth,innerHeight);rend.toneMapping=T.ACESFilmicToneMapping;rend.toneMappingExposure=1.08;document.body.prepend(rend.domElement);
 const cam=new T.PerspectiveCamera(66,innerWidth/innerHeight,.1,1200);cam.rotation.order="YXZ";
 let scene,water,G,rnd,weather,celestial,audio,sound=false,yaw=0,pitch=-.05,jump=0,grounded=true,plane=null,planeEngineAudio=null,planeLookYaw=0,planeLookPitch=0;
@@ -13,6 +15,8 @@ const keys=new Set,clock=new T.Clock,temp=new T.Object3D,CHUNK_SIZE=160,CHUNK_SE
 const chunks=new Map;let chunkQueue=[],chunkX=Infinity,chunkZ=Infinity,floraCatalog=[],faunaCatalog=[],faunaAgents=[],birdCatalog=[],birdAgents=[],faunaStarterPlaced=false,birdStarterPlaced=false,worldPalette;
 const LOW_POWER=matchMedia("(pointer:coarse)").matches,TERRAIN_RADIUS=LOW_POWER?5:6,FLORA_RADIUS=2;
 let mobileForward=0,mobileSide=0,mobileBoost=false,mobileThrottleDown=false;
+let universeSeed="",universeHash=0,originProfile=null,regionalEnabled=false,universeSeaLevel=0,originFastRadius=0;
+const WORLD_CELL=CHUNK_SIZE*22,WORLD_BLEND=CHUNK_SIZE*3.5,WORLD_PROFILE_CACHE_MAX=36,regionProfiles=new Map;
 const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost;
 function hash(s){let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(),16777619);return h>>>0}
 function rng(s){return()=>{s|=0;s=s+0x6d2b79f5|0;let t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296}}
@@ -128,12 +132,18 @@ function naturalTerrainHeight(x,z){
   h=geologicalHeight(x,z,h);
   return applyPathHeight(x,z,h);
 }
-function height(x,z){return applyHomeHeight(x,z,naturalTerrainHeight(x,z))}
+function regionalNaturalTerrainHeight(x,z){
+  const context=worldBlendAt(x,z);
+  if(context.length===1&&context[0].profile===originProfile)return naturalTerrainHeight(x,z);
+  let h=0;for(const item of context)h+=(rawTerrainHeightFor(item.profile,x,z)+item.profile.heightOffset)*item.weight;
+  return h;
+}
+function height(x,z){return applyHomeHeight(x,z,regionalEnabled?regionalNaturalTerrainHeight(x,z):naturalTerrainHeight(x,z))}
 function terrainPatch(x,z,radius=10){
   const offsets=[[0,0],[radius,0],[-radius,0],[0,radius],[0,-radius],[radius*.7,radius*.7],[-radius*.7,radius*.7],[radius*.7,-radius*.7],[-radius*.7,-radius*.7]];
   let min=Infinity,max=-Infinity,sum=0,dry=0;
   for(const [dx,dz] of offsets){
-    const y=naturalTerrainHeight(x+dx,z+dz);min=Math.min(min,y);max=Math.max(max,y);sum+=y;if(y>G.water+.55)dry++;
+    const y=naturalTerrainHeight(x+dx,z+dz);min=Math.min(min,y);max=Math.max(max,y);sum+=y;if(y>(regionalEnabled?universeSeaLevel:G.water)+.55)dry++;
   }
   return {y:sum/offsets.length,min,max,spread:max-min,dry:dry/offsets.length};
 }
@@ -163,29 +173,28 @@ function findNaturalSpawn(){
     for(let i=0;i<180;i++){
       const angle=r()*Math.PI*2,dist=Math.sqrt(r())*radius;
       const x=Math.cos(angle)*dist,z=Math.sin(angle)*dist,centerY=ground(x,z),p=terrainPatch(x,z,11);
-      if(centerY<=G.water+.85)continue;
+      if(centerY<=(regionalEnabled?universeSeaLevel:G.water)+.85)continue;
       const coastPenalty=Math.max(0,.78-p.dry)*24;
-      const lowPenalty=Math.max(0,G.water+1.4-p.y)*7;
+      const lowPenalty=Math.max(0,(regionalEnabled?universeSeaLevel:G.water)+1.4-p.y)*7;
       const score=p.spread*1.55+coastPenalty+lowPenalty+dist*.0015;
       if(!best||score<best.score)best={x,z,p,score};
       if(!fallback||score<fallback.score)fallback={x,z,p,score};
     }
-    if(best&&best.p.dry>=.78&&best.p.spread<5.2&&best.p.y>G.water+.9)return [best.x,ground(best.x,best.z)+1.75,best.z];
+    if(best&&best.p.dry>=.78&&best.p.spread<5.2&&best.p.y>(regionalEnabled?universeSeaLevel:G.water)+.9)return [best.x,ground(best.x,best.z)+1.75,best.z];
   }
   if(fallback)return [fallback.x,ground(fallback.x,fallback.z)+1.75,fallback.z];
   const anchor=G.landAnchor||{x:0,z:0};
   return [anchor.x,ground(anchor.x,anchor.z)+1.75,anchor.z];
 }
-function floraDensity(x,z,y){
+function floraDensitySingle(x,z,y){
   const broad=fbm(x*G.forestScale+G.phase*37,z*G.forestScale-G.phase*23);
   const fine=fbm(x*G.forestScale*3.7-71,z*G.forestScale*3.7+119);
   const field=broad*.76+fine*.24;
   const deviation=(field-.5)*G.forestContrast*mix(.18,1.55,G.forestPatchiness);
-  const moisture=clamp((y-G.water)/18,0,1);
+  const moisture=clamp((y-waterLevelAt(x,z))/18,0,1);
   return smooth(clamp(G.forestCover+deviation+(moisture-.5)*.1,0,1));
 }
-function groveField(x,z){
-  // Coordinate-seeded grove centres add visible clumps without tying them to chunk borders.
+function groveFieldSingle(x,z){
   const cell=220,cx=Math.floor(x/cell),cz=Math.floor(z/cell);let field=0;
   for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){
     const X=cx+dx,Z=cz+dz;
@@ -199,22 +208,38 @@ function groveField(x,z){
   }
   return clamp(field,0,1);
 }
-function treeDensity(x,z,y,base=floraDensity(x,z,y)){
-  // Three scales: kilometer-scale forest mass, local texture, and explicit soft grove clusters.
+function treeDensitySingle(x,z,y,base=floraDensitySingle(x,z,y)){
   const macro=fbm(x*G.forestScale*.22+283,z*G.forestScale*.22-347);
   const mid=fbm(x*G.forestScale*1.25-521,z*G.forestScale*1.25+193);
   const macroGate=smooth(clamp((macro-.40)/.20,0,1));
   const midGate=smooth(clamp((mid-.36)/.27,0,1));
-  const grove=groveField(x,z);
+  const grove=groveFieldSingle(x,z);
   const patchStrength=.7+G.forestPatchiness*.55;
   const background=base*(.025+.07*midGate);
   const forest=base*mix(.035,2.05,macroGate)*(.28+midGate*1.18)*patchStrength;
   const clustered=base*grove*(.65+macroGate*1.7)*patchStrength;
   return smooth(clamp(background+forest*.62+clustered*.92,0,1));
 }
+function floraDensity(x,z,y){
+  if(!regionalEnabled)return floraDensitySingle(x,z,y);
+  const context=worldBlendAt(x,z);if(context.length===1&&context[0].profile===originProfile)return floraDensitySingle(x,z,y);
+  let value=0;for(const item of context)value+=withWorldProfile(item.profile,()=>floraDensitySingle(x,z,y))*item.weight;return value;
+}
+function groveField(x,z){
+  if(!regionalEnabled)return groveFieldSingle(x,z);
+  let value=0;for(const item of worldBlendAt(x,z))value+=withWorldProfile(item.profile,()=>groveFieldSingle(x,z))*item.weight;return value;
+}
+function treeDensity(x,z,y,base=floraDensity(x,z,y)){
+  if(!regionalEnabled)return treeDensitySingle(x,z,y,base);
+  const context=worldBlendAt(x,z);if(context.length===1&&context[0].profile===originProfile)return treeDensitySingle(x,z,y,base);
+  let value=0;for(const item of context){
+    const local=withWorldProfile(item.profile,()=>treeDensitySingle(x,z,y,floraDensitySingle(x,z,y)));
+    value+=local*item.weight;
+  }return value;
+}
 function ground(x,z){let X=Math.floor(x/CHUNK_STEP)*CHUNK_STEP,Z=Math.floor(z/CHUNK_STEP)*CHUNK_STEP,u=(x-X)/CHUNK_STEP,v=(z-Z)/CHUNK_STEP,A=height(X,Z),B=height(X+CHUNK_STEP,Z),C=height(X,Z+CHUNK_STEP),D=height(X+CHUNK_STEP,Z+CHUNK_STEP);return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
 function disposeTree(root){let gs=new Set,ms=new Set;root.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose())}
-function clear(){stopPlaneEngineAudio();plane=null;planeLookYaw=planeLookPitch=0;mobileThrottleDown=false;mobileBoost=false;setPlaneMobileLabels(false);if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity;faunaAgents=[];faunaCatalog=[];birdAgents=[];birdCatalog=[];faunaStarterPlaced=false;birdStarterPlaced=false}
+function clear(){regionalEnabled=false;originProfile=null;originFastRadius=0;regionProfiles.clear();universeSeed="";universeHash=0;universeSeaLevel=0;stopPlaneEngineAudio();plane=null;planeLookYaw=planeLookPitch=0;mobileThrottleDown=false;mobileBoost=false;setPlaneMobileLabels(false);if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity;faunaAgents=[];faunaCatalog=[];birdAgents=[];birdCatalog=[];faunaStarterPlaced=false;birdStarterPlaced=false}
 function instances(g,m,a,parent=scene){if(!a.length){g.dispose();m.dispose();return null;}let o=new T.InstancedMesh(g,m,a.length);a.forEach((v,i)=>{temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);temp.rotation.set(v[6]||0,v[7]||0,v[8]||0);temp.updateMatrix();o.setMatrixAt(i,temp.matrix)});o.instanceMatrix.setUsage(T.StaticDrawUsage);parent.add(o);return o}
 function instancesQ(g,m,a,parent=scene){
   if(!a.length){g.dispose();m.dispose();return;}
@@ -401,11 +426,11 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,accent,catalog=floraCatalo
     const path=Math.abs(x-G.path-Math.sin(z*.011+G.phase)*G.curve);
     const baseDensity=floraDensity(x,z,y),localDensity=treeDensity(x,z,y,baseDensity);
     const treeChance=.006+.43*Math.pow(localDensity,1.35);
-    if(!houseReserved(x,z)&&plants<plantLimit&&y>G.water+.7&&slope<.82&&path>7&&r()<treeChance){
+    if(!houseReserved(x,z)&&plants<plantLimit&&y>waterLevelAt(x,z)+.7&&slope<.82&&path>7&&r()<treeChance){
       const patch=noise(x*.009+211,z*.009-173),mixPatch=noise(x*.0037-337,z*.0037+419);
-      const index=Math.min(catalog.length-1,Math.floor((patch*.56+mixPatch*.24+r()*.2)*catalog.length));
-      const species=catalog[index],group=groups[index];
-      const h=mix(species.heightMin,species.heightMax,Math.pow(r(),species.heightCurve))*(.68+localDensity*.62)*( .7+G.slender*.5),yaw=r()*Math.PI*2;
+      const selector=patch*.56+mixPatch*.24+r()*.2,index=weightedCatalogIndex(catalog,selector);
+      const species=catalog[index],group=groups[index],localSlender=regionalScalarAt(x,z,"slender");
+      const h=mix(species.heightMin,species.heightMax,Math.pow(r(),species.heightCurve))*(.68+localDensity*.62)*( .7+localSlender*.5),yaw=r()*Math.PI*2;
       const treeHue=(r()-.5)*.03,treeLight=(r()-.5)*.15;
       for(let burn=0;burn<species.prototype.tips.length*3;burn++)r();
       const qx=Math.floor(x*16),qz=Math.floor(z*16);
@@ -433,7 +458,7 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,accent,catalog=floraCatalo
       for(const branch of prototype.segments){
         p.copy(branch.mid).multiplyScalar(scale).applyQuaternion(treeQ);
         worldQ.copy(treeQ).multiply(branch.q);
-        const radius=h*(.014+G.slender*.007)*species.branchScale*Math.pow(.61,branch.depth)*trunkVariation*(.9+treeR()*.2);
+        const radius=h*(.014+localSlender*.007)*species.branchScale*Math.pow(.61,branch.depth)*trunkVariation*(.9+treeR()*.2);
         const branchT=clamp(branch.mid.y/prototype.height,0,1),depthT=clamp(branch.depth/4,0,1);
         branchTint.copy(branchTone).offsetHSL(species.barkHueGradient*(branchT-.5),-.015*depthT,species.barkLightGradient*(branchT-.5)-depthT*.012);
         group.branches.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,radius,branch.length*scale,radius,worldQ.x,worldQ.y,worldQ.z,worldQ.w,branchTint.r,branchTint.g,branchTint.b]);
@@ -442,7 +467,7 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,accent,catalog=floraCatalo
         if(treeR()>foliageKeep)continue;
         p.copy(tip.position).multiplyScalar(scale).applyQuaternion(treeQ);
         worldQ.copy(treeQ).multiply(tip.q);
-        const s=h*(.035+G.slender*.035)*species.leafScale*treeLeafScale*(.78+treeR()*.44);
+        const s=h*(.035+localSlender*.035)*species.leafScale*treeLeafScale*(.78+treeR()*.44);
         const leafJitterHue=(treeR()-.5)*species.leafHueVariance,leafJitterLight=(treeR()-.5)*.07;
         const heightT=clamp(tip.position.y/prototype.height,0,1);
         const outer=clamp(Math.hypot(tip.position.x,tip.position.z)/Math.max(.001,prototype.height*.58),0,1);
@@ -453,7 +478,7 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,accent,catalog=floraCatalo
           .015+treeColorSat+(heightT-.5)*species.gradientSat*gradientScale+outer*.02,
           species.lightShift+treeLight+treeColorLight+(heightT-.5)*species.gradientLight*gradientScale+(outer-.5)*species.edgeLight*edgeScale+young*.018+leafJitterLight
         );
-        group.foliage.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,s,s*(species.leafForm===2?.42:.65+G.slender*.35)*treeLeafAspect,s,worldQ.x,worldQ.y,worldQ.z,worldQ.w,tint.r,tint.g,tint.b]);
+        group.foliage.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,s,s*(species.leafForm===2?.42:.65+localSlender*.35)*treeLeafAspect,s,worldQ.x,worldQ.y,worldQ.z,worldQ.w,tint.r,tint.g,tint.b]);
         if(fruiting){
           const angle=Math.atan2(tip.position.z,tip.position.x),sector=.5+.5*Math.cos(angle-fruitAzimuth);
           const heightAffinity=1-clamp(Math.abs(heightT-fruitHeight)/.38,0,1);
@@ -466,8 +491,8 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,accent,catalog=floraCatalo
         }
       }
       plants++;
-    }else if(y>G.water&&r()<.06+(1-baseDensity)*.18){
-      const s=.5+r()*3;rocks.push([x-baseX,y+s*.3,z-baseZ,s,s*(.6+G.slender),s*.8,r()*.2,r()*6.28,r()*.2]);
+    }else if(y>waterLevelAt(x,z)&&r()<.06+(1-baseDensity)*.18){
+      const s=.5+r()*3;rocks.push([x-baseX,y+s*.3,z-baseZ,s,s*(.6+regionalScalarAt(x,z,"slender")),s*.8,r()*.2,r()*6.28,r()*.2]);
     }
   }
   catalog.forEach((species,i)=>{
@@ -481,18 +506,19 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,accent,catalog=floraCatalo
 }
 function growGroundFlora(parent,cx,cz,land,leaf,accent){
   const r=rng(chunkSeed(cx,cz,0x35a7c1)),stems=[],caps=[],baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE,area=(CHUNK_SIZE*CHUNK_SIZE)/(780*780);
+  const centerX=baseX+CHUNK_SIZE*.5,centerZ=baseZ+CHUNK_SIZE*.5,localForest=regionalScalarAt(centerX,centerZ,"forestCover"),localWet=regionalScalarAt(centerX,centerZ,"wet");
   // Preserve the legacy ground-cover RNG consumption so mushrooms keep their previous deterministic layout.
-  const compatibilityLimit=Math.floor((80+G.forestCover*720)*(.45+G.wet*.75)*area);
-  const mushroomLimit=Math.floor((8+G.forestCover*150)*(.25+G.wet)*area);
+  const compatibilityLimit=Math.floor((80+localForest*720)*(.45+localWet*.75)*area);
+  const mushroomLimit=Math.floor((8+localForest*150)*(.25+localWet)*area);
   let compatibilityCount=0,mushroomCount=0;
   for(let i=0;i<180&&(compatibilityCount<compatibilityLimit||mushroomCount<mushroomLimit);i++){
     const x=baseX+r()*CHUNK_SIZE,z=baseZ+r()*CHUNK_SIZE,y=height(x,z),density=floraDensity(x,z,y);
     const slope=Math.hypot(height(x+1.2,z)-y,height(x,z+1.2)-y)/1.2;
-    if(houseReserved(x,z)||y<G.water+.15||slope>.72)continue;
-    if(compatibilityCount<compatibilityLimit&&r()<density*(.15+G.wet*.3)){
+    if(houseReserved(x,z)||y<waterLevelAt(x,z)+.15||slope>.72)continue;
+    if(compatibilityCount<compatibilityLimit&&r()<density*(.15+localWet*.3)){
       r();r();r();r();r();compatibilityCount++;
     }
-    if(mushroomCount<mushroomLimit&&r()<density*G.wet*.095){
+    if(mushroomCount<mushroomLimit&&r()<density*localWet*.095){
       const stem=.18+r()*(.35+density*.7),cap=.16+r()*(.25+density*.55);
       const capTone=accent.clone().lerp(leaf,.28+r()*.28).offsetHSL((r()-.5)*.025,-.04,(r()-.5)*.08);
       stems.push([x-baseX,y+stem/2,z-baseZ,cap*.28,stem,cap*.28,0,r()*6.28,0]);
@@ -619,6 +645,7 @@ function addBirdAgent(chunk,species,index,homeX,homeZ,homeY,seed,phaseOffset=0){
 function populateChunkBirds(chunk){
   if(chunk.birds)return {birds:chunk.birdAgents?.length||0};
   const group=new T.Group();chunk.group.add(group);chunk.birds=group;chunk.birdAgents=[];
+  const catalog=regionalCatalogAt("birds",(chunk.cx+.5)*CHUNK_SIZE,(chunk.cz+.5)*CHUNK_SIZE);
   const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE,cell=260;
   const minX=Math.floor(baseX/cell)-1,maxX=Math.floor((baseX+CHUNK_SIZE)/cell)+1,minZ=Math.floor(baseZ/cell)-1,maxZ=Math.floor((baseZ+CHUNK_SIZE)/cell)+1;
   for(let cz=minZ;cz<=maxZ;cz++)for(let cx=minX;cx<=maxX;cx++){
@@ -627,9 +654,9 @@ function populateChunkBirds(chunk){
     if(ax<baseX||ax>=baseX+CHUNK_SIZE||az<baseZ||az>=baseZ+CHUNK_SIZE)continue;
     const r=rng((chunkSeed(cx,cz,0x74e1)^0x7f4a7c15)>>>0),e=faunaEcology(ax,az),airField=fbm(ax*.0014-187,az*.0014+263);
     if(r()>clamp(.24+e.life*.34+airField*.35,0,.78))continue;
-    const weights=birdCatalog.map(sp=>(.42+.58*(1-Math.abs(e.forest-sp.forestAffinity)))*(.58+.42*(1-Math.abs(e.moisture-sp.waterAffinity))));
+    const weights=catalog.map(sp=>(.42+.58*(1-Math.abs(e.forest-sp.forestAffinity)))*(.58+.42*(1-Math.abs(e.moisture-sp.waterAffinity))));
     let total=weights.reduce((aa,bb)=>aa+bb,0),pick=r()*total,index=0;for(;index<weights.length-1;index++){pick-=weights[index];if(pick<=0)break;}
-    const species=birdCatalog[index],count=species.flockMin+Math.floor(r()*(species.flockMax-species.flockMin+1));
+    const species=catalog[index],count=species.flockMin+Math.floor(r()*(species.flockMax-species.flockMin+1));
     const homeY=height(ax,az)+species.altitude*(.82+r()*.4);
     const homeJitter=mix(10,2,species.sociality),phaseGap=mix(.42,.06,species.sociality);
     for(let n=0;n<count;n++){
@@ -643,17 +670,17 @@ function populateChunkBirds(chunk){
     const ax=clamp(cam.position.x+Math.cos(angle)*dist,baseX+18,baseX+CHUNK_SIZE-18);
     const az=clamp(cam.position.z+Math.sin(angle)*dist,baseZ+18,baseZ+CHUNK_SIZE-18);
     let socialIndex=0,soarIndex=0,socialScore=-1,soarScore=-1;
-    birdCatalog.forEach((sp,i)=>{
+    catalog.forEach((sp,i)=>{
       if(sp.sociality>socialScore){socialScore=sp.sociality;socialIndex=i;}
       const score=sp.soar*.55+sp.migration*.45;if(score>soarScore){soarScore=score;soarIndex=i;}
     });
-    const social=birdCatalog[socialIndex],flockCount=Math.max(5,Math.min(9,social.flockMax));
+    const social=catalog[socialIndex],flockCount=Math.max(5,Math.min(9,social.flockMax));
     const flockY=Math.max(cam.position.y+16,height(ax,az)+14+social.altitude*.38);
     for(let n=0;n<flockCount;n++){
       const seed=(chunkSeed(chunk.cx,chunk.cz,0x91e1)^Math.imul(n+1,0x27d4eb2f)^Math.imul(socialIndex+1,0x165667b1))>>>0;
       addBirdAgent(chunk,social,socialIndex,ax+(r()-.5)*3,az+(r()-.5)*3,flockY+(r()-.5)*2,seed,n*.07);
     }
-    const soarer=birdCatalog[soarIndex],soarAngle=angle+1.2+r()*.8,soarDist=45+r()*26;
+    const soarer=catalog[soarIndex],soarAngle=angle+1.2+r()*.8,soarDist=45+r()*26;
     const sx=clamp(cam.position.x+Math.cos(soarAngle)*soarDist,baseX+20,baseX+CHUNK_SIZE-20);
     const sz=clamp(cam.position.z+Math.sin(soarAngle)*soarDist,baseZ+20,baseZ+CHUNK_SIZE-20);
     const soarY=Math.max(cam.position.y+25,height(sx,sz)+22+soarer.altitude*.45);
@@ -707,9 +734,9 @@ function updateBirds(dt){
 }
 function faunaEcology(x,z,y=height(x,z)){
   const base=floraDensity(x,z,y),forest=treeDensity(x,z,y,base);
-  const slope=Math.hypot(height(x+3,z)-y,height(x,z+3)-y)/3;
-  const altitude=clamp((y-G.water)/Math.max(18,24+G.relief*.55),0,1);
-  const moisture=Math.exp(-Math.max(0,y-G.water-1)/22);
+  const slope=Math.hypot(height(x+3,z)-y,height(x,z+3)-y)/3,water=waterLevelAt(x,z),relief=regionalScalarAt(x,z,"relief");
+  const altitude=clamp((y-water)/Math.max(18,24+relief*.55),0,1);
+  const moisture=Math.exp(-Math.max(0,y-water-1)/22);
   const fertility=smooth(clamp(base*.52+(1-clamp(slope/.85,0,1))*.23+moisture*.16+(fbm(x*.0031+73,z*.0031-91)-.5)*.24,0,1));
   const migration=fbm(x*.00115+311,z*.00115-227),prey=smooth(clamp(fertility*(.42+migration*.95)*(1-forest*.16),0,1));
   const hunt=fbm(x*.0017-419,z*.0017+157),predator=smooth(clamp(prey*(hunt-.33)*1.15,0,1));
@@ -769,7 +796,7 @@ function makeFaunaBody(species,seed){
 function addFaunaAgent(chunk,species,index,x,z,homeX,homeZ,seed){
   const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE,y=height(x,z);
   const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
-  if(x<baseX+2||x>baseX+CHUNK_SIZE-2||z<baseZ+2||z>baseZ+CHUNK_SIZE-2||y<G.water+.55||slope>.95||houseReserved(x,z))return false;
+  if(x<baseX+2||x>baseX+CHUNK_SIZE-2||z<baseZ+2||z>baseZ+CHUNK_SIZE-2||y<(regionalEnabled?universeSeaLevel:G.water)+.55||slope>.95||houseReserved(x,z))return false;
   const body=makeFaunaBody(species,seed),ar=rng(seed^0x61c88647),heading=ar()*6.28;
   body.root.position.set(x-baseX,y,z-baseZ);body.root.rotation.y=heading;chunk.fauna.add(body.root);
   const agent={chunk,species,group:body.root,visual:body.visual,legs:body.legs,random:ar,heading,targetHeading:heading,
@@ -779,6 +806,7 @@ function addFaunaAgent(chunk,species,index,x,z,homeX,homeZ,seed){
 function populateChunkFauna(chunk){
   if(chunk.fauna)return {animals:chunk.faunaAgents?.length||0};
   const group=new T.Group();chunk.group.add(group);chunk.fauna=group;chunk.faunaAgents=[];
+  const catalog=regionalCatalogAt("fauna",(chunk.cx+.5)*CHUNK_SIZE,(chunk.cz+.5)*CHUNK_SIZE);
   const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE,cell=145;
   const minX=Math.floor(baseX/cell)-1,maxX=Math.floor((baseX+CHUNK_SIZE)/cell)+1,minZ=Math.floor(baseZ/cell)-1,maxZ=Math.floor((baseZ+CHUNK_SIZE)/cell)+1;
   for(let cz=minZ;cz<=maxZ;cz++)for(let cx=minX;cx<=maxX;cx++){
@@ -786,12 +814,12 @@ function populateChunkFauna(chunk){
     const ax=(cx+.12+worldRandom(cx,cz,0x892d)*.76)*cell,az=(cz+.12+worldRandom(cx,cz,0xb147)*.76)*cell;
     if(ax<baseX||ax>=baseX+CHUNK_SIZE||az<baseZ||az>=baseZ+CHUNK_SIZE)continue;
     const r=rng((chunkSeed(cx,cz,0xd41b)^0x9e3779b9)>>>0),ay=height(ax,az);
-    if(ay<G.water+.8||houseReserved(ax,az))continue;
+    if(ay<waterLevelAt(ax,az)+.8||houseReserved(ax,az))continue;
     const e=faunaEcology(ax,az,ay);if(e.slope>.9||e.life<.025)continue;
-    const weights=faunaCatalog.map(sp=>faunaSuitability(sp,e)),total=weights.reduce((a,b)=>a+b,0);
-    if(total<.025||r()>clamp(.28+e.life*.9+total/faunaCatalog.length*.75,0,.96))continue;
+    const weights=catalog.map(sp=>faunaSuitability(sp,e)),total=weights.reduce((a,b)=>a+b,0);
+    if(total<.025||r()>clamp(.28+e.life*.9+total/catalog.length*.75,0,.96))continue;
     let pick=r()*total,index=0;for(;index<weights.length-1;index++){pick-=weights[index];if(pick<=0)break;}
-    const species=faunaCatalog[index],density=clamp(weights[index]*1.6,0,1);
+    const species=catalog[index],density=clamp(weights[index]*1.6,0,1);
     const target=species.groupMin+Math.floor(r()*(species.groupMax-species.groupMin+1));
     const count=Math.max(1,Math.round(target*(.6+density*.65)));
     for(let n=0;n<count;n++){
@@ -809,16 +837,16 @@ function populateChunkFauna(chunk){
       const z=clamp(cam.position.z+Math.sin(angle)*dist,baseZ+7,baseZ+CHUNK_SIZE-7);
       const y=height(x,z),e=faunaEcology(x,z,y);
       const slope=Math.hypot(height(x+2,z)-y,height(x,z+2)-y)/2;
-      if(y<G.water+.65||slope>.9||houseReserved(x,z))continue;
-      const weights=faunaCatalog.map(sp=>faunaSuitability(sp,e)),total=weights.reduce((a,b)=>a+b,0);
+      if(y<waterLevelAt(x,z)+.65||slope>.9||houseReserved(x,z))continue;
+      const weights=catalog.map(sp=>faunaSuitability(sp,e)),total=weights.reduce((a,b)=>a+b,0);
       candidates.push({x,z,e,weights,total});
     }
     candidates.sort((a,b)=>(b.e.life+b.total*.35)-(a.e.life+a.total*.35));
     const spot=candidates[0];
     if(spot){
       let index=0,best=-1;
-      spot.weights.forEach((w,i)=>{if(!faunaCatalog[i].predator&&w>best){best=w;index=i;}});
-      const species=faunaCatalog[index],count=Math.max(5,8-chunk.faunaAgents.length)+Math.floor(fr()*3);
+      spot.weights.forEach((w,i)=>{if(!catalog[i].predator&&w>best){best=w;index=i;}});
+      const species=catalog[index],count=Math.max(5,8-chunk.faunaAgents.length)+Math.floor(fr()*3);
       let placed=0;
       for(let n=0;n<count;n++){
         const angle=fr()*6.28,rad=Math.sqrt(fr())*(3+species.roam*.22);
@@ -856,7 +884,7 @@ function updateFauna(dt){
     a.heading+=clamp(diff,-a.species.turn*dt,a.species.turn*dt);
     const step=a.speed*moveScale*dt,nx=wx+Math.sin(a.heading)*step,nz=wz+Math.cos(a.heading)*step,ny=height(nx,nz);
     const slope=Math.hypot(height(nx+1.5,nz)-ny,height(nx,nz+1.5)-ny)/1.5;
-    if(ny>G.water+.55&&slope<.9&&!houseReserved(nx,nz)){
+    if(ny>(regionalEnabled?universeSeaLevel:G.water)+.55&&slope<.9&&!houseReserved(nx,nz)){
       a.group.position.x=nx-baseX;a.group.position.z=nz-baseZ;a.group.position.y=ny;
     }else{
       a.targetHeading=a.heading+Math.PI*(.65+a.random()*.7);a.turnTimer=.45;
@@ -954,7 +982,7 @@ function makeGrassDNA(seedHash,dna){
     phaseX:r()*900,phaseZ:r()*900,sparseWorld
   };
 }
-function grassDensity(x,z,y,slope){
+function grassDensitySingle(x,z,y,slope){
   const g=G.grass;
   const macro=noise(x*g.macroScale+g.phaseX,z*g.macroScale-g.phaseZ);
   const mid=noise(x*g.midScale-g.phaseZ*.37,z*g.midScale+g.phaseX*.41);
@@ -964,11 +992,15 @@ function grassDensity(x,z,y,slope){
   const forestField=noise(x*G.forestScale+G.phase*37,z*G.forestScale-G.phase*23);
   const forestShade=clamp(G.forestCover+(forestField-.5)*G.forestContrast*.72,0,1);
   density*=mix(.5+g.shadeTolerance*.45,1,1-forestShade);
-  const dryEdge=smooth(clamp((y-G.water-.12)/2.2,0,1));
-  const altitude=clamp((y-G.water)/(20+G.relief*.34),0,1);
+  const water=waterLevelAt(x,z),dryEdge=smooth(clamp((y-water-.12)/2.2,0,1));
+  const altitude=clamp((y-water)/(20+G.relief*.34),0,1);
   const highland=mix(1,.42,smooth(clamp((altitude-.52)/.48,0,1)));
   const slopeFit=1-smooth(clamp((slope-.16)/.58,0,1));
   return smooth(clamp(density*dryEdge*highland*slopeFit,0,1));
+}
+function grassDensity(x,z,y,slope){
+  if(!regionalEnabled)return grassDensitySingle(x,z,y,slope);
+  let value=0;for(const item of worldBlendAt(x,z))value+=withWorldProfile(item.profile,()=>grassDensitySingle(x,z,y,slope))*item.weight;return value;
 }
 function makeGrassGeometry(width=G.grass.width){
   const positions=[],blades=9,golden=2.399963229728653;
@@ -985,9 +1017,8 @@ function makeGrassGeometry(width=G.grass.width){
   const geo=new T.BufferGeometry();geo.setAttribute("position",new T.Float32BufferAttribute(positions,3));geo.computeVertexNormals();
   return geo;
 }
-function grassColors(){
-  const g=G.grass;
-  const base=worldPalette.leaf.clone().lerp(worldPalette.land,.14+g.dryness*.38)
+function grassColors(g=G.grass,palette=worldPalette){
+  const base=palette.leaf.clone().lerp(palette.land,.14+g.dryness*.38)
     .offsetHSL(g.hueShift+g.hueSpan*.18,g.saturationShift-g.dryness*.09,-.085-g.dryness*.025);
   const tip=base.clone().offsetHSL(g.tipShift-g.hueSpan*.35,.035-g.dryness*.075,.13-g.dryness*.025);
   return {base,tip};
@@ -1041,13 +1072,13 @@ diffuseColor.rgb*=grassGradient*(.88+vGrassTint*.22);`);
   return material;
 }
 function growGrass(parent,chunk){
-  const g=G.grass;if(!g||g.cover<.012)return {count:0};
+  const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE,centerX=baseX+CHUNK_SIZE*.5,centerZ=baseZ+CHUNK_SIZE*.5;
+  const g=regionalGrassAt(centerX,centerZ),palette=regionalPaletteAt(centerX,centerZ);if(!g||g.cover<.012)return {count:0};
   const maxInstances=LOW_POWER?900:2200,candidateLimit=Math.max(70,Math.floor(maxInstances*(.12+g.cover*.88)));
   const side=Math.ceil(Math.sqrt(candidateLimit)),cell=CHUNK_SIZE/side,r=rng(chunkSeed(chunk.cx,chunk.cz,0x2c936f));
   const terrainPos=chunk.terrain.geometry.attributes.position,terrainNormal=chunk.terrain.geometry.attributes.normal,row=CHUNK_SEG+1;
-  const colors=grassColors(),geo=makeGrassGeometry(g.width),material=makeGrassMaterial(colors.base,colors.tip),mesh=new T.InstancedMesh(geo,material,candidateLimit);
+  const colors=grassColors(g,palette),geo=makeGrassGeometry(g.width),material=makeGrassMaterial(colors.base,colors.tip),mesh=new T.InstancedMesh(geo,material,candidateLimit);
   const data=new Float32Array(candidateLimit*4),matrix=new T.Matrix4(),q=new T.Quaternion(),scale=new T.Vector3(),pos=new T.Vector3(),yAxis=new T.Vector3(0,1,0);
-  const baseX=chunk.cx*CHUNK_SIZE,baseZ=chunk.cz*CHUNK_SIZE;
   function sample(lx,lz){
     const fx=clamp(lx/CHUNK_STEP,0,CHUNK_SEG-.0001),fz=clamp(lz/CHUNK_STEP,0,CHUNK_SEG-.0001);
     const ix=Math.floor(fx),iz=Math.floor(fz),u=fx-ix,v=fz-iz;
@@ -1060,7 +1091,7 @@ function growGrass(parent,chunk){
   for(let i=0;i<candidateLimit;i++){
     const gx=i%side,gz=Math.floor(i/side),lx=(gx+.12+r()*.76)*cell,lz=(gz+.12+r()*.76)*cell;
     const [y,slope]=sample(lx,lz),x=baseX+lx,z=baseZ+lz,density=grassDensity(x,z,y,slope);
-    if(y<=G.water+.16||density<=.012||r()>density||houseReserved(x,z))continue;
+    if(y<=waterLevelAt(x,z)+.16||density<=.012||r()>density||houseReserved(x,z))continue;
     const localCluster=noise(x*(g.midScale*1.9)+71,z*(g.midScale*1.9)-113);
     const height=clamp(g.height*(1+(r()-.5)*2*g.heightVariation)*mix(.72,1.22,localCluster),.12,2.1);
     const spread=mix(.78,1.28,.35+r()*.65)*mix(.82,1.18,g.clumpiness),yaw=r()*Math.PI*2;
@@ -1076,10 +1107,11 @@ function growGrass(parent,chunk){
 function populateChunkFlora(chunk){
   if(chunk.flora)return;
   const group=new T.Group();chunk.group.add(group);chunk.flora=group;
-  const trees=growLSystemFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.rock,worldPalette.accent,floraCatalog);
+  const centerX=(chunk.cx+.5)*CHUNK_SIZE,centerZ=(chunk.cz+.5)*CHUNK_SIZE,palette=regionalPaletteAt(centerX,centerZ),localFlora=regionalCatalogAt("flora",centerX,centerZ);
+  const trees=growLSystemFlora(group,chunk.cx,chunk.cz,palette.land,palette.leaf,palette.rock,palette.accent,localFlora);
   attachWindToFlora(group,chunk);
   // Ground flora is intentionally added after wind binding: mushrooms must remain completely still.
-  const groundCover=growGroundFlora(group,chunk.cx,chunk.cz,worldPalette.land,worldPalette.leaf,worldPalette.accent);
+  const groundCover=growGroundFlora(group,chunk.cx,chunk.cz,palette.land,palette.leaf,palette.accent);
   const grass=growGrass(group,chunk);
   const fauna=populateChunkFauna(chunk),birds=populateChunkBirds(chunk);
   chunk.stats={plants:trees.plants,mushrooms:groundCover.mushrooms,grass:grass.count,animals:fauna.animals,birds:birds.birds};
@@ -1106,18 +1138,18 @@ function createChunk(cx,cz,detailed){
     pos.setXYZ(i,ix*CHUNK_STEP,y,iz*CHUNK_STEP);
     const hx=grid(ix-1,iz)-grid(ix+1,iz),hz=grid(ix,iz-1)-grid(ix,iz+1);
     normal.set(hx,CHUNK_STEP*2,hz).normalize();normals[i*3]=normal.x;normals[i*3+1]=normal.y;normals[i*3+2]=normal.z;
-    const slope=Math.hypot(hx,hz)/(CHUNK_STEP*2);
-    const warpedY=y+(noise(x*.0031+211,z*.0031-97)-.5)*worldPalette.altitudeWarp;
-    const altitude=smooth(clamp((warpedY-worldPalette.altitudeBase)/worldPalette.altitudeSpan,0,1)),mid=worldPalette.altitudeMid;
+    const slope=Math.hypot(hx,hz)/(CHUNK_STEP*2),palette=regionalPaletteAt(x,z);
+    const warpedY=y+(noise(x*.0031+211,z*.0031-97)-.5)*palette.altitudeWarp;
+    const altitude=smooth(clamp((warpedY-palette.altitudeBase)/palette.altitudeSpan,0,1)),mid=palette.altitudeMid;
     let c,rc;
     if(altitude<mid){
       const t=smooth(clamp(altitude/mid,0,1));
-      c=worldPalette.landLow.clone().lerp(worldPalette.landMid,t);
-      rc=worldPalette.rockLow.clone().lerp(worldPalette.rockMid,t);
+      c=palette.landLow.clone().lerp(palette.landMid,t);
+      rc=palette.rockLow.clone().lerp(palette.rockMid,t);
     }else{
       const t=smooth(clamp((altitude-mid)/(1-mid),0,1));
-      c=worldPalette.landMid.clone().lerp(worldPalette.landHigh,t);
-      rc=worldPalette.rockMid.clone().lerp(worldPalette.rockHigh,t);
+      c=palette.landMid.clone().lerp(palette.landHigh,t);
+      rc=palette.rockMid.clone().lerp(palette.rockHigh,t);
     }
     c.lerp(rc,clamp(slope*.6+(y-25)/80,0,1));
     c.multiplyScalar(.86+noise(x*.11,z*.11)*.26);colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;
@@ -1388,7 +1420,7 @@ function buildHomes(){
   }
 }
 function supportAt(x,z,feet){
-  let top=Math.max(ground(x,z),G.water);for(const home of homes)if(home.cells.some(([ix,iz])=>Math.abs(x-home.x-ix*8)<4&&Math.abs(z-home.z-iz*8)<4))top=home.base-(home.basement?4.2:0);
+  let top=Math.max(ground(x,z),waterLevelAt(x,z));for(const home of homes)if(home.cells.some(([ix,iz])=>Math.abs(x-home.x-ix*8)<4&&Math.abs(z-home.z-iz*8)<4))top=home.base-(home.basement?4.2:0);
   for(const b of buildingSolids){
     const y=b.y+b.h;
     if(Math.abs(x-b.x)<b.w&&Math.abs(z-b.z)<b.d&&y<=feet+.23&&y>top)top=y;
@@ -1535,7 +1567,7 @@ function createPlane(sites=[]){
   for(let i=0;i<150;i++){
     const angle=r()*Math.PI*2,dist=24+Math.sqrt(r())*78;
     const x=cam.position.x+Math.cos(angle)*dist,z=cam.position.z+Math.sin(angle)*dist,y=height(x,z);
-    if(y<G.water+.9||houseReserved(x,z)||sites.some(p=>Math.hypot(x-p[0],z-p[1])<22))continue;
+    if(y<(regionalEnabled?universeSeaLevel:G.water)+.9||houseReserved(x,z)||sites.some(p=>Math.hypot(x-p[0],z-p[1])<22))continue;
     const heading=r()*Math.PI*2,c=Math.cos(heading),s=Math.sin(heading);
     const probes=[[-3.7,0],[3.7,0],[0,-2.6],[0,2.6],[0,0]].map(([lx,lz])=>height(x+lx*c+lz*s,z-lx*s+lz*c));
     const spread=Math.max(...probes)-Math.min(...probes),score=spread+Math.abs(dist-46)*.01;
@@ -1693,7 +1725,7 @@ function applyWorldDNA(g,dna){
   g.slender=clamp(mix(g.slender,.2+dna.humidity*.46+dna.biosphere*.34,.3),0,1);
 }
 
-function generate(seed){clear();homes=[];buildingSolids=[];rnd=rng(hash(seed));let kind=Math.floor(rnd()*6),near=[[5,2,3],[2,4,3],[1,5,0],[4,0,1],[1,3,5],[0,2,4]];const reliefSeed=rnd(),coverSeed=rnd();G={hash:hash(seed),kind,second:near[kind][Math.floor(rnd()*3)],hue:rnd(),
+function generate(seed){document.body.dataset.generationStage="start";clear();homes=[];buildingSolids=[];rnd=rng(hash(seed));let kind=Math.floor(rnd()*6),near=[[5,2,3],[2,4,3],[1,5,0],[4,0,1],[1,3,5],[0,2,4]];const reliefSeed=rnd(),coverSeed=rnd();G={hash:hash(seed),kind,second:near[kind][Math.floor(rnd()*3)],hue:rnd(),
 relief:2+Math.pow(reliefSeed,1.35)*108,freq:.003+rnd()*.011,angle:rnd()*6.28,warp:18+rnd()*92,phase:rnd()*6.28,
 path:rnd()*100-50,curve:8+rnd()*72,wet:rnd(),slender:rnd(),form:Math.floor(rnd()*5),
 regionStrength:Math.pow(rnd(),.72),regionScale:.0015+rnd()*.006,regionWidth:.12+rnd()*.22,
@@ -1757,30 +1789,218 @@ let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let 
 buildHomes();createPlane(sites);
 let wg=new T.PlaneGeometry((TERRAIN_RADIUS*2+2)*CHUNK_SIZE,(TERRAIN_RADIUS*2+2)*CHUNK_SIZE);wg.rotateX(-Math.PI/2);water=new T.Mesh(wg,new T.MeshStandardMaterial({color:col(G.hue+.08,.5,.3),metalness:.35,roughness:.2,transparent:true,opacity:.86}));water.position.set(cam.position.x,G.water,cam.position.z);scene.add(water);
 let sun=mesh(new T.SphereGeometry(25+rnd()*35,28,18),new T.MeshBasicMaterial({color:col(G.hue+.42,.25,.9),fog:false}),-260,160,-600);for(let i=0;i<Math.floor(rnd()*4);i++){rnd();rnd();}
-scheduleChunks(true);
+scheduleChunks(true);document.body.dataset.generationStage="chunks";initRegionalWorlds(seed,sky,horizon);document.body.dataset.generationStage="regions";
 const weatherRoll=rng(G.hash^0x57ea7)(),cold=1-dna.temperature,dry=1-dna.humidity;let wt;
 if(kind===4&&dry>.28||dry>.72&&weatherRoll<.2+dna.volatility*.35)wt="dust";
 else if(cold>.58&&weatherRoll<.18+cold*.52)wt="snow";
 else if(G.wet>.55&&weatherRoll<.38+G.wet*.45+dna.volatility*.12)wt="rain";
 else wt="spores";
-weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fogNear:scene.fog.near,fogFar:scene.fog.far};celestial.nightSky=makeNightSky();
-let flora=[...chunks.values()].reduce((a,c)=>(a.plants+=c.stats?.plants||0,a.mushrooms+=c.stats?.mushrooms||0,a.grass+=c.stats?.grass||0,a.animals+=c.stats?.animals||0,a.birds+=c.stats?.birds||0,a),{plants:0,mushrooms:0,grass:0,animals:0,birds:0});document.body.dataset.grassInstances=String(flora.grass);document.body.dataset.grassCover=G.grass.cover.toFixed(3);document.body.dataset.fogNear=G.fogNear.toFixed(1);document.body.dataset.fogFar=G.fogFar.toFixed(1);document.body.dataset.fogMoisture=G.fogMoisture.toFixed(3);let generations=[...new Set(floraCatalog.map(s=>s.iterations))].sort().join(","),names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · бескрайний · "+wx[wt]+": "+weather.count+" частиц · рядом: "+flora.plants+" растений, "+floraCatalog.length+" форм, поколения "+generations+" · грибы: "+flora.mushrooms+" · фауна: "+flora.animals+" / "+faunaCatalog.length+" видов · птицы: "+flora.birds+" / "+birdCatalog.length+" видов · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);document.body.dataset.generationStage="weather";celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fogNear:scene.fog.near,fogFar:scene.fog.far};celestial.nightSky=makeNightSky();
+let flora=[...chunks.values()].reduce((a,c)=>(a.plants+=c.stats?.plants||0,a.mushrooms+=c.stats?.mushrooms||0,a.grass+=c.stats?.grass||0,a.animals+=c.stats?.animals||0,a.birds+=c.stats?.birds||0,a),{plants:0,mushrooms:0,grass:0,animals:0,birds:0});document.body.dataset.grassInstances=String(flora.grass);document.body.dataset.grassCover=G.grass.cover.toFixed(3);document.body.dataset.fogNear=G.fogNear.toFixed(1);document.body.dataset.fogFar=G.fogFar.toFixed(1);document.body.dataset.fogMoisture=G.fogMoisture.toFixed(3);let generations=[...new Set(floraCatalog.map(s=>s.iterations))].sort().join(","),names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};document.body.dataset.generationStage="complete";$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · бескрайний · "+wx[wt]+": "+weather.count+" частиц · рядом: "+flora.plants+" растений, "+floraCatalog.length+" форм, поколения "+generations+" · грибы: "+flora.mushrooms+" · фауна: "+flora.animals+" / "+faunaCatalog.length+" видов · птицы: "+flora.birds+" / "+birdCatalog.length+" видов · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+
+function waterLevelAt(x=0,z=0){return regionalEnabled?universeSeaLevel:G.water}
+function withWorldProfile(profile,fn){
+  const previous=G;G=profile;try{return fn()}finally{G=previous}
+}
+function universeRandom(x,z,salt=0){
+  let q=Math.imul(x|0,374761393)^Math.imul(z|0,668265263)^universeHash^salt;
+  q=Math.imul(q^q>>>13,1274126177);return((q^q>>>16)>>>0)/4294967296;
+}
+function universeNoise(x,z,salt=0){
+  const X=Math.floor(x),Z=Math.floor(z),u=smooth(x-X),v=smooth(z-Z);
+  const n=(a,b)=>universeRandom(a,b,salt);
+  return mix(mix(n(X,Z),n(X+1,Z),u),mix(n(X,Z+1),n(X+1,Z+1),u),v);
+}
+function warpedUniversePoint(x,z){
+  const scale=1/WORLD_CELL,warp=WORLD_CELL*.105;
+  return [x+(universeNoise(x*scale*.72+13,z*scale*.72-29,0x43a1)-.5)*warp,
+          z+(universeNoise(x*scale*.72-71,z*scale*.72+47,0x8c2d)-.5)*warp];
+}
+function regionCenter(gx,gz){
+  if(gx===0&&gz===0)return {gx,gz,key:"0,0",x:0,z:0};
+  const jitter=WORLD_CELL*.17;
+  return {gx,gz,key:gx+","+gz,
+    x:gx*WORLD_CELL+(universeRandom(gx,gz,0x71ac)-.5)*jitter*2,
+    z:gz*WORLD_CELL+(universeRandom(gx,gz,0xc531)-.5)*jitter*2};
+}
+function regionBlendGeometry(x,z){
+  if(!regionalEnabled)return [{gx:0,gz:0,key:"0,0",weight:1,distance:0}];
+  const [wx,wz]=warpedUniversePoint(x,z),gx=Math.round(wx/WORLD_CELL),gz=Math.round(wz/WORLD_CELL),candidates=[];
+  for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){
+    const center=regionCenter(gx+dx,gz+dz),distance=Math.hypot(wx-center.x,wz-center.z);
+    candidates.push({...center,distance});
+  }
+  candidates.sort((a,b)=>a.distance-b.distance);
+  const nearest=candidates[0].distance,active=[];let total=0;
+  for(const candidate of candidates){
+    const delta=candidate.distance-nearest;if(delta>=WORLD_BLEND)break;
+    const q=clamp(delta/WORLD_BLEND,0,1),weight=1-smooth(q);
+    if(weight>.0001){active.push({...candidate,weight});total+=weight;}
+  }
+  for(const item of active)item.weight/=total||1;
+  return active;
+}
+function rawTerrainHeightFor(profile,x,z){
+  return withWorldProfile(profile,()=>naturalTerrainHeight(x,z));
+}
+function calibrateRegionalWater(profile,centerX,centerZ){
+  const original=profile.water,r=rng(profile.hash^0x71a4d3),samples=[];let anchor=-Infinity;
+  const span=Math.min(980,WORLD_CELL*.31),grid=11,step=span*2/(grid-1);
+  for(let iz=0;iz<grid;iz++)for(let ix=0;ix<grid;ix++){
+    const x=centerX-span+ix*step+(r()-.5)*step*.42,z=centerZ-span+iz*step+(r()-.5)*step*.42;
+    const y=rawTerrainHeightFor(profile,x,z);samples.push(y);anchor=Math.max(anchor,y);
+  }
+  samples.sort((a,b)=>a-b);
+  const oceanic=profile.kind===0||profile.kind===5,targetDry=oceanic?.14:.22;
+  const currentDry=samples.reduce((n,y)=>n+(y>profile.water+.8),0)/samples.length;
+  if(currentDry<targetDry){
+    const index=Math.max(0,Math.min(samples.length-1,Math.floor((1-targetDry)*(samples.length-1))));
+    profile.water=Math.min(profile.water,samples[index]-.85);
+  }
+  profile.water=Math.min(profile.water,anchor-1.15);profile.waterOriginal=original;
+}
+function makeRegionalPalette(profile){
+  const dna=profile.dna,paletteR=rng(profile.hash^0x6ca91),baseHue=(profile.hue+(dna.temperature-.5)*.025+1)%1,botanicalShift=(paletteR()-.5)*.11+(dna.fertility-.5)*.018;
+  const sky=col(baseHue,.2+paletteR()*.12,.46+paletteR()*.1),horizon=col(baseHue+.035+botanicalShift*.18,.22+paletteR()*.12,.64+paletteR()*.1),
+    land=col(baseHue+botanicalShift*.32,.2+paletteR()*.14,.2+paletteR()*.1),rock=col(baseHue+botanicalShift*.12,.07+paletteR()*.09,.32+paletteR()*.12),
+    leaf=col(baseHue+botanicalShift,.34+paletteR()*.18,.3+paletteR()*.13),accent=col(baseHue+(paletteR()<.72?.075:.48),.34+paletteR()*.16,.58+paletteR()*.12);
+  const terrainR=rng(profile.hash^0x2df487),terrainProfile=Math.floor(terrainR()*6),terrainDirection=terrainR()<.5?-1:1,terrainRare=terrainR()<.09,
+    terrainHueSpan=(terrainRare?48+terrainR()*20:24+terrainR()*22)/360,terrainProfiles=[[-.72,.02,.92],[-.98,-.14,.58],[-.76,.28,1.0],[.78,-.18,-.92],[-.58,.62,-.54],[-.42,.02,.48]],
+    terrainHueScale=terrainProfile===5?.72:1,terrainStops=terrainProfiles[terrainProfile].map(v=>v*terrainDirection*terrainHueSpan*terrainHueScale),
+    terrainLowLight=(terrainR()-.5)*.085,terrainMidLight=(terrainR()-.5)*.04,terrainHighLight=.035+terrainR()*.095,
+    terrainLowSat=(terrainR()-.5)*.09,terrainMidSat=(terrainR()-.5)*.055,terrainHighSat=(terrainR()-.5)*.11-.018;
+  const landLow=land.clone().offsetHSL(terrainStops[0],terrainLowSat,terrainLowLight),landMid=land.clone().offsetHSL(terrainStops[1],terrainMidSat,terrainMidLight),
+    landHigh=land.clone().offsetHSL(terrainStops[2],terrainHighSat,terrainHighLight),rockLow=rock.clone().offsetHSL(terrainStops[0]*.72,terrainLowSat*.45,terrainLowLight*.65),
+    rockMid=rock.clone().offsetHSL(terrainStops[1]*.72,terrainMidSat*.45,terrainMidLight*.65),rockHigh=rock.clone().offsetHSL(terrainStops[2]*.72,terrainHighSat*.45,terrainHighLight*.65),
+    altitudeBase=universeSeaLevel+.8,altitudeSpan=clamp(12+profile.relief*(.28+terrainR()*.2),16,58),altitudeWarp=2.5+terrainR()*(4+profile.relief*.045),altitudeMid=.36+terrainR()*.28;
+  return {sky,horizon,palette:{land,rock,leaf,accent,landLow,landMid,landHigh,rockLow,rockMid,rockHigh,altitudeBase,altitudeSpan,altitudeWarp,altitudeMid}};
+}
+function makeRegionalProfile(seedHash,gx,gz){
+  const rr=rng(seedHash),kind=Math.floor(rr()*6),near=[[5,2,3],[2,4,3],[1,5,0],[4,0,1],[1,3,5],[0,2,4]],reliefSeed=rr(),coverSeed=rr();
+  const profile={hash:seedHash,kind,second:near[kind][Math.floor(rr()*3)],hue:rr(),
+    relief:2+Math.pow(reliefSeed,1.35)*108,freq:.003+rr()*.011,angle:rr()*6.28,warp:18+rr()*92,phase:rr()*6.28,
+    path:rr()*100-50,curve:8+rr()*72,wet:rr(),slender:rr(),form:Math.floor(rr()*5),
+    regionStrength:Math.pow(rr(),.72),regionScale:.0015+rr()*.006,regionWidth:.12+rr()*.22,
+    terrainVariation:Math.pow(rr(),1.15),roughness:.08+Math.pow(rr(),1.3)*3.1,pathRelief:.12+rr()*.88,
+    forestCover:Math.pow(coverSeed,.72),forestPatchiness:rr(),forestScale:.0018+rr()*.008,forestContrast:.25+rr()*1.75};
+  profile.dna=makeWorldDNA(profile.hash);applyWorldDNA(profile,profile.dna);profile.grass=makeGrassDNA(profile.hash,profile.dna);
+  profile.water=(kind===0?2:kind===5?6:-8)+profile.wet*5;profile.legacyPath=profile.path;profile.path=1e12;
+  const plainsR=rng(profile.hash^0x4c31a95),plainsStrength=smooth(clamp((30-profile.relief)/24,0,1));
+  profile.plains={strength:plainsStrength,angle:plainsR()*Math.PI*2,phaseX:plainsR()*700,phaseZ:plainsR()*700,
+    macroScale:.00055+plainsR()*.00035,rollScale:.00125+plainsR()*.0007,basinScale:.00036+plainsR()*.00024,
+    warpScale:.00065+plainsR()*.00045,warp:35+plainsR()*70,macroAmp:4.5+plainsR()*3.2,rollAmp:1.8+plainsR()*2.4,basinAmp:1.5+plainsR()*2.2};
+  const geoR=rng(profile.hash^0x5f3759df),dominant=Math.floor(geoR()*4),strengths=[Math.pow(geoR(),2.6),Math.pow(geoR(),2.6),Math.pow(geoR(),2.6),Math.pow(geoR(),2.6)];
+  strengths[dominant]=Math.max(strengths[dominant],.62+geoR()*.34);if(geoR()<.14){for(let i=0;i<4;i++)strengths[i]*=.5;strengths[dominant]=Math.max(strengths[dominant],.36);}
+  strengths[0]=clamp(strengths[0]*mix(.72,1.32,profile.dna.tectonics)*mix(1.08,.78,profile.dna.erosion),0,1);
+  strengths[1]=clamp(strengths[1]*mix(.78,1.25,profile.dna.erosion)*mix(.9,1.12,profile.dna.humidity),0,1);
+  strengths[2]=clamp(strengths[2]*mix(.74,1.28,profile.dna.age)*mix(1.08,.88,profile.dna.tectonics),0,1);
+  strengths[3]=clamp(strengths[3]*mix(.78,1.3,profile.dna.erosion)*mix(.9,1.15,1-profile.dna.humidity),0,1);
+  profile.geology={dominant,ridgeStrength:strengths[0],basinStrength:strengths[1],plateauStrength:strengths[2],canyonStrength:strengths[3],
+    macroScale:.00055+geoR()*.00045,angle:geoR()*Math.PI*2,warpScale:.0007+geoR()*.00045,warp:28+geoR()*92,
+    ridgeScale:.0022+geoR()*.0016,ridgeSharpness:1.8+geoR()*1,canyonScale:.0018+geoR()*.0018,canyonWidth:.045+geoR()*.045,
+    basinCell:380+geoR()*300,basinRadius:.18+geoR()*.14,terraceStep:4.5+geoR()*5.5,terraceSoftness:.34+geoR()*.24,phaseX:geoR()*900,phaseZ:geoR()*900};
+  const center=regionCenter(gx,gz);calibrateRegionalWater(profile,center.x,center.z);profile.heightOffset=universeSeaLevel-profile.water;
+  const fog=makeFogProfile(profile.dna,profile.wet);profile.fogMoisture=fog.moisture;profile.fogIntensity=fog.humidityFog;profile.fogNear=fog.near;profile.fogFar=fog.far;
+  const visual=makeRegionalPalette(profile);profile.palette=visual.palette;profile.sky=visual.sky;profile.horizon=visual.horizon;profile.wind=makeWindClimate(profile.hash,profile.dna);profile.key=gx+","+gz;profile.gx=gx;profile.gz=gz;
+  return profile;
+}
+function getRegionProfile(gx,gz){
+  const key=gx+","+gz;if(key==="0,0")return originProfile;
+  if(regionProfiles.has(key)){const profile=regionProfiles.get(key);regionProfiles.delete(key);regionProfiles.set(key,profile);return profile;}
+  const seedHash=Math.floor(universeRandom(gx,gz,0x5eeda11)*4294967295)>>>0,profile=makeRegionalProfile(seedHash,gx,gz);regionProfiles.set(key,profile);
+  while(regionProfiles.size>WORLD_PROFILE_CACHE_MAX){const first=regionProfiles.keys().next().value;if(first==="0,0"){const p=regionProfiles.get(first);regionProfiles.delete(first);regionProfiles.set(first,p);continue;}regionProfiles.delete(first);}
+  return profile;
+}
+function worldBlendAt(x,z){
+  if(regionalEnabled&&originProfile&&Math.hypot(x,z)<originFastRadius)return [{gx:0,gz:0,key:"0,0",x:0,z:0,distance:Math.hypot(x,z),weight:1,profile:originProfile}];
+  return regionBlendGeometry(x,z).map(item=>({...item,profile:getRegionProfile(item.gx,item.gz)}));
+}
+function blendColor(context,key,source="palette"){
+  const out=new T.Color(0,0,0);for(const item of context){const value=source==="profile"?item.profile[key]:item.profile.palette[key];out.r+=value.r*item.weight;out.g+=value.g*item.weight;out.b+=value.b*item.weight;}return out;
+}
+function regionalPaletteAt(x,z){
+  if(!regionalEnabled)return worldPalette;
+  const context=worldBlendAt(x,z);if(context.length===1&&context[0].profile===originProfile)return worldPalette;
+  const palette={};
+  for(const key of ["land","rock","leaf","accent","landLow","landMid","landHigh","rockLow","rockMid","rockHigh"])palette[key]=blendColor(context,key);
+  for(const key of ["altitudeBase","altitudeSpan","altitudeWarp","altitudeMid"])palette[key]=context.reduce((s,item)=>s+item.profile.palette[key]*item.weight,0);
+  return palette;
+}
+function regionalGrassAt(x,z){
+  if(!regionalEnabled)return G.grass;
+  const context=worldBlendAt(x,z);if(context.length===1&&context[0].profile===originProfile)return G.grass;
+  const keys=["cover","patchiness","clumpiness","shadeTolerance","height","heightVariation","width","flexibility","hueShift","hueSpan","tipShift","dryness","saturationShift","macroScale","midScale","phaseX","phaseZ"],out={};
+  for(const key of keys)out[key]=context.reduce((s,item)=>s+item.profile.grass[key]*item.weight,0);out.sparseWorld=context[0].profile.grass.sparseWorld;return out;
+}
+function regionalScalarAt(x,z,key){
+  if(!regionalEnabled)return G[key];
+  const context=worldBlendAt(x,z);if(context.length===1&&context[0].profile===originProfile)return G[key];
+  return context.reduce((s,item)=>s+item.profile[key]*item.weight,0);
+}
+function ensureProfileCatalogs(profile){
+  if(profile.catalogs)return profile.catalogs;
+  const previousG=G,previousPalette=worldPalette;G=profile;worldPalette=profile.palette;
+  try{profile.catalogs={flora:makeFloraCatalog(),fauna:makeFaunaCatalog(),birds:makeBirdCatalog()};}
+  finally{G=previousG;worldPalette=previousPalette}
+  return profile.catalogs;
+}
+function regionalCatalogAt(type,x,z){
+  if(!regionalEnabled)return type==="flora"?floraCatalog:type==="fauna"?faunaCatalog:birdCatalog;
+  const context=worldBlendAt(x,z);
+  if(context.length===1){
+    const profile=context[0].profile;if(profile===originProfile)return type==="flora"?floraCatalog:type==="fauna"?faunaCatalog:birdCatalog;
+    return ensureProfileCatalogs(profile)[type];
+  }
+  const combined=[];
+  for(const item of context){
+    if(item.weight<.035)continue;
+    const list=ensureProfileCatalogs(item.profile)[type],worldWeight=item.weight/list.length;
+    for(const species of list)combined.push({...species,worldWeight});
+  }
+  return combined.length?combined:(type==="flora"?floraCatalog:type==="fauna"?faunaCatalog:birdCatalog);
+}
+function weightedCatalogIndex(catalog,u){
+  if(!catalog.length)return 0;if(catalog[0].worldWeight==null)return Math.min(catalog.length-1,Math.floor(u*catalog.length));
+  let total=0;for(const species of catalog)total+=species.worldWeight||0;let pick=clamp(u,0,.999999)*total;
+  for(let i=0;i<catalog.length;i++){pick-=catalog[i].worldWeight||0;if(pick<=0)return i;}return catalog.length-1;
+}
+function circularRegionValue(context,key,nested=null){
+  let x=0,z=0;for(const item of context){const value=nested?item.profile[nested][key]:item.profile[key],a=value*Math.PI*2;x+=Math.cos(a)*item.weight;z+=Math.sin(a)*item.weight;}return ((Math.atan2(z,x)/(Math.PI*2))%1+1)%1;
+}
+function regionalEnvironmentAt(x,z){
+  if(!regionalEnabled)return {primary:{key:"0,0",weight:1,profile:G},palette:worldPalette,horizon:celestial?.horizon||new T.Color(),hue:G.hue,
+    fogMoisture:G.fogMoisture,fogIntensity:G.fogIntensity,fogNear:G.fogNear,fogFar:G.fogFar,forestCover:G.forestCover,wet:G.wet,windAngle:weather?.windAngle||0,windSpeed:weather?.windSpeed||1,gustiness:weather?.gustiness||1};
+  const context=worldBlendAt(x,z),primary=context[0],palette=regionalPaletteAt(x,z),horizon=blendColor(context,"horizon","profile"),hue=circularRegionValue(context,"hue");
+  let wx=0,wz=0;for(const item of context){wx+=Math.cos(item.profile.wind.windAngle)*item.weight;wz+=Math.sin(item.profile.wind.windAngle)*item.weight;}
+  return {context,primary,palette,horizon,hue,
+    fogMoisture:context.reduce((s,i)=>s+i.profile.fogMoisture*i.weight,0),fogIntensity:context.reduce((s,i)=>s+i.profile.fogIntensity*i.weight,0),
+    fogNear:context.reduce((s,i)=>s+i.profile.fogNear*i.weight,0),fogFar:context.reduce((s,i)=>s+i.profile.fogFar*i.weight,0),
+    forestCover:context.reduce((s,i)=>s+i.profile.forestCover*i.weight,0),wet:context.reduce((s,i)=>s+i.profile.wet*i.weight,0),
+    windAngle:Math.atan2(wz,wx),windSpeed:context.reduce((s,i)=>s+i.profile.wind.windSpeed*i.weight,0),gustiness:context.reduce((s,i)=>s+i.profile.wind.gustiness*i.weight,0)};
+}
+function initRegionalWorlds(seed,sky,horizon){
+  universeSeed=seed;universeHash=G.hash;universeSeaLevel=G.water;originProfile=G;originProfile.key="0,0";originProfile.gx=0;originProfile.gz=0;originProfile.heightOffset=0;
+  originProfile.palette=worldPalette;originProfile.sky=sky.clone();originProfile.horizon=horizon.clone();originProfile.wind=makeWindClimate(originProfile.hash,originProfile.dna);
+  let nearest=Infinity;for(let gz=-1;gz<=1;gz++)for(let gx=-1;gx<=1;gx++)if(gx||gz){const center=regionCenter(gx,gz);nearest=Math.min(nearest,Math.hypot(center.x,center.z));}
+  const maxWarp=WORLD_CELL*.08;originFastRadius=Math.max(CHUNK_SIZE*3,(nearest-WORLD_BLEND)/2-maxWarp);
+  originProfile.catalogs={flora:floraCatalog,fauna:faunaCatalog,birds:birdCatalog};regionProfiles.clear();regionProfiles.set("0,0",originProfile);regionalEnabled=true;
+}
 function update(dt){
-  const e=celestial;e.age+=dt;
+  const e=celestial;e.age+=dt,env=regionalEnvironmentAt(cam.position.x,cam.position.z);
   const cycle=(e.start+e.age/e.length)%1,a=cycle*6.28,alt=Math.sin(a),day=smooth(clamp((alt+.15)/.55,0,1)),tw=Math.exp(-((alt/.2)**2));
   const front=smooth(.5+.5*Math.sin(e.age/55+weather.phase))*weather.strength;
   const directionWobble=.035*Math.sin(e.age*.073+weather.phase)+.018*Math.sin(e.age*.29+weather.phase*.7);
-  const windAngle=weather.windAngle+directionWobble,windX=Math.cos(windAngle),windZ=Math.sin(windAngle);
+  const windAngle=env.windAngle+directionWobble,windX=Math.cos(windAngle),windZ=Math.sin(windAngle),windSpeed=env.windSpeed;
   const gustWave=.82+.14*Math.sin(e.age*.41+weather.phase)+.07*Math.sin(e.age*1.17+weather.phase*1.9);
-  const gust=clamp((.76+front*.5)*gustWave*(.82+weather.gustiness*.22),.48,1.75),windForce=clamp(weather.windSpeed*gust/2.18,0,1.38);
-  weather.windX=windX;weather.windZ=windZ;windTimeUniform.value=e.age;windDirectionUniform.value.set(windX,windZ);windForceUniform.value=windForce;weather.currentWind=windForce;
+  const gust=clamp((.76+front*.5)*gustWave*(.82+env.gustiness*.22),.48,1.75),windForce=clamp(windSpeed*gust/2.18,0,1.38);
+  weather.windX=windX;weather.windZ=windZ;weather.windSpeed=windSpeed;windTimeUniform.value=e.age;windDirectionUniform.value.set(windX,windZ);windForceUniform.value=windForce;weather.currentWind=windForce;
   const nightTop=new T.Color(0x061426),nightHorizon=new T.Color(0x1b2b3e),dayTop=new T.Color(0x438fd0),dayHorizon=new T.Color(0xc6dce9),sunsetSky=new T.Color(0xee9466);
-  const top=nightTop.lerp(dayTop,day),h=nightHorizon.lerp(dayHorizon,day).lerp(sunsetSky,tw*.64),fogColor=h.clone().lerp(e.horizon,.08+G.fogMoisture*.18);
-  const frontFog=front*(.055+G.fogIntensity*.24);
+  const top=nightTop.lerp(dayTop,day),h=nightHorizon.lerp(dayHorizon,day).lerp(sunsetSky,tw*.64),fogColor=h.clone().lerp(env.horizon,.08+env.fogMoisture*.18);
+  const frontFog=front*(.055+env.fogIntensity*.24);
   scene.background.copy(top);scene.fog.color.copy(fogColor);
-  scene.fog.near=Math.max(12,e.fogNear*(1-frontFog*.72));scene.fog.far=Math.max(scene.fog.near+68,e.fogFar*(1-frontFog));
-  const paletteNight=col(G.hue,.25,.13),paletteSunset=col(G.hue+.12,.4,.42),lightH=paletteNight.clone().lerp(e.horizon,day).lerp(paletteSunset,tw*.35);
-  e.hemi.color.copy(lightH).lerp(col(G.hue,.12,.64),(1-day)*.65);e.hemi.intensity=.85+day*.95;
+  scene.fog.near=Math.max(12,env.fogNear*(1-frontFog*.72));scene.fog.far=Math.max(scene.fog.near+68,env.fogFar*(1-frontFog));
+  const paletteNight=col(env.hue,.25,.13),paletteSunset=col(env.hue+.12,.4,.42),lightH=paletteNight.clone().lerp(env.horizon,day).lerp(paletteSunset,tw*.35);
+  e.hemi.color.copy(lightH).lerp(col(env.hue,.12,.64),(1-day)*.65);e.hemi.intensity=.85+day*.95;
   e.light.position.set(Math.cos(a)*450,alt*500,-400);e.light.intensity=(.05+day*2.5)*(1-front*.45);
   e.sun.position.set(cam.position.x+Math.cos(a)*430,cam.position.y+alt*480,cam.position.z-650);e.sun.visible=alt>-.12;updateNightSky(e,day,front,top,h,tw);
 
@@ -1788,7 +2008,7 @@ function update(dt){
   weather.points.material.opacity=front*(type==="rain"?.58:type==="spores"?.72:.66);
   for(let i=0;i<weather.speed.length;i++){
     const k=i*stride,s=weather.speed[i];
-    let dx=weather.windX*weather.drift*weather.windSpeed*gust*dt*s,dz=weather.windZ*weather.drift*weather.windSpeed*gust*dt*s,dy=-weather.fall*dt*s;
+    let dx=weather.windX*weather.drift*windSpeed*gust*dt*s,dz=weather.windZ*weather.drift*windSpeed*gust*dt*s,dy=-weather.fall*dt*s;
     if(type==="spores"){
       dx+=Math.sin(e.age*.17+i*.73)*.16*dt;dz+=Math.cos(e.age*.13+i*.51)*.16*dt;
       dy=Math.sin(e.age*.28+weather.phase+i*.37)*.2*dt;
@@ -1800,17 +2020,17 @@ function update(dt){
     if(p[k+1]<low){p[k+1]=high+weather.random()*8;if(type!=="spores"){p[k]-=weather.windX*half*.35;p[k+2]-=weather.windZ*half*.35}}
     else if(p[k+1]>high+10)p[k+1]=low+weather.random()*(high-low);
     if(stride===6){
-      const ratio=weather.fall?weather.streak/weather.fall:0,slant=weather.drift*weather.windSpeed*gust*ratio;
+      const ratio=weather.fall?weather.streak/weather.fall:0,slant=weather.drift*windSpeed*gust*ratio;
       p[k+3]=p[k]-weather.windX*slant;p[k+4]=p[k+1]+weather.streak;p[k+5]=p[k+2]-weather.windZ*slant;
     }
   }
   weather.points.geometry.attributes.position.needsUpdate=true;
   if(weather.debris){
     const dp=weather.debrisA,halfD=58,lowD=cam.position.y-13,highD=cam.position.y+25;
-    weather.debris.material.opacity=clamp((windForce-.18)/.78,0,1)*(.12+G.forestCover*.32);
+    weather.debris.material.opacity=clamp((windForce-.18)/.78,0,1)*(.12+env.forestCover*.32);
     for(let i=0;i<weather.debrisSpeed.length;i++){
       const k=i*3,s=weather.debrisSpeed[i],side=Math.sin(e.age*(1.2+s*.35)+i*.71)*(.08+.18*windForce);
-      const travel=(2.2+weather.windSpeed*3.8)*gust*dt*s;
+      const travel=(2.2+windSpeed*3.8)*gust*dt*s;
       dp[k]+=windX*travel+windZ*side*dt;dp[k+2]+=windZ*travel-windX*side*dt;
       dp[k+1]+=Math.sin(e.age*.9+i*.47)*(.12+.42*windForce)*dt;
       let rx=dp[k]-cam.position.x,rz=dp[k+2]-cam.position.z;
@@ -1821,6 +2041,8 @@ function update(dt){
     weather.debris.geometry.attributes.position.needsUpdate=true;
   }
   water.material.roughness=clamp(.17+windForce*.13+Math.sin(e.age*.4)*.018,.16,.38);
+  const waterTint=col(env.hue+.08,.5,.3);water.material.color.lerp(waterTint,clamp(dt*1.4,0,1));
+  document.body.dataset.worldRegion=env.primary.key;document.body.dataset.worldBlend=env.primary.weight.toFixed(3);document.body.dataset.worldProfileCache=String(regionProfiles.size);
 }
 async function toggleAudio(){if(!audio){let ctx=new AudioContext,master=ctx.createGain(),filter=ctx.createBiquadFilter(),buf=ctx.createBuffer(1,ctx.sampleRate*4,ctx.sampleRate),d=buf.getChannelData(0),r=rng(G.hash^999),last=0;for(let i=0;i<d.length;i++){last=(last+(r()*2-1)*.03)/1.03;d[i]=last*4}let src=ctx.createBufferSource();src.buffer=buf;src.loop=true;filter.type="lowpass";filter.frequency.value=250+G.slender*900;src.connect(filter).connect(master).connect(ctx.destination);master.gain.value=0;src.start();audio={ctx,master,filter}}await audio.ctx.resume();sound=!sound;audio.master.gain.setTargetAtTime(sound?.25:0,audio.ctx.currentTime,.4);$("#sound").textContent="Звук: "+(sound?"вкл.":"выкл.")}
 

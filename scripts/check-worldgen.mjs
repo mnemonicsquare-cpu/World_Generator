@@ -193,6 +193,55 @@ if(denseGrassWorlds<300)fail("Grass DNA no longer produces enough genuinely gras
 if(almostBareWorlds<180)fail("Grass DNA no longer produces enough nearly bare worlds");
 if(maxGrassCover-minGrassCover<.75)fail("Grass cover lacks meaningful world-to-world variation");
 
+
+// Seamless-world layer: region geometry must be deterministic, normalized, broad, and continuous.
+const seamlessSource=section(current,"function waterLevelAt(x=0,z=0){","function update(dt){");
+for(const required of [
+  "WORLD_PROFILE_CACHE_MAX","regionBlendGeometry","worldBlendAt","makeRegionalProfile","regionalPaletteAt",
+  "regionalGrassAt","regionalEnvironmentAt","initRegionalWorlds","heightOffset"
+])if(!current.includes(required))fail("missing seamless-world primitive: "+required);
+const startupSchedulePos=current.indexOf("scheduleChunks(true);"),regionalInitPos=current.indexOf("initRegionalWorlds(seed,sky,horizon);");
+if(startupSchedulePos<0||regionalInitPos<0||regionalInitPos<startupSchedulePos)fail("regional layer must activate only after legacy spawn chunks are generated");
+const clearSection=section(current,"function clear(){","function instances(");
+for(const marker of ["regionalEnabled=false","originProfile=null","originFastRadius=0","regionProfiles.clear()","universeHash=0","universeSeaLevel=0"])if(!clearSection.includes(marker))fail("new-seed reset lost regional state guard: "+marker);
+if(!current.includes("rawTerrainHeightFor(item.profile,x,z)+item.profile.heightOffset"))fail("regional terrain is not height-aligned to the common sea level");
+if(!current.includes("waterLevelAt(x,z)"))fail("regional ecology is not using the common water level");
+
+const blendGeometrySource=section(current,"function universeRandom(x,z,salt=0){","function rawTerrainHeightFor(profile,x,z){");
+let blendTools;
+try{
+  blendTools=new Function(`
+    const CHUNK_SIZE=160,WORLD_CELL=CHUNK_SIZE*22,WORLD_BLEND=CHUNK_SIZE*3.5;
+    let universeHash=0x12345678,regionalEnabled=true;
+    const clamp=(x,a,b)=>Math.min(b,Math.max(a,x)),mix=(a,b,t)=>a+(b-a)*t,smooth=x=>x*x*(3-2*x);
+    ${blendGeometrySource}
+    return {regionBlendGeometry,regionCenter,warpedUniversePoint};
+  `)();
+}catch(error){fail("Seamless region geometry harness could not be built: "+error.message);}
+for(const [x,z] of [[0,0],[3519,0],[-3519,1221],[7040,-5280],[12345,6789]]){
+  const a=blendTools.regionBlendGeometry(x,z),b=blendTools.regionBlendGeometry(x,z);
+  if(JSON.stringify(a)!==JSON.stringify(b))fail("region blend is not deterministic at "+x+","+z);
+  const total=a.reduce((s,v)=>s+v.weight,0);
+  if(Math.abs(total-1)>1e-9)fail("region weights do not normalize at "+x+","+z+": "+total);
+  if(!a.length||a.length>4)fail("unexpected active region count at "+x+","+z+": "+a.length);
+  for(const item of a)if(!Number.isFinite(item.weight)||item.weight<=0||item.weight>1||!Number.isFinite(item.distance))fail("invalid region blend item");
+}
+const TEST_WORLD_CELL=160*22;
+let mixedSamples=0,dominantSamples=0,changes=0,lastKey=null;
+for(let x=-TEST_WORLD_CELL*3;x<=TEST_WORLD_CELL*3;x+=80){
+  const a=blendTools.regionBlendGeometry(x,137);
+  if(a.length>1)mixedSamples++;else dominantSamples++;
+  if(lastKey!==null&&a[0].key!==lastKey)changes++;
+  lastKey=a[0].key;
+  const b=blendTools.regionBlendGeometry(x+.5,137);
+  const wa=new Map(a.map(v=>[v.key,v.weight])),wb=new Map(b.map(v=>[v.key,v.weight]));
+  let delta=0;for(const key of new Set([...wa.keys(),...wb.keys()]))delta+=Math.abs((wa.get(key)||0)-(wb.get(key)||0));
+  if(delta>.035)fail("region weights change too sharply across half a world unit: "+delta);
+}
+if(mixedSamples<12)fail("transition bands are too narrow or absent");
+if(dominantSamples<20)fail("world interiors disappeared into permanent blending");
+if(changes<4)fail("long travel does not cross enough distinct worlds");
+
 const epsilonShapeEnd=epsilonBeta.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
 const currentShapeEnd=current.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
 const epsilonShape=section(epsilonBeta,"function shape(",epsilonShapeEnd);
@@ -215,9 +264,19 @@ if(!grassRenderSection.includes("),.12,2.1)"))fail("grass per-instance height cl
 if(!grassRenderSection.includes("positions=[],blades=9,golden=2.399963229728653"))fail("grass blade geometry complexity changed unexpectedly");
 if(!grassRenderSection.includes("castShadow=false")||!grassRenderSection.includes("receiveShadow=false"))fail("grass shadow cost guard is missing");
 
-const epsilonFlora=section(epsilonBeta,"function floraDensity","function makeFaunaCatalog");
-const currentFlora=section(current,"function floraDensity","function makeFaunaCatalog");
-if(epsilonFlora!==currentFlora)fail("protected flora generation changed relative to Epsilon Beta");
+const currentFlora=section(current,"function floraDensitySingle","function makeFaunaCatalog");
+for(const marker of [
+  "const broad=fbm(x*G.forestScale+G.phase*37,z*G.forestScale-G.phase*23);",
+  "const fine=fbm(x*G.forestScale*3.7-71,z*G.forestScale*3.7+119);",
+  "const field=broad*.76+fine*.24;",
+  "const deviation=(field-.5)*G.forestContrast*mix(.18,1.55,G.forestPatchiness);",
+  "const macro=fbm(x*G.forestScale*.22+283,z*G.forestScale*.22-347);",
+  "const mid=fbm(x*G.forestScale*1.25-521,z*G.forestScale*1.25+193);",
+  "const patchStrength=.7+G.forestPatchiness*.55;",
+  "return smooth(clamp(background+forest*.62+clustered*.92,0,1));"
+])if(!currentFlora.includes(marker))fail("legacy flora equation changed unexpectedly: "+marker);
+if(!currentFlora.includes("function floraDensity(x,z,y)")||!currentFlora.includes("worldBlendAt(x,z)"))fail("flora no longer blends neighboring world profiles");
+if(!currentFlora.includes("withWorldProfile(item.profile"))fail("flora blending no longer evaluates each world's own noise field");
 
 for(const marker of [
   "function naturalMountainShape(x,z)",
@@ -246,7 +305,7 @@ for(const marker of [
   "attachWindToFlora(group,chunk);",
   "windForceUniform.value=windForce",
   "weather.currentWind=windForce",
-  "slant=weather.drift*weather.windSpeed*gust*ratio",
+  "slant=weather.drift*windSpeed*gust*ratio",
   "function makeWindClimate(seedHash,dna)",
   "windClimate=clamp(",
   "gale=galeRoll<.16",
@@ -265,7 +324,7 @@ for(const marker of [
   "growGrass(group,chunk)",
   "function makeFogProfile(dna,wet,terrainRadius=TERRAIN_RADIUS)",
   "new T.Fog(horizon,G.fogNear,G.fogFar)",
-  "scene.fog.near=Math.max(12,e.fogNear",
+  "scene.fog.near=Math.max(12,env.fogNear",
   "scene.fog.far=Math.max(scene.fog.near+68",
   "document.body.dataset.fogNear"
 ]){
@@ -281,7 +340,7 @@ for(const legacyPattern of [
   if(current.includes(legacyPattern))fail("legacy path-based placement returned: "+legacyPattern);
 }
 
-if(!current.includes("centerY<=G.water+.85"))fail("spawn center is not required to be dry");
+if(!current.includes("centerY<=(regionalEnabled?universeSeaLevel:G.water)+.85"))fail("spawn center is not required to be dry");
 if(!current.includes("G.water=Math.min(G.water,anchor.y-1.15)"))fail("absolute land guard is missing");
 
 if(!current.includes("smooth(clamp((30-G.relief)/24,0,1))"))fail("flat-world relief gate is missing");
@@ -290,7 +349,7 @@ if(!current.includes("return h+plainsMacroRelief(x,z)"))fail("plains macro relie
 console.log("worldgen checks passed");
 console.log("- JavaScript syntax: OK");
 console.log("- Epsilon Beta base shapes: unchanged");
-console.log("- Epsilon Beta flora block: unchanged");
+console.log("- Legacy flora equations preserved inside regional profiles: OK");
 console.log("- World DNA determinism and bounds: OK");
 console.log("- Epsilon Beta World DNA: unchanged");
 console.log("- Living wind architecture markers: OK");
