@@ -1018,10 +1018,11 @@ vec4 mvPosition=vec4(transformed,1.0);
 #ifdef USE_INSTANCING
   mvPosition=instanceMatrix*mvPosition;
 #endif
-float h=pow(vGrassHeight,1.72);
-float wave=.78+.22*sin(uWindTime*(1.35+uWindForce*.38)+grassData.x);
+float h=vGrassHeight*vGrassHeight*(1.18-.18*vGrassHeight);
+float oscillation=sin(uWindTime*(1.7+uWindForce*.52)+grassData.x+position.y*2.35);
+float wave=.82+.18*oscillation;
 float bend=h*grassData.y*grassData.w*(.035+uWindForce*.29)*wave;
-float flutter=sin(uWindTime*(3.6+uWindForce*2.9)+grassData.x*1.7+position.y*4.1)*h*grassData.y*(.006+uWindForce*.022);
+float flutter=oscillation*h*grassData.y*(.006+uWindForce*.022);
 mvPosition.x+=uWindDirection.x*bend+uWindDirection.y*flutter;
 mvPosition.z+=uWindDirection.y*bend-uWindDirection.x*flutter;
 mvPosition=modelViewMatrix*mvPosition;
