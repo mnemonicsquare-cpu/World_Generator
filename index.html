@@ -18,6 +18,8 @@ const SMOKE_TEST=new URLSearchParams(location.search).has("smoke");
 let mobileForward=0,mobileSide=0,mobileBoost=false,mobileThrottleDown=false;
 let universeSeed="",universeHash=0,originProfile=null,regionalEnabled=false,universeSeaLevel=0,originFastRadius=0,universeOriginX=0,universeOriginZ=0;
 const WORLD_CELL=CHUNK_SIZE*22,WORLD_BLEND=CHUNK_SIZE*3.5,WORLD_PROFILE_CACHE_MAX=36,regionProfiles=new Map;
+let roadReady=false,roadHash=0,roadOriginX=0,roadOriginZ=0,roadDNA=null;
+const ROAD_HALF=4.8,ROAD_SHOULDER=7.2,ROAD_BLEND=26,ROAD_CLEAR=10.5,ROAD_MESH_STEP=8;
 const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost;
 function hash(s){let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(),16777619);return h>>>0}
 function rng(s){return()=>{s|=0;s=s+0x6d2b79f5|0;let t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296}}
@@ -120,6 +122,102 @@ function applyPathHeight(x,z,h){
   h=mix(h,(fbm(x*.004,z*.004)-.42)*10*G.pathRelief+G.water+3,pathBlend*.88);
   return h+(noise(x*.065,z*.065)-.5)*G.roughness*(1-pathBlend);
 }
+function roadRandom(i,salt=0){
+  let q=Math.imul(i|0,374761393)^roadHash^salt;q=Math.imul(q^q>>>13,1274126177);return((q^q>>>16)>>>0)/4294967296;
+}
+function initInfiniteRoad(seedHash,x,z){
+  const r=rng((seedHash^0x6a09e667)>>>0);roadHash=seedHash;roadOriginX=x;roadOriginZ=z;
+  roadDNA={
+    macroAmp:160+r()*150,macroWave:2900+r()*2300,macroPhase:r()*Math.PI*2,
+    midAmp:65+r()*85,midWave:900+r()*950,midPhase:r()*Math.PI*2,
+    fineAmp:18+r()*38,fineWave:360+r()*420,finePhase:r()*Math.PI*2
+  };
+  roadReady=true;
+}
+function roadCenterX(z){
+  if(!roadReady)return Infinity;
+  const t=z-roadOriginZ,d=roadDNA,twopi=Math.PI*2;
+  return roadOriginX+
+    d.macroAmp*(Math.sin(t*twopi/d.macroWave+d.macroPhase)-Math.sin(d.macroPhase))+
+    d.midAmp*(Math.sin(t*twopi/d.midWave+d.midPhase)-Math.sin(d.midPhase))+
+    d.fineAmp*(Math.sin(t*twopi/d.fineWave+d.finePhase)-Math.sin(d.finePhase));
+}
+function roadFrame2D(z){
+  const dz=2,x=roadCenterX(z),dx=(roadCenterX(z+dz)-roadCenterX(z-dz))/(dz*2),inv=1/Math.hypot(dx,1);
+  return {x,dx,sideX:inv,sideZ:-dx*inv};
+}
+function roadDistance(x,z){
+  if(!roadReady)return Infinity;
+  const f=roadFrame2D(z);return Math.abs(x-f.x)/Math.sqrt(1+f.dx*f.dx);
+}
+function roadReserved(x,z,margin=0){return roadReady&&roadDistance(x,z)<=ROAD_CLEAR+margin}
+function worldTerrainWithoutRoad(x,z){return regionalEnabled?regionalNaturalTerrainHeight(x,z):naturalTerrainHeight(x,z)}
+function roadElevation(z){
+  const offsets=[-720,-360,0,360,720],weights=[1,2,3,2,1];let sum=0,total=0;
+  for(let i=0;i<offsets.length;i++){
+    const zz=z+offsets[i],xx=roadCenterX(zz),w=weights[i];
+    sum+=worldTerrainWithoutRoad(xx,zz)*w;total+=w;
+  }
+  let y=sum/total,water=waterLevelAt(roadCenterX(z),z)+1.35;
+  if(y<water+2)y=mix(water,y,smooth(clamp((y-water)/2,0,1)));
+  return y;
+}
+function roadSurfaceY(z,lateral=0){
+  const crown=.075*(1-clamp(Math.abs(lateral)/ROAD_HALF,0,1));
+  return roadElevation(z)+crown;
+}
+function applyInfiniteRoadHeight(x,z,h){
+  if(!roadReady)return h;
+  const f=roadFrame2D(z),lateral=(x-f.x)/Math.sqrt(1+f.dx*f.dx),d=Math.abs(lateral);
+  if(d>=ROAD_BLEND)return h;
+  const target=roadSurfaceY(z,lateral);
+  if(d<=ROAD_SHOULDER)return target;
+  const blend=1-smooth(clamp((d-ROAD_SHOULDER)/(ROAD_BLEND-ROAD_SHOULDER),0,1));
+  return mix(h,target,blend);
+}
+function makeRoadChunk(cx,cz,parent){
+  if(!roadReady)return null;
+  const baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE,verts=[],indices=[],marks=[],markIndices=[];
+  const pushQuad=(arr,inds,a,b,c,d)=>{
+    const n=arr.length/3;for(const p of [a,b,c,d])arr.push(p[0]-baseX,p[1],p[2]-baseZ);inds.push(n,n+1,n+2,n,n+2,n+3);
+  };
+  const start=Math.floor(baseZ/ROAD_MESH_STEP)*ROAD_MESH_STEP-ROAD_MESH_STEP,end=baseZ+CHUNK_SIZE+ROAD_MESH_STEP;
+  let segments=0;
+  for(let z=start;z<end;z+=ROAD_MESH_STEP){
+    const z0=z,z1=z+ROAD_MESH_STEP,zm=(z0+z1)*.5,xm=roadCenterX(zm);
+    if(Math.floor(xm/CHUNK_SIZE)!==cx||Math.floor(zm/CHUNK_SIZE)!==cz)continue;
+    const a=roadFrame2D(z0),b=roadFrame2D(z1),y0=roadSurfaceY(z0),y1=roadSurfaceY(z1);
+    const l0=[a.x-a.sideX*ROAD_HALF,y0+.035,z0-a.sideZ*ROAD_HALF],r0=[a.x+a.sideX*ROAD_HALF,y0+.035,z0+a.sideZ*ROAD_HALF];
+    const l1=[b.x-b.sideX*ROAD_HALF,y1+.035,z1-b.sideZ*ROAD_HALF],r1=[b.x+b.sideX*ROAD_HALF,y1+.035,z1+b.sideZ*ROAD_HALF];
+    pushQuad(verts,indices,l0,r0,r1,l1);segments++;
+    const dash=Math.floor((zm-roadOriginZ)/ROAD_MESH_STEP);
+    if((dash&1)===0){
+      const mw=.10;
+      pushQuad(marks,markIndices,[a.x-a.sideX*mw,y0+.065,z0-a.sideZ*mw],[a.x+a.sideX*mw,y0+.065,z0+a.sideZ*mw],[b.x+b.sideX*mw,y1+.065,z1+b.sideZ*mw],[b.x-b.sideX*mw,y1+.065,z1-b.sideZ*mw]);
+    }
+  }
+  if(!segments)return null;
+  const palette=regionalPaletteAt(baseX+CHUNK_SIZE*.5,baseZ+CHUNK_SIZE*.5);
+  const geo=new T.BufferGeometry();geo.setAttribute("position",new T.Float32BufferAttribute(verts,3));geo.setIndex(indices);geo.computeVertexNormals();
+  const asphalt=new T.MeshStandardMaterial({color:new T.Color(0x24272a).lerp(palette.rock,.13),roughness:.96,metalness:.02});
+  const mesh=new T.Mesh(geo,asphalt);mesh.receiveShadow=true;mesh.renderOrder=2;parent.add(mesh);
+  let marking=null;
+  if(marks.length){
+    const mg=new T.BufferGeometry();mg.setAttribute("position",new T.Float32BufferAttribute(marks,3));mg.setIndex(markIndices);mg.computeVertexNormals();
+    marking=new T.Mesh(mg,new T.MeshStandardMaterial({color:0xe7dec1,roughness:.82,metalness:0}));marking.renderOrder=3;parent.add(marking);
+  }
+  return {mesh,marking,segments};
+}
+function roadDiagnostic(){
+  if(!roadReady)return {grade:0,range:0};
+  let maxGrade=0,minX=Infinity,maxX=-Infinity,prev=null;
+  for(let z=roadOriginZ-1200;z<=roadOriginZ+1200;z+=60){
+    const x=roadCenterX(z),y=roadElevation(z);minX=Math.min(minX,x);maxX=Math.max(maxX,x);
+    if(prev)maxGrade=Math.max(maxGrade,Math.abs(y-prev.y)/(z-prev.z));
+    prev={z,y};
+  }
+  return {grade:maxGrade,range:maxX-minX};
+}
 function applyHomeHeight(x,z,h){
   for(const home of homes){
     const d=Math.max(Math.abs(x-home.x-4)/27,Math.abs(z-home.z)/23),blend=1-smooth(clamp((d-1)/.4,0,1));
@@ -139,7 +237,7 @@ function regionalNaturalTerrainHeight(x,z){
   let h=0;for(const item of context)h+=(rawTerrainHeightFor(item.profile,x,z)+item.profile.heightOffset)*item.weight;
   return h;
 }
-function height(x,z){return applyHomeHeight(x,z,regionalEnabled?regionalNaturalTerrainHeight(x,z):naturalTerrainHeight(x,z))}
+function height(x,z){const base=worldTerrainWithoutRoad(x,z);return applyHomeHeight(x,z,applyInfiniteRoadHeight(x,z,base))}
 function terrainPatch(x,z,radius=10){
   const offsets=[[0,0],[radius,0],[-radius,0],[0,radius],[0,-radius],[radius*.7,radius*.7],[-radius*.7,radius*.7],[radius*.7,-radius*.7],[-radius*.7,-radius*.7]];
   let min=Infinity,max=-Infinity,sum=0,dry=0;
@@ -240,7 +338,7 @@ function treeDensity(x,z,y,base=floraDensity(x,z,y)){
 }
 function ground(x,z){let X=Math.floor(x/CHUNK_STEP)*CHUNK_STEP,Z=Math.floor(z/CHUNK_STEP)*CHUNK_STEP,u=(x-X)/CHUNK_STEP,v=(z-Z)/CHUNK_STEP,A=height(X,Z),B=height(X+CHUNK_STEP,Z),C=height(X,Z+CHUNK_STEP),D=height(X+CHUNK_STEP,Z+CHUNK_STEP);return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
 function disposeTree(root){let gs=new Set,ms=new Set;root.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose())}
-function clear(){regionalEnabled=false;originProfile=null;originFastRadius=0;universeOriginX=universeOriginZ=0;regionProfiles.clear();universeSeed="";universeHash=0;universeSeaLevel=0;stopPlaneEngineAudio();plane=null;planeLookYaw=planeLookPitch=0;mobileThrottleDown=false;mobileBoost=false;setPlaneMobileLabels(false);if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity;faunaAgents=[];faunaCatalog=[];birdAgents=[];birdCatalog=[];faunaStarterPlaced=false;birdStarterPlaced=false}
+function clear(){roadReady=false;roadHash=0;roadOriginX=roadOriginZ=0;roadDNA=null;regionalEnabled=false;originProfile=null;originFastRadius=0;universeOriginX=universeOriginZ=0;regionProfiles.clear();universeSeed="";universeHash=0;universeSeaLevel=0;stopPlaneEngineAudio();plane=null;planeLookYaw=planeLookPitch=0;mobileThrottleDown=false;mobileBoost=false;setPlaneMobileLabels(false);if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity;faunaAgents=[];faunaCatalog=[];birdAgents=[];birdCatalog=[];faunaStarterPlaced=false;birdStarterPlaced=false}
 function instances(g,m,a,parent=scene){if(!a.length){g.dispose();m.dispose();return null;}let o=new T.InstancedMesh(g,m,a.length);a.forEach((v,i)=>{temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);temp.rotation.set(v[6]||0,v[7]||0,v[8]||0);temp.updateMatrix();o.setMatrixAt(i,temp.matrix)});o.instanceMatrix.setUsage(T.StaticDrawUsage);parent.add(o);return o}
 function instancesQ(g,m,a,parent=scene){
   if(!a.length){g.dispose();m.dispose();return;}
@@ -1157,7 +1255,8 @@ function createChunk(cx,cz,detailed){
   }
   geo.setAttribute("normal",new T.BufferAttribute(normals,3));geo.setAttribute("color",new T.BufferAttribute(colors,3));
   const terrain=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));terrain.receiveShadow=true;group.add(terrain);
-  const chunk={key,cx,cz,group,terrain,flora:null,fauna:null,faunaAgents:null,birds:null,birdAgents:null,stats:null};chunks.set(key,chunk);if(detailed)populateChunkFlora(chunk);return chunk;
+  const road=makeRoadChunk(cx,cz,group);
+  const chunk={key,cx,cz,group,terrain,road,flora:null,fauna:null,faunaAgents:null,birds:null,birdAgents:null,stats:null};chunks.set(key,chunk);if(detailed)populateChunkFlora(chunk);return chunk;
 }
 function removeChunk(key){const chunk=chunks.get(key);if(!chunk)return;removeChunkFauna(chunk);removeChunkBirds(chunk);scene.remove(chunk.group);disposeTree(chunk.group);chunks.delete(key)}
 function scheduleChunks(force=false){
@@ -1328,7 +1427,7 @@ function planHomes(spawnX=0,spawnZ=0){
     for(let tries=0;tries<150;tries++){
       const angle=placeR()*Math.PI*2,dist=105+Math.sqrt(placeR())*520;
       const x=spawnX+Math.cos(angle)*dist,z=spawnZ+Math.sin(angle)*dist;
-      if(homes.some(h=>Math.hypot(x-h.x,z-h.z)<120))continue;
+      if(homes.some(h=>Math.hypot(x-h.x,z-h.z)<120)||roadReserved(x,z,24))continue;
       const p=terrainPatch(x,z,18),minClearance=plan.basement?5.2:1.1;
       if(p.min<=G.water+minClearance||p.dry<1)continue;
       const score=p.spread+Math.abs(dist-260)*.003+(noise(x*.0021+73,z*.0021-47)-.5)*.35;
@@ -1339,7 +1438,7 @@ function planHomes(spawnX=0,spawnZ=0){
   }
 }
 function houseReserved(x,z){
-  return homes.some(h=>Math.abs(x-h.x)<34&&Math.abs(z-h.z)<30);
+  return roadReserved(x,z)||homes.some(h=>Math.abs(x-h.x)<34&&Math.abs(z-h.z)<30);
 }
 function buildHomes(){
   buildingSolids=[];
@@ -1785,7 +1884,7 @@ const rockHigh=rock.clone().offsetHSL(terrainStops[2]*.72,terrainHighSat*.45,ter
 const altitudeBase=G.water+.8,altitudeSpan=clamp(12+G.relief*(.28+terrainR()*.2),16,58),altitudeWarp=2.5+terrainR()*(4+G.relief*.045),altitudeMid=.36+terrainR()*.28;
 scene=new T.Scene;scene.background=sky;scene.fog=new T.Fog(horizon,G.fogNear,G.fogFar);let hemi=new T.HemisphereLight(horizon,land,.9),light=new T.DirectionalLight(col(G.hue+.42,.3,.9),2);scene.add(hemi,light);
 worldPalette={land,rock,leaf,accent,landLow,landMid,landHigh,rockLow,rockMid,rockHigh,altitudeBase,altitudeSpan,altitudeWarp,altitudeMid};floraCatalog=makeFloraCatalog();faunaCatalog=makeFaunaCatalog();birdCatalog=makeBirdCatalog();
-const spawn=findNaturalSpawn();cam.position.set(...spawn);yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();planHomes(spawn[0],spawn[2]);
+const spawn=findNaturalSpawn();cam.position.set(...spawn);initInfiniteRoad(G.hash,spawn[0],spawn[2]);cam.position.y=height(spawn[0],spawn[2])+1.75;yaw=0;pitch=-.05;jump=0;grounded=true;keys.clear();planHomes(spawn[0],spawn[2]);
 let sites=[],stone=mat(rock.clone().lerp(land,.2)),rare=mat(accent,.15);for(let tries=0;tries<120&&sites.length<3+Math.floor(rnd()*3);tries++){let x=cam.position.x+(rnd()-.5)*620,z=cam.position.z+(rnd()-.5)*620,y=ground(x,z);if(houseReserved(x,z)||y<G.water+2||Math.hypot(x-cam.position.x,z-cam.position.z)<55||sites.some(p=>Math.hypot(x-p[0],z-p[1])<100))continue;let d=Math.max(Math.abs(ground(x+12,z)-y),Math.abs(ground(x-12,z)-y),Math.abs(ground(x,z+12)-y),Math.abs(ground(x,z-12)-y));if(d<6){sites.push([x,z]);ruin(x,z,Math.floor(rnd()*4),stone,rare)}}
 buildHomes();createPlane(sites);
 let wg=new T.PlaneGeometry((TERRAIN_RADIUS*2+2)*CHUNK_SIZE,(TERRAIN_RADIUS*2+2)*CHUNK_SIZE);wg.rotateX(-Math.PI/2);water=new T.Mesh(wg,new T.MeshStandardMaterial({color:col(G.hue+.08,.5,.3),metalness:.35,roughness:.2,transparent:true,opacity:.86}));water.position.set(cam.position.x,G.water,cam.position.z);scene.add(water);
@@ -1797,7 +1896,9 @@ else if(cold>.58&&weatherRoll<.18+cold*.52)wt="snow";
 else if(G.wet>.55&&weatherRoll<.38+G.wet*.45+dna.volatility*.12)wt="rain";
 else wt="spores";
 weather=makeWeather(wt,wt==="spores"?accent:wt==="rain"?new T.Color(0x72c7ff):horizon);document.body.dataset.generationStage="weather";celestial={age:0,start:.15+rnd()*.65,length:600+rnd()*600,hemi,light,sun,sky:sky.clone(),horizon:horizon.clone(),fogNear:scene.fog.near,fogFar:scene.fog.far};celestial.nightSky=makeNightSky();
-let flora=[...chunks.values()].reduce((a,c)=>(a.plants+=c.stats?.plants||0,a.mushrooms+=c.stats?.mushrooms||0,a.grass+=c.stats?.grass||0,a.animals+=c.stats?.animals||0,a.birds+=c.stats?.birds||0,a),{plants:0,mushrooms:0,grass:0,animals:0,birds:0});document.body.dataset.grassInstances=String(flora.grass);document.body.dataset.grassCover=G.grass.cover.toFixed(3);document.body.dataset.fogNear=G.fogNear.toFixed(1);document.body.dataset.fogFar=G.fogFar.toFixed(1);document.body.dataset.fogMoisture=G.fogMoisture.toFixed(3);let generations=[...new Set(floraCatalog.map(s=>s.iterations))].sort().join(","),names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};document.body.dataset.generationStage="complete";$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · бескрайний · "+wx[wt]+": "+weather.count+" частиц · рядом: "+flora.plants+" растений, "+floraCatalog.length+" форм, поколения "+generations+" · грибы: "+flora.mushrooms+" · фауна: "+flora.animals+" / "+faunaCatalog.length+" видов · птицы: "+flora.birds+" / "+birdCatalog.length+" видов · руины: "+sites.length+" · строения: "+homes.length;if(audio)audio.filter.frequency.value=250+G.slender*900}
+let flora=[...chunks.values()].reduce((a,c)=>(a.plants+=c.stats?.plants||0,a.mushrooms+=c.stats?.mushrooms||0,a.grass+=c.stats?.grass||0,a.animals+=c.stats?.animals||0,a.birds+=c.stats?.birds||0,a),{plants:0,mushrooms:0,grass:0,animals:0,birds:0});
+const roadStats=roadDiagnostic(),roadSegments=[...chunks.values()].reduce((n,ch)=>n+(ch.road?.segments||0),0);document.body.dataset.roadSegments=String(roadSegments);document.body.dataset.roadMaxGrade=roadStats.grade.toFixed(4);document.body.dataset.roadLateralRange=roadStats.range.toFixed(1);
+document.body.dataset.grassInstances=String(flora.grass);document.body.dataset.grassCover=G.grass.cover.toFixed(3);document.body.dataset.fogNear=G.fogNear.toFixed(1);document.body.dataset.fogFar=G.fogFar.toFixed(1);document.body.dataset.fogMoisture=G.fogMoisture.toFixed(3);let generations=[...new Set(floraCatalog.map(s=>s.iterations))].sort().join(","),names=["Рассыпанные острова","Каменные ступени","Складки горизонта","Чаши тишины","Дыхание песка","Затопленные сады"],wx={rain:"дождь",snow:"снег",dust:"пыльный ветер",spores:"светящиеся споры"};document.body.dataset.generationStage="complete";$("#seed").value=seed;$("#name").textContent=names[kind];$("#info").textContent="Мир "+seed+" · бескрайний · "+wx[wt]+": "+weather.count+" частиц · рядом: "+flora.plants+" растений, "+floraCatalog.length+" форм, поколения "+generations+" · грибы: "+flora.mushrooms+" · фауна: "+flora.animals+" / "+faunaCatalog.length+" видов · птицы: "+flora.birds+" / "+birdCatalog.length+" видов · руины: "+sites.length+" · строения: "+homes.length+" · дорога: бесконечная";if(audio)audio.filter.frequency.value=250+G.slender*900}
 
 function waterLevelAt(x=0,z=0){return regionalEnabled?universeSeaLevel:G.water}
 function withWorldProfile(profile,fn){
