@@ -340,7 +340,7 @@ for(const legacyPattern of [
   if(current.includes(legacyPattern))fail("legacy path-based placement returned: "+legacyPattern);
 }
 
-if(!current.includes("centerY<=waterLevelAt(x,z)+.85"))fail("spawn center is not required to be dry");
+if(!current.includes("centerY<=(regionalEnabled?universeSeaLevel:G.water)+.85"))fail("spawn center is not required to be dry");
 if(!current.includes("G.water=Math.min(G.water,anchor.y-1.15)"))fail("absolute land guard is missing");
 
 if(!current.includes("smooth(clamp((30-G.relief)/24,0,1))"))fail("flat-world relief gate is missing");
