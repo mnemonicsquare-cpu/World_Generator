@@ -41,6 +41,16 @@ jobs:
               cat "$log"
               exit 1
             fi
+            grass="$(grep -o 'data-grass-instances="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
+            cover="$(grep -o 'data-grass-cover="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            if [[ -z "$grass" || -z "$cover" ]]; then
+              echo "Grass diagnostics were not emitted for ${seed}"
+              exit 1
+            fi
+            if [[ "$seed" == "release-smoke-2" && "$grass" -le 0 ]]; then
+              echo "Dense grass smoke seed generated no visible grass"
+              exit 1
+            fi
             if grep -Eiq 'THREE\.WebGLProgram: Shader Error|VALIDATE_STATUS false|ERROR: [0-9]+:' "$log"; then
               echo "WebGL shader failure detected for ${seed}"
               cat "$log"
