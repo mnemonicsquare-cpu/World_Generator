@@ -2190,7 +2190,9 @@ function resizeView(){
   cam.aspect=w/h;cam.updateProjectionMatrix();rend.setSize(w,h);
 }
 addEventListener("resize",resizeView);visualViewport?.addEventListener("resize",resizeView);screen.orientation?.addEventListener("change",()=>setTimeout(resizeView,120));resizeView();generate(new URLSearchParams(location.search).get("seed")||fresh());
+let renderedFrames=0;
 rend.setAnimationLoop(()=>{
+  document.body.dataset.frameStage="start";
   const dt=Math.min(clock.getDelta(),.05),f=+keys.has("KeyW")-+keys.has("KeyS")+mobileForward,s=+keys.has("KeyD")-+keys.has("KeyA")+mobileSide;
   if(plane?.occupied){
     updatePlane(dt);updatePlaneCamera();
@@ -2203,6 +2205,6 @@ rend.setAnimationLoop(()=>{
     for(let i=0;i<steps;i++)walkFrame(dt/steps,dx/steps,dz/steps);
     updatePlane(dt);cam.rotation.set(pitch,yaw,0);cam.fov=mix(cam.fov,boosting()&&Math.hypot(f,s)?79:66,1-Math.exp(-dt*8));
   }
-  cam.updateProjectionMatrix();updatePlaneInteractionUI();updateChunks();updateFauna(dt);updateBirds(dt);update(dt);updateSoundscape(dt);rend.render(scene,cam);
+  cam.updateProjectionMatrix();updatePlaneInteractionUI();document.body.dataset.frameStage="before-chunks";updateChunks();document.body.dataset.frameStage="after-chunks";updateFauna(dt);updateBirds(dt);update(dt);document.body.dataset.frameStage="after-update";updateSoundscape(dt);rend.render(scene,cam);renderedFrames++;document.body.dataset.frameStage="rendered";document.body.dataset.renderedFrames=String(renderedFrames);
 });
 </script><!-- atmosphere-sky-fog-experiment --></body></html>
