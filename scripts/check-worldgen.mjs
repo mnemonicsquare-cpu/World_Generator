@@ -176,6 +176,7 @@ if(!(treePos>=0&&windPos>treePos&&groundPos>windPos&&grassPos>groundPos))fail("f
 const grassRenderSection=section(current,"function makeGrassGeometry(width=G.grass.width){","function populateChunkFlora(chunk){");
 if(grassRenderSection.includes("buildingSolids.push")||grassRenderSection.includes("collision")||grassRenderSection.includes("collider"))fail("grass unexpectedly participates in collision logic");
 if(!grassRenderSection.includes("new T.InstancedMesh")||!grassRenderSection.includes("InstancedBufferAttribute"))fail("grass is not using the required instanced GPU path");
+if(!grassRenderSection.includes("new T.MeshLambertMaterial"))fail("grass material is no longer using the lightweight lit path");
 if(!grassRenderSection.includes("LOW_POWER?900:2200"))fail("grass instance safety caps are missing");
 if(!grassRenderSection.includes("makeGrassGeometry(g.width)"))fail("Grass DNA width is not applied to geometry");
 if(!grassRenderSection.includes("positions=[],blades=9,golden=2.399963229728653"))fail("grass blade geometry complexity changed unexpectedly");
