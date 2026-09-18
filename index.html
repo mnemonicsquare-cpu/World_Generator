@@ -43,12 +43,22 @@ function naturalMountainShape(x,z){
   return(broad-.46)*G.relief*.5+ridge*envelope*G.relief*.46;
 }
 function terrainShape(k,x,z){return k===2?naturalMountainShape(x,z):shape(k,x,z)}
+function plainsMacroRelief(x,z){
+  const p=G.plains;if(!p||p.strength<=.001)return 0;
+  const c=Math.cos(p.angle),s=Math.sin(p.angle),u=x*c-z*s,v=x*s+z*c;
+  const warp=(noise(x*p.warpScale+p.phaseX,z*p.warpScale-p.phaseZ)-.5)*p.warp;
+  const broad=(fbm((u+warp)*p.macroScale+p.phaseX,(v-warp*.55)*p.macroScale-p.phaseZ,3)-.5)*2;
+  const rolls=(fbm((u-warp*.28)*p.rollScale-p.phaseZ,(v+warp*.2)*p.rollScale+p.phaseX,3)-.5)*2;
+  const basin=(fbm(x*p.basinScale+173,z*p.basinScale-241,2)-.5)*2;
+  return (broad*p.macroAmp+rolls*p.rollAmp+basin*p.basinAmp)*p.strength;
+}
 function baseHeight(x,z){
   const rawRegion=fbm(x*G.regionScale+130,z*G.regionScale-80);
   const region=smooth(clamp((rawRegion-(.5-G.regionWidth))/(G.regionWidth*2),0,1))*G.regionStrength;
   let h=mix(terrainShape(G.kind,x,z),terrainShape(G.second,x,z),region);
   const reliefField=fbm(x*.0027-91,z*.0027+147);
-  return h*mix(1,.34+reliefField*1.32,G.terrainVariation);
+  h*=mix(1,.34+reliefField*1.32,G.terrainVariation);
+  return h+plainsMacroRelief(x,z);
 }
 function basinField(x,z){
   const g=G.geology,cell=g.basinCell,cx=Math.floor(x/cell),cz=Math.floor(z/cell);let field=0;
@@ -1420,6 +1430,13 @@ terrainVariation:Math.pow(rnd(),1.15),roughness:.08+Math.pow(rnd(),1.3)*3.1,path
 forestCover:Math.pow(coverSeed,.72),forestPatchiness:rnd(),forestScale:.0018+rnd()*.008,
 forestContrast:.25+rnd()*1.75};G.water=(kind===0?2:kind===5?6:-8)+G.wet*5;
 G.legacyPath=G.path;G.path=1e12;
+const plainsR=rng(G.hash^0x4c31a95),plainsStrength=smooth(clamp((30-G.relief)/24,0,1));
+G.plains={
+  strength:plainsStrength,angle:plainsR()*Math.PI*2,phaseX:plainsR()*700,phaseZ:plainsR()*700,
+  macroScale:.00055+plainsR()*.00035,rollScale:.00125+plainsR()*.0007,basinScale:.00036+plainsR()*.00024,
+  warpScale:.00065+plainsR()*.00045,warp:35+plainsR()*70,
+  macroAmp:4.5+plainsR()*3.2,rollAmp:1.8+plainsR()*2.4,basinAmp:1.5+plainsR()*2.2
+};
 const geoR=rng(G.hash^0x5f3759df),geoDominant=Math.floor(geoR()*4),geoStrengths=[Math.pow(geoR(),2.6),Math.pow(geoR(),2.6),Math.pow(geoR(),2.6),Math.pow(geoR(),2.6)];
 geoStrengths[geoDominant]=Math.max(geoStrengths[geoDominant],.62+geoR()*.34);
 if(geoR()<.14){for(let i=0;i<geoStrengths.length;i++)geoStrengths[i]*=.5;geoStrengths[geoDominant]=Math.max(geoStrengths[geoDominant],.36);}
