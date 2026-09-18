@@ -72,11 +72,14 @@ jobs:
             road_grade="$(grep -o 'data-road-max-grade="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             road_range="$(grep -o 'data-road-lateral-range="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             road_radius="$(grep -o 'data-road-min-radius="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
-            if [[ -z "$road_segments" || "$road_segments" -le 0 || -z "$road_grade" || -z "$road_range" || -z "$road_radius" ]]; then
-              echo "Infinite-road diagnostics were not emitted or no startup road was generated for ${seed}"
+            road_far_grade="$(grep -o 'data-road-far-grade="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            road_far_ok="$(grep -o 'data-road-far-ok="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            if [[ -z "$road_segments" || "$road_segments" -le 0 || -z "$road_grade" || -z "$road_range" || -z "$road_radius" || -z "$road_far_grade" || "$road_far_ok" != "1" ]]; then
+              echo "Infinite-road diagnostics were not emitted or no valid cross-world road was generated for ${seed}"
               exit 1
             fi
             awk -v g="$road_grade" 'BEGIN{if(g>0.10)exit 1}' || { echo "Road grade too steep for ${seed}: $road_grade"; exit 1; }
+            awk -v g="$road_far_grade" 'BEGIN{if(g>0.10)exit 1}' || { echo "Cross-world road grade too steep for ${seed}: $road_far_grade"; exit 1; }
             awk -v r="$road_range" 'BEGIN{if(r<120)exit 1}' || { echo "Road is too straight for ${seed}: lateral range=$road_range"; exit 1; }
             awk -v r="$road_radius" 'BEGIN{if(r<32)exit 1}' || { echo "Road turn radius too tight for ${seed}: $road_radius m"; exit 1; }
             fog_near="$(grep -o 'data-fog-near="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
