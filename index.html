@@ -1932,6 +1932,7 @@ function buildDetailedCarModel(bytes){
   const group=new T.Group(),bodyRecord=records.get(0),wheelRecord=records.get(1),bodyPos=bodyRecord.geometry.getAttribute("position"),bodyIndex=bodyRecord.geometry.index;
   const bodyBox=bodyRecord.geometry.boundingBox,width=Math.max(.001,bodyBox.max.x-bodyBox.min.x),height=Math.max(.001,bodyBox.max.y-bodyBox.min.y),depth=Math.max(.001,bodyBox.max.z-bodyBox.min.z),bodyCX=(bodyBox.min.x+bodyBox.max.x)*.5;
   const cabinMaterials=[],headlightMaterials=[],tailLightMaterials=[],headlightCenters=[],tailLightCenters=[];
+  const headlightSideSum=[{x:0,y:0,z:0,n:0},{x:0,y:0,z:0,n:0}];
   const materialUsage=Array(materialCount).fill(0);let bodyIndexTotal=0;
   for(const g of bodyRecord.groups){materialUsage[g.materialIndex]+=g.count;bodyIndexTotal+=g.count;}
   let cabinGlassGroups=0,headlightGroups=0,tailLightGroups=0;
@@ -1946,8 +1947,8 @@ function buildDetailedCarModel(bytes){
   function roleMaterial(base,role){
     const m=base.clone();m.transparent=false;m.opacity=1;m.depthWrite=true;m.side=T.DoubleSide;
     if(role==="cabin"){m.color.setHex(0x050607);m.metalness=.035;m.roughness=.34;m.emissive.setHex(0x000000);m.emissiveIntensity=0;}
-    if(role==="head"){m.color.setHex(0xffc84a);m.metalness=.02;m.roughness=.24;m.emissive.setHex(0xffb52e);m.emissiveIntensity=.18;}
-    if(role==="tail"){m.color.setHex(0xb91912);m.metalness=.01;m.roughness=.3;m.emissive.setHex(0xff2a18);m.emissiveIntensity=0;}
+    if(role==="head"){m.color.setHex(0x7a8083);m.metalness=.025;m.roughness=.34;m.emissive.setHex(0xffb52e);m.emissiveIntensity=0;}
+    if(role==="tail"){m.color.setHex(0x560807);m.metalness=.01;m.roughness=.34;m.emissive.setHex(0xff0000);m.emissiveIntensity=0;}
     return m;
   }
   bodyRecord.groups.forEach((g,gi)=>{
@@ -1964,8 +1965,13 @@ function buildDetailedCarModel(bytes){
     const m=roleMaterial(materials[g.materialIndex],role),mi=materials.push(m)-1;bodyRecord.geometry.groups[gi].materialIndex=mi;
     const center=new T.Vector3(b.cx+bodyRecord.translation.x,b.cy+bodyRecord.translation.y,b.cz+bodyRecord.translation.z);
     if(role==="cabin"){cabinGlassGroups++;cabinMaterials.push(m);}
-    else if(role==="head"){headlightGroups++;headlightMaterials.push(m);headlightCenters.push(center);}
-    else {tailLightGroups++;tailLightMaterials.push(m);tailLightCenters.push(center);}
+    else if(role==="head"){
+      headlightGroups++;headlightMaterials.push(m);headlightCenters.push(center);
+      for(let i=g.start;i<g.start+g.count;i++){
+        const vi=bodyIndex.getX(i),x=bodyPos.getX(vi),side=x<bodyCX?0:1,s=headlightSideSum[side];
+        s.x+=x+bodyRecord.translation.x;s.y+=bodyPos.getY(vi)+bodyRecord.translation.y;s.z+=bodyPos.getZ(vi)+bodyRecord.translation.z;s.n++;
+      }
+    }else {tailLightGroups++;tailLightMaterials.push(m);tailLightCenters.push(center);}
   });
   if(!cabinGlassGroups||!headlightGroups||!tailLightGroups)throw new Error(`CAR2 native groups missing head=${headlightGroups} tail=${tailLightGroups} cabin=${cabinGlassGroups}`);
   const averageCenter=(list,fallback)=>{
@@ -1973,6 +1979,7 @@ function buildDetailedCarModel(bytes){
   };
   const frontCenter=averageCenter(headlightCenters,new T.Vector3(bodyCX,bodyBox.min.y+height*.35,bodyBox.min.z));
   const rearCenter=averageCenter(tailLightCenters,new T.Vector3(bodyCX,bodyBox.min.y+height*.35,bodyBox.max.z));
+  const headlightBeamCenters=headlightSideSum.map((s,i)=>s.n?new T.Vector3(s.x/s.n,s.y/s.n,s.z/s.n):new T.Vector3(bodyCX+(i?1:-1)*width*.28,frontCenter.y,frontCenter.z));
   const wheelMaterials=materials.slice(0,materialCount).map(m=>m.clone()),wheelPos=wheelRecord.geometry.getAttribute("position"),wheelIndex=wheelRecord.geometry.index;
   let tireMaterialIndex=-1,tireScore=-Infinity;
   for(const g of wheelRecord.groups){
@@ -1993,9 +2000,13 @@ function buildDetailedCarModel(bytes){
   for(const w of wheelTransforms)sourceWheelBottom=Math.min(sourceWheelBottom,w.y+wheelRecord.geometry.boundingBox.min.y*Math.abs(w.scale));
   const visualLift=clamp(.02-sourceWheelBottom,-.35,.9);
   const body=new T.Mesh(bodyRecord.geometry,materials);body.position.copy(bodyRecord.translation);body.position.y+=visualLift;group.add(body);
-  frontCenter.y+=visualLift;rearCenter.y+=visualLift;
-  const headlightSpot=new T.SpotLight(0xffd36a,0,48,.34,.62,1.5);headlightSpot.position.copy(frontCenter);headlightSpot.castShadow=false;group.add(headlightSpot);
-  const headlightTarget=new T.Object3D();headlightTarget.position.set(frontCenter.x,frontCenter.y-1.1,frontCenter.z-25);group.add(headlightTarget);headlightSpot.target=headlightTarget;
+  frontCenter.y+=visualLift;rearCenter.y+=visualLift;for(const p of headlightBeamCenters)p.y+=visualLift;
+  const headlightSpots=[];
+  for(let i=0;i<2;i++){
+    const origin=headlightBeamCenters[i],side=i?1:-1;
+    const spot=new T.SpotLight(0xffd36a,0,44,.235,.42,1.55);spot.position.copy(origin);spot.castShadow=false;group.add(spot);
+    const target=new T.Object3D();target.position.set(origin.x+side*.18,origin.y-1.05,origin.z-26);group.add(target);spot.target=target;headlightSpots.push(spot);
+  }
   const wheels=[],frontPivots=[];
   for(let i=0;i<wheelTransforms.length;i++){
     const w=wheelTransforms[i],pivot=new T.Group();pivot.position.set(w.x,w.y+visualLift,w.z);group.add(pivot);
@@ -2008,7 +2019,8 @@ function buildDetailedCarModel(bytes){
   return {
     group,wheels,frontPivots,detailed:true,vertexTotal:bodyRecord.vertexCount+wheelRecord.vertexCount*4,
     tireMaterialIndex,tireBlack,glassOpaque,glassCount:cabinGlassGroups,visualLift,wheelLocalBottom:sourceWheelBottom+visualLift,
-    headlightMaterials,tailLightMaterials,headlightSpot,headlightGroups,tailLightGroups,cabinGlassGroups,frontLightZ:frontCenter.z,rearLightZ:rearCenter.z
+    headlightMaterials,tailLightMaterials,headlightSpots,headlightGroups,tailLightGroups,cabinGlassGroups,
+    headlightBeamSeparation:Math.abs(headlightBeamCenters[1].x-headlightBeamCenters[0].x),frontLightZ:frontCenter.z,rearLightZ:rearCenter.z
   };
 }
 async function upgradeCarModel(targetCar){
@@ -2018,13 +2030,14 @@ async function upgradeCarModel(targetCar){
     if(!car||car!==targetCar){disposeTree(detailed.group);return}
     for(const child of [...targetCar.group.children]){targetCar.group.remove(child);disposeTree(child)}
     while(detailed.group.children.length)targetCar.group.add(detailed.group.children[0]);
-    targetCar.wheels=detailed.wheels;targetCar.frontPivots=detailed.frontPivots;targetCar.headlightMaterials=detailed.headlightMaterials;targetCar.tailLightMaterials=detailed.tailLightMaterials;targetCar.headlightSpot=detailed.headlightSpot;targetCar.modelDetailed=true;
+    targetCar.wheels=detailed.wheels;targetCar.frontPivots=detailed.frontPivots;targetCar.headlightMaterials=detailed.headlightMaterials;targetCar.tailLightMaterials=detailed.tailLightMaterials;targetCar.headlightSpots=detailed.headlightSpots;targetCar.modelDetailed=true;
     document.body.dataset.carModel="detailed";document.body.dataset.carDetailedVerts=String(detailed.vertexTotal);
     document.body.dataset.carTireBlack=detailed.tireBlack?"1":"0";document.body.dataset.carGlassOpaque=detailed.glassOpaque?"1":"0";
     document.body.dataset.carGlassCount=String(detailed.glassCount);document.body.dataset.carWheelLocalBottom=detailed.wheelLocalBottom.toFixed(4);
     document.body.dataset.carVisualLift=detailed.visualLift.toFixed(4);
     document.body.dataset.carNativeHeadlightGroups=String(detailed.headlightGroups);document.body.dataset.carNativeTailGroups=String(detailed.tailLightGroups);document.body.dataset.carNativeCabinGlassGroups=String(detailed.cabinGlassGroups);
     document.body.dataset.carNativeFrontZ=detailed.frontLightZ.toFixed(4);document.body.dataset.carNativeRearZ=detailed.rearLightZ.toFixed(4);
+    document.body.dataset.carHeadlightBeamSeparation=detailed.headlightBeamSeparation.toFixed(4);
     const roadTop=roadSurfaceY(targetCar.group.position.z,0)+ROAD_VISUAL_LIFT;
     document.body.dataset.carWheelRoadClearance=(targetCar.group.position.y+detailed.wheelLocalBottom-roadTop).toFixed(4);carLightSmokeDiagnostic();
   }catch(error){
@@ -2044,8 +2057,8 @@ function makeFallbackCarModel(){
   const chromeMat=new T.MeshStandardMaterial({color:chrome,roughness:.18,metalness:.78});
   const rubberMat=new T.MeshStandardMaterial({color:rubber,roughness:.9,metalness:.02});
   const glassMat=new T.MeshStandardMaterial({color:0x050607,roughness:.34,metalness:.035,transparent:false,opacity:1});
-  const lampMat=new T.MeshStandardMaterial({color:0xffc84a,emissive:0xffb52e,emissiveIntensity:.18,roughness:.24});
-  const tailMat=new T.MeshStandardMaterial({color:0xb91912,emissive:0xff2a18,emissiveIntensity:0,roughness:.3});
+  const lampMat=new T.MeshStandardMaterial({color:0x7a8083,emissive:0xffb52e,emissiveIntensity:0,roughness:.34,metalness:.025});
+  const tailMat=new T.MeshStandardMaterial({color:0x560807,emissive:0xff0000,emissiveIntensity:0,roughness:.34,metalness:.01});
   const amberMat=new T.MeshStandardMaterial({color:0xe28b22,emissive:0x8f4508,emissiveIntensity:.15,roughness:.34});
   function part(g,m,x,y,z,sx=1,sy=1,sz=1,rx=0,ry=0,rz=0,parent=group){
     const o=new T.Mesh(g,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);o.rotation.set(rx,ry,rz);parent.add(o);return o;
@@ -2085,23 +2098,36 @@ function makeFallbackCarModel(){
     part(hubGeo,chromeMat,0,0,0,1,1,1,0,0,0,pivot);
     wheels.push(wheel);if(z<0)frontPivots.push(pivot);
   }
-  const headlightSpot=new T.SpotLight(0xffd36a,0,48,.34,.62,1.5);headlightSpot.position.set(0,.76,-1.98);headlightSpot.castShadow=false;group.add(headlightSpot);
-  const headlightTarget=new T.Object3D();headlightTarget.position.set(0,-.3,-25);group.add(headlightTarget);headlightSpot.target=headlightTarget;
-  return {group,wheels,frontPivots,headlightMaterials:[lampMat],tailLightMaterials:[tailMat],headlightSpot};
+  const headlightSpots=[];
+  for(const side of[-1,1]){
+    const spot=new T.SpotLight(0xffd36a,0,44,.235,.42,1.55);spot.position.set(side*.63,.76,-1.98);spot.castShadow=false;group.add(spot);
+    const target=new T.Object3D();target.position.set(side*.81,-.29,-27);group.add(target);spot.target=target;headlightSpots.push(spot);
+  }
+  return {group,wheels,frontPivots,headlightMaterials:[lampMat],tailLightMaterials:[tailMat],headlightSpots};
 }
+const carHeadlightOffColor=new T.Color(0x7a8083),carHeadlightOnColor=new T.Color(0xffc84a);
 function updateCarLights(day=1){
   if(!car)return;
   const night=smooth(clamp((.42-day)/.42,0,1)),reverse=!!(car.engineOn&&car.reverseActive);
-  for(const m of car.headlightMaterials||[])m.emissiveIntensity=.18+night*3.8;
-  if(car.headlightSpot){car.headlightSpot.intensity=night*155;car.headlightSpot.visible=night>.01;}
-  for(const m of car.tailLightMaterials||[])m.emissiveIntensity=reverse?3.3:0;
+  for(const m of car.headlightMaterials||[]){
+    m.color.copy(carHeadlightOffColor).lerp(carHeadlightOnColor,night);
+    m.emissive.setHex(0xffb52e);m.emissiveIntensity=night*3.65;
+  }
+  for(const spot of car.headlightSpots||[]){spot.intensity=night*82;spot.visible=night>.01;}
+  for(const m of car.tailLightMaterials||[]){
+    m.color.setHex(reverse?0xa20a07:0x560807);m.emissive.setHex(0xff0000);m.emissiveIntensity=reverse?1.65:0;
+  }
 }
 function carLightSmokeDiagnostic(){
   if(!SMOKE_TEST||!car?.headlightMaterials?.length||!car?.tailLightMaterials?.length)return;
-  const engineOn=car.engineOn,reverseActive=car.reverseActive;car.engineOn=true;car.reverseActive=true;updateCarLights(0);
+  const engineOn=car.engineOn,reverseActive=car.reverseActive;car.engineOn=true;car.reverseActive=false;updateCarLights(1);
+  document.body.dataset.carHeadlightOffGray=car.headlightMaterials.every(m=>m.color.getHex()===0x7a8083&&m.emissiveIntensity===0)?"1":"0";
+  car.reverseActive=true;updateCarLights(0);
   document.body.dataset.carHeadlightYellow=car.headlightMaterials.every(m=>m.color.getHex()===0xffc84a)?"1":"0";
-  document.body.dataset.carHeadlightNight=(car.headlightSpot?.intensity||0)>120&&car.headlightMaterials.every(m=>m.emissiveIntensity>3)?"1":"0";
-  document.body.dataset.carReverseLight=car.tailLightMaterials.every(m=>m.emissiveIntensity>3)?"1":"0";
+  document.body.dataset.carHeadlightNight=(car.headlightSpots?.length===2&&car.headlightSpots.every(s=>s.intensity>70)&&car.headlightMaterials.every(m=>m.emissiveIntensity>3))?"1":"0";
+  document.body.dataset.carHeadlightBeams=String(car.headlightSpots?.length||0);
+  document.body.dataset.carReverseLight=car.tailLightMaterials.every(m=>m.emissiveIntensity>1.5)?"1":"0";
+  document.body.dataset.carReverseRed=car.tailLightMaterials.every(m=>m.color.getHex()===0xa20a07&&m.emissive.getHex()===0xff0000)?"1":"0";
   document.body.dataset.carLightGeometryAdded="0";
   car.engineOn=engineOn;car.reverseActive=reverseActive;updateCarLights(1);
 }
@@ -2138,7 +2164,7 @@ function createCar(){
   const z=roadOriginZ-13,f=roadFrame2D(z),lateral=2.15,x=f.x+f.sideX*lateral,yaw=Math.atan(f.dx),model=makeFallbackCarModel();
   scene.add(model.group);
   const pose=carGroundPose(x,z,yaw);
-  car={group:model.group,wheels:model.wheels,frontPivots:model.frontPivots,headlightMaterials:model.headlightMaterials,tailLightMaterials:model.tailLightMaterials,headlightSpot:model.headlightSpot,yaw,pitch:pose.pitch,roll:pose.roll,speed:0,steer:0,occupied:false,engineOn:false,reverseActive:false,modelDetailed:false};
+  car={group:model.group,wheels:model.wheels,frontPivots:model.frontPivots,headlightMaterials:model.headlightMaterials,tailLightMaterials:model.tailLightMaterials,headlightSpots:model.headlightSpots,yaw,pitch:pose.pitch,roll:pose.roll,speed:0,steer:0,occupied:false,engineOn:false,reverseActive:false,modelDetailed:false};
   car.group.position.set(x,pose.y,z);car.group.rotation.set(pose.pitch,yaw,pose.roll);
   upgradeCarModel(car);
 }
