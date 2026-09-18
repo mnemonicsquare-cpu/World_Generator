@@ -1965,7 +1965,7 @@ function buildDetailedCarModel(bytes){
     else if(role==="head"){headlightGroups++;headlightMaterials.push(m);headlightCenters.push(center);}
     else {tailLightGroups++;tailLightMaterials.push(m);tailLightCenters.push(center);}
   });
-  if(!cabinGlassGroups||!headlightGroups||!tailLightGroups)throw new Error("CAR2 native light/glass groups could not be identified");
+  if(!cabinGlassGroups||!headlightGroups||!tailLightGroups)throw new Error(`CAR2 native groups missing head=${headlightGroups} tail=${tailLightGroups} cabin=${cabinGlassGroups}`);
   const averageCenter=(list,fallback)=>{
     if(!list.length)return fallback.clone();const out=new T.Vector3();for(const p of list)out.add(p);return out.multiplyScalar(1/list.length);
   };
