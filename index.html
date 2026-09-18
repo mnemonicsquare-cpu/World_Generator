@@ -132,8 +132,9 @@ function legacyNaturalTerrainHeight(x,z){
 }
 function naturalTerrainHeight(x,z){
   if(!regionalEnabled)return legacyNaturalTerrainHeight(x,z);
-  const context=worldBlendAt(x,z);let h=0;
-  for(const item of context)h+=(rawTerrainHeightFor(item.profile,x,z)+item.profile.heightOffset)*item.weight;
+  const context=worldBlendAt(x,z);
+  if(context.length===1&&context[0].profile===originProfile)return legacyNaturalTerrainHeight(x,z);
+  let h=0;for(const item of context)h+=(rawTerrainHeightFor(item.profile,x,z)+item.profile.heightOffset)*item.weight;
   return h;
 }
 function height(x,z){return applyHomeHeight(x,z,naturalTerrainHeight(x,z))}
@@ -220,7 +221,8 @@ function treeDensitySingle(x,z,y,base=floraDensitySingle(x,z,y)){
 }
 function floraDensity(x,z,y){
   if(!regionalEnabled)return floraDensitySingle(x,z,y);
-  let value=0;for(const item of worldBlendAt(x,z))value+=withWorldProfile(item.profile,()=>floraDensitySingle(x,z,y))*item.weight;return value;
+  const context=worldBlendAt(x,z);if(context.length===1&&context[0].profile===originProfile)return floraDensitySingle(x,z,y);
+  let value=0;for(const item of context)value+=withWorldProfile(item.profile,()=>floraDensitySingle(x,z,y))*item.weight;return value;
 }
 function groveField(x,z){
   if(!regionalEnabled)return groveFieldSingle(x,z);
@@ -228,7 +230,8 @@ function groveField(x,z){
 }
 function treeDensity(x,z,y,base=floraDensity(x,z,y)){
   if(!regionalEnabled)return treeDensitySingle(x,z,y,base);
-  let value=0;for(const item of worldBlendAt(x,z)){
+  const context=worldBlendAt(x,z);if(context.length===1&&context[0].profile===originProfile)return treeDensitySingle(x,z,y,base);
+  let value=0;for(const item of context){
     const local=withWorldProfile(item.profile,()=>treeDensitySingle(x,z,y,floraDensitySingle(x,z,y)));
     value+=local*item.weight;
   }return value;
@@ -1915,19 +1918,22 @@ function blendColor(context,key,source="palette"){
 }
 function regionalPaletteAt(x,z){
   if(!regionalEnabled)return worldPalette;
-  const context=worldBlendAt(x,z),palette={};
+  const context=worldBlendAt(x,z);if(context.length===1&&context[0].profile===originProfile)return worldPalette;
+  const palette={};
   for(const key of ["land","rock","leaf","accent","landLow","landMid","landHigh","rockLow","rockMid","rockHigh"])palette[key]=blendColor(context,key);
   for(const key of ["altitudeBase","altitudeSpan","altitudeWarp","altitudeMid"])palette[key]=context.reduce((s,item)=>s+item.profile.palette[key]*item.weight,0);
   return palette;
 }
 function regionalGrassAt(x,z){
   if(!regionalEnabled)return G.grass;
-  const context=worldBlendAt(x,z),keys=["cover","patchiness","clumpiness","shadeTolerance","height","heightVariation","width","flexibility","hueShift","hueSpan","tipShift","dryness","saturationShift","macroScale","midScale","phaseX","phaseZ"],out={};
+  const context=worldBlendAt(x,z);if(context.length===1&&context[0].profile===originProfile)return G.grass;
+  const keys=["cover","patchiness","clumpiness","shadeTolerance","height","heightVariation","width","flexibility","hueShift","hueSpan","tipShift","dryness","saturationShift","macroScale","midScale","phaseX","phaseZ"],out={};
   for(const key of keys)out[key]=context.reduce((s,item)=>s+item.profile.grass[key]*item.weight,0);out.sparseWorld=context[0].profile.grass.sparseWorld;return out;
 }
 function regionalScalarAt(x,z,key){
   if(!regionalEnabled)return G[key];
-  return worldBlendAt(x,z).reduce((s,item)=>s+item.profile[key]*item.weight,0);
+  const context=worldBlendAt(x,z);if(context.length===1&&context[0].profile===originProfile)return G[key];
+  return context.reduce((s,item)=>s+item.profile[key]*item.weight,0);
 }
 function ensureProfileCatalogs(profile){
   if(profile.catalogs)return profile.catalogs;
