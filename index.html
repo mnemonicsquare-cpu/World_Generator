@@ -15,7 +15,7 @@ const keys=new Set,clock=new T.Clock,temp=new T.Object3D,CHUNK_SIZE=160,CHUNK_SE
 const chunks=new Map;let chunkQueue=[],chunkX=Infinity,chunkZ=Infinity,floraCatalog=[],faunaCatalog=[],faunaAgents=[],birdCatalog=[],birdAgents=[],faunaStarterPlaced=false,birdStarterPlaced=false,worldPalette;
 const LOW_POWER=matchMedia("(pointer:coarse)").matches,TERRAIN_RADIUS=LOW_POWER?5:6,FLORA_RADIUS=2;
 let mobileForward=0,mobileSide=0,mobileBoost=false,mobileThrottleDown=false;
-let universeSeed="",universeHash=0,originProfile=null,regionalEnabled=false,universeSeaLevel=0,originFastRadius=0;
+let universeSeed="",universeHash=0,originProfile=null,regionalEnabled=false,universeSeaLevel=0,originFastRadius=0,universeOriginX=0,universeOriginZ=0;
 const WORLD_CELL=CHUNK_SIZE*22,WORLD_BLEND=CHUNK_SIZE*3.5,WORLD_PROFILE_CACHE_MAX=36,regionProfiles=new Map;
 const boosting=()=>keys.has("ShiftLeft")||keys.has("ShiftRight")||mobileBoost;
 function hash(s){let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(),16777619);return h>>>0}
@@ -239,7 +239,7 @@ function treeDensity(x,z,y,base=floraDensity(x,z,y)){
 }
 function ground(x,z){let X=Math.floor(x/CHUNK_STEP)*CHUNK_STEP,Z=Math.floor(z/CHUNK_STEP)*CHUNK_STEP,u=(x-X)/CHUNK_STEP,v=(z-Z)/CHUNK_STEP,A=height(X,Z),B=height(X+CHUNK_STEP,Z),C=height(X,Z+CHUNK_STEP),D=height(X+CHUNK_STEP,Z+CHUNK_STEP);return u+v<=1?A+u*(B-A)+v*(C-A):D+(1-u)*(C-D)+(1-v)*(B-D)}
 function disposeTree(root){let gs=new Set,ms=new Set;root.traverse(o=>{if(o.geometry)gs.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>ms.add(m))});gs.forEach(g=>g.dispose());ms.forEach(m=>m.dispose())}
-function clear(){regionalEnabled=false;originProfile=null;originFastRadius=0;regionProfiles.clear();universeSeed="";universeHash=0;universeSeaLevel=0;stopPlaneEngineAudio();plane=null;planeLookYaw=planeLookPitch=0;mobileThrottleDown=false;mobileBoost=false;setPlaneMobileLabels(false);if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity;faunaAgents=[];faunaCatalog=[];birdAgents=[];birdCatalog=[];faunaStarterPlaced=false;birdStarterPlaced=false}
+function clear(){regionalEnabled=false;originProfile=null;originFastRadius=0;universeOriginX=universeOriginZ=0;regionProfiles.clear();universeSeed="";universeHash=0;universeSeaLevel=0;stopPlaneEngineAudio();plane=null;planeLookYaw=planeLookPitch=0;mobileThrottleDown=false;mobileBoost=false;setPlaneMobileLabels(false);if(!scene)return;disposeTree(scene);chunks.clear();chunkQueue=[];chunkX=chunkZ=Infinity;faunaAgents=[];faunaCatalog=[];birdAgents=[];birdCatalog=[];faunaStarterPlaced=false;birdStarterPlaced=false}
 function instances(g,m,a,parent=scene){if(!a.length){g.dispose();m.dispose();return null;}let o=new T.InstancedMesh(g,m,a.length);a.forEach((v,i)=>{temp.position.set(v[0],v[1],v[2]);temp.scale.set(v[3],v[4],v[5]);temp.rotation.set(v[6]||0,v[7]||0,v[8]||0);temp.updateMatrix();o.setMatrixAt(i,temp.matrix)});o.instanceMatrix.setUsage(T.StaticDrawUsage);parent.add(o);return o}
 function instancesQ(g,m,a,parent=scene){
   if(!a.length){g.dispose();m.dispose();return;}
@@ -1817,15 +1817,15 @@ function warpedUniversePoint(x,z){
           z+(universeNoise(x*scale*.72-71,z*scale*.72+47,0x8c2d)-.5)*warp];
 }
 function regionCenter(gx,gz){
-  if(gx===0&&gz===0)return {gx,gz,key:"0,0",x:0,z:0};
+  if(gx===0&&gz===0)return {gx,gz,key:"0,0",x:universeOriginX,z:universeOriginZ};
   const jitter=WORLD_CELL*.17;
   return {gx,gz,key:gx+","+gz,
-    x:gx*WORLD_CELL+(universeRandom(gx,gz,0x71ac)-.5)*jitter*2,
-    z:gz*WORLD_CELL+(universeRandom(gx,gz,0xc531)-.5)*jitter*2};
+    x:universeOriginX+gx*WORLD_CELL+(universeRandom(gx,gz,0x71ac)-.5)*jitter*2,
+    z:universeOriginZ+gz*WORLD_CELL+(universeRandom(gx,gz,0xc531)-.5)*jitter*2};
 }
 function regionBlendGeometry(x,z){
   if(!regionalEnabled)return [{gx:0,gz:0,key:"0,0",weight:1,distance:0}];
-  const [wx,wz]=warpedUniversePoint(x,z),gx=Math.round(wx/WORLD_CELL),gz=Math.round(wz/WORLD_CELL),candidates=[];
+  const [wx,wz]=warpedUniversePoint(x,z),gx=Math.round((wx-universeOriginX)/WORLD_CELL),gz=Math.round((wz-universeOriginZ)/WORLD_CELL),candidates=[];
   for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++){
     const center=regionCenter(gx+dx,gz+dz),distance=Math.hypot(wx-center.x,wz-center.z);
     candidates.push({...center,distance});
@@ -1912,7 +1912,8 @@ function getRegionProfile(gx,gz){
   return profile;
 }
 function worldBlendAt(x,z){
-  if(regionalEnabled&&originProfile&&Math.hypot(x,z)<originFastRadius)return [{gx:0,gz:0,key:"0,0",x:0,z:0,distance:Math.hypot(x,z),weight:1,profile:originProfile}];
+  const originDistance=Math.hypot(x-universeOriginX,z-universeOriginZ);
+  if(regionalEnabled&&originProfile&&originDistance<originFastRadius)return [{gx:0,gz:0,key:"0,0",x:universeOriginX,z:universeOriginZ,distance:originDistance,weight:1,profile:originProfile}];
   return regionBlendGeometry(x,z).map(item=>({...item,profile:getRegionProfile(item.gx,item.gz)}));
 }
 function blendColor(context,key,source="palette"){
@@ -1979,7 +1980,7 @@ function regionalEnvironmentAt(x,z){
     windAngle:Math.atan2(wz,wx),windSpeed:context.reduce((s,i)=>s+i.profile.wind.windSpeed*i.weight,0),gustiness:context.reduce((s,i)=>s+i.profile.wind.gustiness*i.weight,0)};
 }
 function initRegionalWorlds(seed,sky,horizon){
-  universeSeed=seed;universeHash=G.hash;universeSeaLevel=G.water;originProfile=G;originProfile.key="0,0";originProfile.gx=0;originProfile.gz=0;originProfile.heightOffset=0;
+  universeSeed=seed;universeHash=G.hash;universeSeaLevel=G.water;universeOriginX=cam.position.x;universeOriginZ=cam.position.z;originProfile=G;originProfile.key="0,0";originProfile.gx=0;originProfile.gz=0;originProfile.heightOffset=0;
   originProfile.palette=worldPalette;originProfile.sky=sky.clone();originProfile.horizon=horizon.clone();originProfile.wind=makeWindClimate(originProfile.hash,originProfile.dna);
   let nearest=Infinity;for(let gz=-1;gz<=1;gz++)for(let gx=-1;gx<=1;gx++)if(gx||gz){const center=regionCenter(gx,gz);nearest=Math.min(nearest,Math.hypot(center.x,center.z));}
   const maxWarp=WORLD_CELL*.08;originFastRadius=Math.max(CHUNK_SIZE*3,(nearest-WORLD_BLEND)/2-maxWarp);
