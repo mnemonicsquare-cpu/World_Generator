@@ -15,7 +15,7 @@ const keys=new Set,clock=new T.Clock,temp=new T.Object3D,CHUNK_SIZE=160,CHUNK_SE
 const chunks=new Map;let chunkQueue=[],chunkX=Infinity,chunkZ=Infinity,floraCatalog=[],faunaCatalog=[],faunaAgents=[],birdCatalog=[],birdAgents=[],faunaStarterPlaced=false,birdStarterPlaced=false,worldPalette;
 const LOW_POWER=matchMedia("(pointer:coarse)").matches,TERRAIN_RADIUS=LOW_POWER?4:5,FLORA_RADIUS=2;
 const DIAGNOSTICS=new URLSearchParams(location.search).has("diagnostics");
-const chunkMetrics={lastMs:0,peakMs:0,generated:0};let diagnosticFrames=0,diagnosticTime=0,diagnosticFrameSum=0,diagnosticPeak=0;
+const chunkMetrics={lastMs:0,peakMs:0,lastFloraMs:0,peakFloraMs:0,generated:0};let diagnosticFrames=0,diagnosticTime=0,diagnosticFrameSum=0,diagnosticPeak=0;
 const SMOKE_TEST=new URLSearchParams(location.search).has("smoke");
 let mobileForward=0,mobileSide=0,mobileBoost=false,mobileThrottleDown=false;
 let universeSeed="",universeHash=0,originProfile=null,regionalEnabled=false,universeSeaLevel=0,originFastRadius=0,universeOriginX=0,universeOriginZ=0;
@@ -563,7 +563,7 @@ function leafGeometry(form){
 }
 function growLSystemFlora(parent,cx,cz,land,leaf,rock,accent,catalog=floraCatalog){
   const groups=catalog.map(()=>({branches:[],foliage:[]})),rocks=[],fruits=[],baseX=cx*CHUNK_SIZE,baseZ=cz*CHUNK_SIZE;
-  const r=rng(chunkSeed(cx,cz,0x91b44d)),yawQ=new T.Quaternion(),leanQ=new T.Quaternion(),treeQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3(),yAxis=new T.Vector3(0,1,0),leanAxis=new T.Vector3(),branchTint=new T.Color(),fruitTint=new T.Color();
+  const r=rng(chunkSeed(cx,cz,0x91b44d)),yawQ=new T.Quaternion(),leanQ=new T.Quaternion(),treeQ=new T.Quaternion(),worldQ=new T.Quaternion(),p=new T.Vector3(),yAxis=new T.Vector3(0,1,0),leanAxis=new T.Vector3(),branchTint=new T.Color(),fruitTint=new T.Color(),foliageTint=new T.Color();
   const plantLimit=105;let plants=0;
   for(let i=0;i<520;i++){
     const x=baseX+r()*CHUNK_SIZE,z=baseZ+r()*CHUNK_SIZE,y=height(x,z);
@@ -618,12 +618,12 @@ function growLSystemFlora(parent,cx,cz,land,leaf,rock,accent,catalog=floraCatalo
         const outer=clamp(Math.hypot(tip.position.x,tip.position.z)/Math.max(.001,prototype.height*.58),0,1);
         const patch=(Math.sin(tip.position.x*2.7+tip.position.z*1.9+canopyPhase)+Math.sin(tip.position.y*3.1+canopyPhase2))*.25;
         const young=Math.pow(heightT,2.5);
-        const tint=leaf.clone().offsetHSL(
+        foliageTint.copy(leaf).offsetHSL(
           species.hueShift+species.colorHueBias+treeHue+treeColorHue+(heightT-.5)*species.gradientHue*gradientScale+patch*species.canopyPatch+leafJitterHue,
           .015+treeColorSat+(heightT-.5)*species.gradientSat*gradientScale+outer*.02,
           species.lightShift+treeLight+treeColorLight+(heightT-.5)*species.gradientLight*gradientScale+(outer-.5)*species.edgeLight*edgeScale+young*.018+leafJitterLight
         );
-        group.foliage.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,s,s*(species.leafForm===2?.42:.65+localSlender*.35)*treeLeafAspect,s,worldQ.x,worldQ.y,worldQ.z,worldQ.w,tint.r,tint.g,tint.b]);
+        group.foliage.push([x-baseX+p.x,y+p.y,z-baseZ+p.z,s,s*(species.leafForm===2?.42:.65+localSlender*.35)*treeLeafAspect,s,worldQ.x,worldQ.y,worldQ.z,worldQ.w,foliageTint.r,foliageTint.g,foliageTint.b]);
         if(fruiting){
           const angle=Math.atan2(tip.position.z,tip.position.x),sector=.5+.5*Math.cos(angle-fruitAzimuth);
           const heightAffinity=1-clamp(Math.abs(heightT-fruitHeight)/.38,0,1);
@@ -1259,7 +1259,7 @@ function populateChunkFlora(chunk){
   // Ground flora is intentionally added after wind binding: mushrooms must remain completely still.
   const groundCover=growGroundFlora(group,chunk.cx,chunk.cz,palette.land,palette.leaf,palette.accent);
   const grass=growGrass(group,chunk);
-  const fauna=populateChunkFauna(chunk),birds=populateChunkBirds(chunk);
+  const fauna=chunk.d<=1?populateChunkFauna(chunk):{animals:0},birds=populateChunkBirds(chunk);
   chunk.stats={plants:trees.plants,mushrooms:groundCover.mushrooms,grass:grass.count,animals:fauna.animals,birds:birds.birds};
 }
 function removeChunkFlora(chunk){
@@ -1303,7 +1303,7 @@ function createChunk(cx,cz,detailed){
   geo.setAttribute("normal",new T.BufferAttribute(normals,3));geo.setAttribute("color",new T.BufferAttribute(colors,3));
   const terrain=new T.Mesh(geo,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));terrain.receiveShadow=true;group.add(terrain);
   const road=makeRoadChunk(cx,cz,group);
-  const chunk={key,cx,cz,group,terrain,road,flora:null,fauna:null,faunaAgents:null,birds:null,birdAgents:null,stats:null};chunks.set(key,chunk);if(detailed)populateChunkFlora(chunk);
+  const chunk={key,cx,cz,d:Math.max(Math.abs(cx-chunkX),Math.abs(cz-chunkZ)),group,terrain,road,flora:null,fauna:null,faunaAgents:null,birds:null,birdAgents:null,stats:null};chunks.set(key,chunk);if(detailed)populateChunkFlora(chunk);
   chunkMetrics.lastMs=performance.now()-generationStart;chunkMetrics.peakMs=Math.max(chunkMetrics.peakMs,chunkMetrics.lastMs);chunkMetrics.generated++;return chunk;
 }
 function removeChunk(key){const chunk=chunks.get(key);if(!chunk)return;removeChunkFauna(chunk);removeChunkBirds(chunk);scene.remove(chunk.group);disposeTree(chunk.group);chunks.delete(key)}
@@ -1328,7 +1328,11 @@ function scheduleChunks(force=false){
     for(let dz=-1;dz<=1;dz++)for(let dx=-1;dx<=1;dx++)want(tx+dx,tz+dz);
   }
   for(const key of [...chunks.keys()])if(!wanted.has(key))removeChunk(key);
-  for(const [key,chunk] of chunks){const detail=wanted.get(key)?.detailed;if(!detail&&chunk.flora)removeChunkFlora(chunk)}
+  for(const [key,chunk] of chunks){const item=wanted.get(key),detail=item?.detailed;chunk.d=item?.d??Infinity;
+    if(!detail&&chunk.flora)removeChunkFlora(chunk);
+    else if(chunk.flora&&chunk.d<=1&&!chunk.fauna){chunk.stats.animals=populateChunkFauna(chunk).animals;}
+    else if(chunk.flora&&chunk.d>1&&chunk.fauna){removeChunkFauna(chunk);chunk.stats.animals=0;}
+  }
   chunkQueue=order.filter(c=>!chunks.has(c.key)||c.detailed&&!chunks.get(c.key).flora).map(c=>({...c,upgrade:chunks.has(c.key)})).sort((a,b)=>a.priority-b.priority);
   if(force){const nearby=chunkQueue.filter(c=>c.d<=1);chunkQueue=chunkQueue.filter(c=>c.d>1);for(const c of nearby)createChunk(c.x,c.z,c.detailed)}
 }
@@ -1337,9 +1341,12 @@ function updateChunks(){
   if(cx!==chunkX||cz!==chunkZ||diagnosticFrames%45===0)scheduleChunks();
   const start=performance.now();
   for(let i=0;i<2&&chunkQueue.length;i++){
-    const c=chunkQueue.shift();if(c.upgrade)populateChunkFlora(chunks.get(c.key));else createChunk(c.x,c.z,c.detailed);
+    const c=chunkQueue.shift();
+    if(c.upgrade){const begun=performance.now();populateChunkFlora(chunks.get(c.key));chunkMetrics.lastFloraMs=performance.now()-begun;chunkMetrics.peakFloraMs=Math.max(chunkMetrics.peakFloraMs,chunkMetrics.lastFloraMs);}
+    else{createChunk(c.x,c.z,false);if(c.detailed)chunkQueue.push({...c,upgrade:true,priority:c.priority+.1});}
     if(performance.now()-start>5)break;
   }
+  if(chunkQueue.length>1)chunkQueue.sort((a,b)=>a.priority-b.priority);
   if(water){water.position.x=cam.position.x;water.position.z=cam.position.z;}
 }
 function makeWindClimate(seedHash,dna){
@@ -2765,7 +2772,8 @@ function update(dt){
   const top=nightTop.lerp(dayTop,day),h=nightHorizon.lerp(dayHorizon,day).lerp(sunsetSky,tw*.64),fogColor=h.clone().lerp(env.horizon,.08+env.fogMoisture*.18);
   const frontFog=front*(.055+env.fogIntensity*.24);
   scene.background.copy(top);scene.fog.color.copy(fogColor);
-  const fogNear=Math.max(12,env.fogNear*(1-frontFog*.72));
+  const speedFog=car?.occupied?clamp(Math.abs(car.speed)/56,0,1)*.08:0;
+  const fogNear=Math.max(12,env.fogNear*(1-frontFog*.72-speedFog));
   const fogFar=Math.max(fogNear+68,env.fogFar*(1-frontFog));
   const fogEase=1-Math.exp(-dt*.9);
   scene.fog.near=mix(scene.fog.near,fogNear,fogEase);scene.fog.far=mix(scene.fog.far,fogFar,fogEase);
@@ -3051,7 +3059,8 @@ rend.setAnimationLoop(()=>{
   cam.updateProjectionMatrix();updateVehicleInteractionUI();updateChunks();updateInteriorVisibility();updateFauna(dt);updateBirds(dt);update(dt);updateSoundscape(dt);rend.render(scene,cam);
   if(diagnosticPanel){diagnosticTime+=rawDt;diagnosticFrameSum+=rawDt;diagnosticPeak=Math.max(diagnosticPeak,rawDt);if(diagnosticTime>=1){
     const flora=[...chunks.values()].reduce((n,c)=>n+(c.stats?.plants||0)+(c.stats?.grass||0),0);
-    diagnosticPanel.textContent=`FPS ${(diagnosticFrames/diagnosticFrameSum).toFixed(0)} | frame ${(1000*diagnosticFrameSum/diagnosticFrames).toFixed(1)} ms | peak ${(diagnosticPeak*1000).toFixed(1)} ms\nchunks ${chunks.size} | queue ${chunkQueue.length} | chunk ${(chunkMetrics.lastMs).toFixed(1)} ms (peak ${chunkMetrics.peakMs.toFixed(1)})\nscene ${scene.children.length} | draw calls ${rend.info.render.calls} | flora ${flora} | particles ${weather?.count||0}`;
+    let objects=0;scene.traverse(()=>objects++);
+    diagnosticPanel.textContent=`FPS ${(diagnosticFrames/diagnosticFrameSum).toFixed(0)} | frame ${(1000*diagnosticFrameSum/diagnosticFrames).toFixed(1)} ms | peak ${(diagnosticPeak*1000).toFixed(1)} ms\nchunks ${chunks.size} | queue ${chunkQueue.length} | terrain ${chunkMetrics.lastMs.toFixed(1)} ms | flora ${chunkMetrics.lastFloraMs.toFixed(1)} ms\nobjects ${objects} | draw calls ${rend.info.render.calls} | flora ${flora} | particles ${(weather?.count||0)+(weather?.debrisCount||0)}`;
     diagnosticFrames=0;diagnosticTime=0;diagnosticFrameSum=0;diagnosticPeak=0;
   }}
   renderedFrames++;
