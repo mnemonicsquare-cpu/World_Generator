@@ -2834,6 +2834,7 @@ async function toggleAudio(){if(!audio){
 }await audio.ctx.resume();sound=!sound;$("#sound").textContent="Звук: "+(sound?"вкл.":"выкл.")}
 
 const soundTracks=new Map();
+const audioForward=new T.Vector3(),audioUp=new T.Vector3();
 const bundledSounds={
   rain:"audio/rain.mp3",
   gravel:"audio/gravel.mp3",
@@ -2934,7 +2935,12 @@ function updateSoundscape(dt){
   const walking=grounded&&!car?.occupied&&!plane?.occupied&&moved>.001&&moved<2;
   const env=currentEnvironment||regionalEnvironmentAt(cam.position.x,cam.position.z),now=audio.ctx.currentTime;
   const listener=audio.ctx.listener;
-  if(listener.positionX){listener.positionX.setValueAtTime(cam.position.x,now);listener.positionY.setValueAtTime(cam.position.y,now);listener.positionZ.setValueAtTime(cam.position.z,now);}
+  if(listener.positionX){
+    listener.positionX.setValueAtTime(cam.position.x,now);listener.positionY.setValueAtTime(cam.position.y,now);listener.positionZ.setValueAtTime(cam.position.z,now);
+    cam.getWorldDirection(audioForward);audioUp.set(0,1,0).applyQuaternion(cam.quaternion);
+    listener.forwardX.setValueAtTime(audioForward.x,now);listener.forwardY.setValueAtTime(audioForward.y,now);listener.forwardZ.setValueAtTime(audioForward.z,now);
+    listener.upX.setValueAtTime(audioUp.x,now);listener.upY.setValueAtTime(audioUp.y,now);listener.upZ.setValueAtTime(audioUp.z,now);
+  }
   audio.filter.frequency.setTargetAtTime(220+WindState.force*1250,now,.25);
   audio.master.gain.setTargetAtTime(sound?(.012+WindState.force*.13)*(indoors?.24:1):0,now,.3);
   audio.ambientFilter.frequency.setTargetAtTime(400+env.forestCover*900+env.fogMoisture*300,now,.5);
