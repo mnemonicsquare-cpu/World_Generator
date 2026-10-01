@@ -14,8 +14,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Fetch Epsilon Beta reference
-        run: git fetch origin epsilon-beta:refs/remotes/origin/epsilon-beta
+      - name: Fetch Alpha baseline
+        run: git fetch origin refs/tags/alpha:refs/tags/alpha
       - name: Check generator invariants
         run: node scripts/check-worldgen.mjs
       - name: Browser smoke test
@@ -103,6 +103,21 @@ jobs:
             awk -v d="$car_road_distance" 'BEGIN{if(d>4.8)exit 1}' || { echo "Car did not spawn on the road for ${seed}: distance=$car_road_distance"; exit 1; }
             awk -v m="$car_moved" 'BEGIN{if(m<0.5)exit 1}' || { echo "Car smoke drive did not move for ${seed}: moved=$car_moved"; exit 1; }
             awk -v g="$car_camera_gap" 'BEGIN{if(g<0.4||g>20)exit 1}' || { echo "Third-person car camera geometry is invalid for ${seed}: gap=$car_camera_gap"; exit 1; }
+            car_accel="$(grep -o 'data-car-smoke-accelerated="[-0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_brake="$(grep -o 'data-car-smoke-braked="[-0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_low_steer="$(grep -o 'data-car-smoke-low-steer="[-0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_high_steer="$(grep -o 'data-car-smoke-high-steer="[-0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            car_frame_difference="$(grep -o 'data-car-smoke-frame-difference="[0-9.]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            if [[ -z "$car_accel" || -z "$car_brake" || -z "$car_low_steer" || -z "$car_high_steer" || -z "$car_frame_difference" ]]; then
+              echo "Car dynamics diagnostics missing for ${seed}"; exit 1
+            fi
+            awk -v a="$car_accel" -v b="$car_brake" -v l="$car_low_steer" -v h="$car_high_steer" -v f="$car_frame_difference" 'BEGIN{if(a<3||b>=a||h>=l||f>0.4)exit 1}' || { echo "Car dynamics regression for ${seed}: accel=$car_accel brake=$car_brake steering=$car_low_steer/$car_high_steer frame=$car_frame_difference"; exit 1; }
+            building_count="$(grep -o 'data-building-count="[0-9]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            building_entry="$(grep -o 'data-building-entry-clear="[01]"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            ruin_count="$(grep -o 'data-ruin-count="[0-9]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
+            if [[ -z "$building_count" || "$building_count" -lt 1 || "$building_entry" != "1" || "$ruin_count" != "0" ]]; then
+              echo "Building regression for ${seed}: buildings=${building_count:-missing} entry=${building_entry:-missing} ruins=${ruin_count:-missing}"; exit 1
+            fi
             car_model="$(grep -o 'data-car-model="[^"]*"' "$out" | head -1 | cut -d'"' -f2 || true)"
             car_detailed_verts="$(grep -o 'data-car-detailed-verts="[0-9]*"' "$out" | head -1 | grep -o '[0-9]*' || true)"
             if [[ "$car_model" != "detailed" || -z "$car_detailed_verts" || "$car_detailed_verts" -lt 20000 ]]; then

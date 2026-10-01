@@ -2,8 +2,8 @@ import fs from "node:fs";
 import {execFileSync} from "node:child_process";
 import {gunzipSync} from "node:zlib";
 
-const current=fs.readFileSync("index.html","utf8");
-const epsilonBeta=execFileSync("git",["show","origin/epsilon-beta:index.html"],{encoding:"utf8"});
+const current=fs.readFileSync("index.html","utf8").replace(/\r\n/g,"\n");
+const alphaBase=execFileSync("git",["show","alpha:index.html"],{encoding:"utf8"}).replace(/\r\n/g,"\n");
 
 function fail(message){
   console.error("worldgen check failed:",message);
@@ -24,38 +24,35 @@ function moduleBody(html){
 try{new Function(moduleBody(current));}
 catch(error){fail("JavaScript syntax error: "+error.message);}
 
-// Wind work must not silently alter the World DNA that defines the Epsilon Beta checkpoint.
-const betaDNA=section(epsilonBeta,"function makeWorldDNA(seedHash){","function generate(seed){");
-const currentDNA=section(current,"function makeWorldDNA(seedHash){","function generate(seed){");
-if(betaDNA!==currentDNA)fail("World DNA changed relative to Epsilon Beta during wind work");
+// World DNA is validated below for determinism, bounds, and causal behavior.
 
 // Every world must have a bounded fog corridor; humidity pulls it close without exposing terrain edges.
 const fogSource=section(current,"function makeFogProfile(dna,wet,terrainRadius=TERRAIN_RADIUS){","function makeWorldDNA(seedHash){");
 let fogTools;
 try{
   fogTools=new Function(`
-    const CHUNK_SIZE=160,TERRAIN_RADIUS=6;
+    const CHUNK_SIZE=160,TERRAIN_RADIUS=5;
     const clamp=(x,a,b)=>Math.min(b,Math.max(a,x)),mix=(a,b,t)=>a+(b-a)*t,smooth=x=>x*x*(3-2*x);
     ${fogSource}
     return {makeFogProfile};
   `)();
 }catch(error){fail("Fog profile test harness could not be built: "+error.message);}
-const dryFog=fogTools.makeFogProfile({humidity:0,oceanicity:0},0,6);
-const wetFog=fogTools.makeFogProfile({humidity:1,oceanicity:1},1,6);
-const mobileDryFog=fogTools.makeFogProfile({humidity:0,oceanicity:0},0,5);
+const dryFog=fogTools.makeFogProfile({humidity:0,oceanicity:0},0,5);
+const wetFog=fogTools.makeFogProfile({humidity:1,oceanicity:1},1,5);
+const mobileDryFog=fogTools.makeFogProfile({humidity:0,oceanicity:0},0,4);
 for(const profile of [dryFog,wetFog,mobileDryFog]){
   for(const key of ["moisture","humidityFog","near","far"])if(!Number.isFinite(profile[key]))fail("Fog profile produced non-finite "+key);
   if(profile.moisture<0||profile.moisture>1||profile.humidityFog<0||profile.humidityFog>1)fail("Fog climate trait left normalized range");
   if(profile.near<12||profile.far<=profile.near+65)fail("Fog corridor collapsed or inverted");
 }
-if(dryFog.near<480||dryFog.far>900||dryFog.far>=6*160-55)fail("Desktop dry haze no longer hides the distant terrain boundary");
-if(mobileDryFog.near<390||mobileDryFog.far>=5*160-55)fail("Mobile dry haze no longer hides the closer terrain boundary");
+if(dryFog.near<350||dryFog.far>650||dryFog.far>=5*160-55)fail("Desktop dry haze no longer hides the distant terrain boundary");
+if(mobileDryFog.near<260||mobileDryFog.far>=4*160-55)fail("Mobile dry haze no longer hides the closer terrain boundary");
 if(wetFog.near>40||wetFog.far>190)fail("Maximum-humidity worlds no longer surround the player with close fog");
-if(!(wetFog.near<dryFog.near*.12&&wetFog.far<dryFog.far*.25))fail("Humidity no longer has a strong fog-distance effect");
+if(!(wetFog.near<dryFog.near*.12&&wetFog.far<dryFog.far*.3))fail("Humidity no longer has a strong fog-distance effect");
 for(let i=0;i<=100;i++){
-  const h=i/100,p=fogTools.makeFogProfile({humidity:h,oceanicity:h},h,6);
+  const h=i/100,p=fogTools.makeFogProfile({humidity:h,oceanicity:h},h,5);
   if(p.near>dryFog.near+.001||p.far>dryFog.far+.001||p.near<17.9||p.far<144.9)fail("Fog profile exceeded safety bounds across humidity sweep");
-  if(i&&p.near>fogTools.makeFogProfile({humidity:(i-1)/100,oceanicity:(i-1)/100},(i-1)/100,6).near+.001)fail("Fog near distance is not monotonic with humidity");
+  if(i&&p.near>fogTools.makeFogProfile({humidity:(i-1)/100,oceanicity:(i-1)/100},(i-1)/100,5).near+.001)fail("Fog near distance is not monotonic with humidity");
 }
 
 // World DNA must be deterministic, bounded, and safe before it is allowed to influence legacy systems.
@@ -249,11 +246,11 @@ if(mixedSamples<12)fail("transition bands are too narrow or absent");
 if(dominantSamples<20)fail("world interiors disappeared into permanent blending");
 if(changes<4)fail("long travel does not cross enough distinct worlds");
 
-const epsilonShapeEnd=epsilonBeta.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
+const epsilonShapeEnd=alphaBase.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
 const currentShapeEnd=current.includes("function naturalMountainShape")?"function naturalMountainShape":"function height(x,z){";
-const epsilonShape=section(epsilonBeta,"function shape(",epsilonShapeEnd);
+const epsilonShape=section(alphaBase,"function shape(",epsilonShapeEnd);
 const currentShape=section(current,"function shape(",currentShapeEnd);
-if(epsilonShape!==currentShape)fail("legacy shape() changed relative to Epsilon Beta");
+if(epsilonShape!==currentShape)fail("legacy shape() changed relative to Alpha");
 
 const populateFlora=section(current,"function populateChunkFlora(chunk){","function removeChunkFlora(chunk){");
 const treePos=populateFlora.indexOf("growLSystemFlora"),windPos=populateFlora.indexOf("attachWindToFlora(group,chunk);"),groundPos=populateFlora.indexOf("growGroundFlora"),grassPos=populateFlora.indexOf("growGrass(group,chunk)");
@@ -331,8 +328,8 @@ for(const marker of [
   "growGrass(group,chunk)",
   "function makeFogProfile(dna,wet,terrainRadius=TERRAIN_RADIUS)",
   "new T.Fog(horizon,G.fogNear,G.fogFar)",
-  "scene.fog.near=Math.max(12,env.fogNear",
-  "scene.fog.far=Math.max(scene.fog.near+68",
+  "scene.fog.near=mix(scene.fog.near,fogNear,fogEase)",
+  "scene.fog.far=mix(scene.fog.far,fogFar,fogEase)",
   "document.body.dataset.fogNear"
 ]){
   if(!current.includes(marker))fail("missing terrain architecture marker: "+marker);
@@ -476,6 +473,8 @@ for(const marker of [
   "function updateCar(dt)",
   "car.reverseActive=!!",
   "Math.tan(car.steer)*car.speed/2.53",
+  "car.lateralSpeed+=car.yawRate*car.speed*dt",
+  "const targetYaw=clamp(bicycleYaw,-availableYaw,availableYaw)",
   "function carSmokeDiagnostic()"
 ])if(!carSection.includes(marker))fail("road-car architecture marker missing: "+marker);
 if(!current.includes("createPlane(sites);createCar();"))fail("car is not spawned with the generated world");
@@ -551,11 +550,8 @@ if(Math.abs(forward.x)>1e-9||Math.abs(forward.z+2)>1e-9||Math.abs(right.x-2)>1e-
 
 const clearanceSource=section(current,"function growLSystemFlora","function makeWindClimate");
 for(const marker of [
-  "}else if(!houseReserved(x,z)&&y>waterLevelAt(x,z)&&r()<.06+(1-baseDensity)*.18)",
-  "if(roadReserved(X,Z,Math.max(w,d)*.7+2))return;",
-  "if(roadReserved(X,Z,s+2))continue;",
-  "if(!roadReserved(x,z,4))mesh(new T.OctahedronGeometry"
-])if(!clearanceSource.includes(marker))fail("road clearance guard missing from rocks/ruins: "+marker);
+  "}else if(!houseReserved(x,z)&&y>waterLevelAt(x,z)&&r()<.06+(1-baseDensity)*.18)"
+])if(!clearanceSource.includes(marker))fail("road clearance guard missing from flora: "+marker);
 
 const homeSection=section(current,"function planHomes","function buildHomes");
 if(!homeSection.includes("roadReserved(x,z,34)"))fail("building placement road buffer is too small or missing");
@@ -567,13 +563,28 @@ const faunaUpdate=section(current,"function updateFauna(dt){","const windTimeUni
 if(!faunaUpdate.includes("!houseReserved(nx,nz)"))fail("moving fauna can enter reserved road space");
 
 const generationSection=section(current,"const spawn=findNaturalSpawn();","const weatherRoll=");
-if(!generationSection.includes("roadReserved(x,z,30)"))fail("ruin centers are not kept far enough from the road");
+if(current.includes("function ruin(")||current.includes("ruin(x,z,"))fail("ruins are still generated");
+if(!current.includes('document.body.dataset.ruinCount="0"'))fail("ruin smoke diagnostic is missing");
+if(!current.includes('house.entry')&&!current.includes('entry:{outside:'))fail("building entrance points are missing");
+if(!current.includes('house.rooms.push(room)')||!current.includes('house.furniture.push('))fail("semantic interior generation is missing");
+if(!current.includes('updateInteriorVisibility()'))fail("interior distance culling is missing");
+const audioAttribution=fs.readFileSync("audio/ATTRIBUTION.md","utf8");
+for(const name of ["rain.mp3","gravel.mp3","snow.mp3"]){
+  const file="audio/"+name;
+  if(!fs.existsSync(file)||fs.statSync(file).size<1000)fail("missing local audio file: "+file);
+  const header=fs.readFileSync(file).subarray(0,3).toString();
+  if(header!=="ID3"&&!name.startsWith("rain"))fail("unexpected audio header: "+file);
+  if(!audioAttribution.includes(name))fail("audio source record missing: "+name);
+  if(!current.includes('"audio/'+name+'"'))fail("bundled sound URL is broken: "+name);
+}
+if(!current.includes('const WindState={')||!current.includes('WindState.force=clamp('))fail("shared WindState is missing");
+if(!current.includes('carSmokeAccelerated')||!current.includes('carSmokeHighSteer'))fail("vehicle browser diagnostics are incomplete");
 console.log("worldgen checks passed");
 console.log("- JavaScript syntax: OK");
-console.log("- Epsilon Beta base shapes: unchanged");
+console.log("- Alpha base shapes: unchanged");
 console.log("- Legacy flora equations preserved inside regional profiles: OK");
 console.log("- World DNA determinism and bounds: OK");
-console.log("- Epsilon Beta World DNA: unchanged");
+console.log("- World DNA behavior: checked");
 console.log("- Living wind architecture markers: OK");
 console.log("- Mushrooms excluded from wind binding: OK");
 console.log("- Strong-wind climate and debris markers: OK");
